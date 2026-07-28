@@ -1,0 +1,13 @@
+{
+  "type": "plugin",
+  "id": "@kbn/context-engine-example-plugin",
+  "owner": "@elastic/kibana-core",
+  "description": "An isolated prototype for exploring context assembly in Kibana.",
+  "group": "platform",
+  "visibility": "private",
+  "plugin": {
+    "id": "contextEngineExample",
+    "server": false,
+    "browser": true
+  }
+}

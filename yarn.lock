@@ -5228,6 +5228,10 @@
   version "0.0.0"
   uid ""
 
+"@kbn/context-engine-example-plugin@link:examples/context_engine":
+  version "0.0.0"
+  uid ""
+
 "@kbn/context-switcher-components@link:src/platform/packages/shared/context-switcher-components":
   version "0.0.0"
   uid ""

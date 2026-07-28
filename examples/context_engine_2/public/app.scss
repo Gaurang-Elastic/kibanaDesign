@@ -1,0 +1,789 @@
+.contextEnginePrototype {
+  min-height: 100%;
+
+  .euiPageTemplate__content {
+    margin-inline: auto;
+    max-width: 1180px;
+    width: 100%;
+  }
+}
+
+.contextEnginePrototype__sourceRow,
+.contextEnginePrototype__radioCard {
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+
+  &:hover {
+    border-color: var(--euiColorPrimary);
+  }
+
+  &:focus-within {
+    outline: 2px solid var(--euiColorPrimary);
+    outline-offset: 2px;
+  }
+}
+
+.contextEnginePrototype__namespaceCard {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 220px;
+  text-align: left;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+
+  &:hover {
+    border-color: var(--euiColorPrimary);
+  }
+
+  &:focus {
+    outline: 2px solid var(--euiColorPrimary);
+    outline-offset: 2px;
+  }
+}
+
+.contextEnginePrototype__namespaceCard--managed {
+  background: var(--euiColorLightestShade);
+
+  &:hover {
+    border-color: var(--euiColorMediumShade);
+  }
+}
+
+.contextEnginePrototype__namespaceCardBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.contextEnginePrototype__managedMeta {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.contextEnginePrototype__namespaceSources {
+  min-height: 24px;
+}
+
+.contextEnginePrototype__namespaceCardFooter {
+  margin-top: auto;
+}
+
+.contextEnginePrototype__healthLink {
+  cursor: pointer;
+}
+
+.contextEnginePrototype__indexToolbar {
+  .euiFormRow {
+    margin-bottom: 0;
+  }
+}
+
+.contextEnginePrototype__indexSearch {
+  min-width: min(100%, 280px);
+}
+
+.contextEnginePrototype__sourceIcon {
+  align-items: center;
+  background: var(--euiColorLightestShade);
+  border-radius: 6px;
+  color: var(--euiColorPrimary);
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.contextEnginePrototype__mono {
+  font-family: var(--euiCodeFontFamily);
+}
+
+.contextEnginePrototype__typeBadge {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.contextEnginePrototype__wizardHeader {
+  display: block;
+  width: 100%;
+}
+
+.contextEnginePrototype__esqlSource {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.contextEnginePrototype__esqlActions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.contextEnginePrototype__esqlEditor {
+  border: 1px solid var(--euiBorderColor);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+
+  .monaco-editor,
+  .monaco-editor .overflow-guard,
+  .monaco-editor .monaco-editor-background,
+  .monaco-editor .margin,
+  .monaco-editor .margin-view-overlays,
+  .monaco-editor .lines-content,
+  .monaco-editor .view-lines {
+    background-color: #f5f7fa !important;
+  }
+}
+
+.contextEnginePrototype__esqlSuggestions {
+  background: var(--euiColorEmptyShade);
+  border-top: 1px solid var(--euiBorderColor);
+  display: flex;
+  flex-direction: column;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.contextEnginePrototype__esqlSuggestion {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--euiBorderColor);
+  color: inherit;
+  cursor: pointer;
+  font-family: var(--euiCodeFontFamily);
+  font-size: 12px;
+  padding: 8px 12px;
+  text-align: left;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  &:hover {
+    background: var(--euiColorLightestShade);
+  }
+}
+
+.contextEnginePrototype__connectorsEmpty {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 180px;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.contextEnginePrototype__backstackHeader {
+  padding-bottom: 8px;
+}
+
+.contextEnginePrototype__backstackLink {
+  font-weight: 400;
+  padding-inline: 0;
+}
+
+.contextEnginePrototype__dashedAction {
+  border-color: var(--euiBorderColor);
+  border-style: dashed;
+  border-width: 1px;
+}
+
+.contextEnginePrototype__detailStack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.contextEnginePrototype__detailSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.contextEnginePrototype__sectionHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  width: 100%;
+
+  > div:first-child {
+    min-width: 0;
+  }
+}
+
+.contextEnginePrototype__sectionActions {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.contextEnginePrototype__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.contextEnginePrototype__listRow {
+  border-top: 1px solid var(--euiBorderColor);
+  padding: 12px 0;
+
+  &:first-child {
+    border-top: 0;
+    padding-top: 4px;
+  }
+
+  &--button {
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-inline: -8px;
+    padding-inline: 8px;
+    text-align: left;
+    transition: background-color 150ms ease;
+    width: calc(100% + 16px);
+
+    &:hover {
+      background: var(--euiColorLightestShade);
+    }
+  }
+}
+
+.contextEnginePrototype__suggestionBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  .contextEnginePrototype__listRow:first-child {
+    border-top: none;
+    padding-top: 4px;
+  }
+}
+
+.contextEnginePrototype__activeAutomations {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.contextEnginePrototype__workflowSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.contextEnginePrototype__workflowStep {
+  border-top: 1px solid var(--euiBorderColor);
+  padding: 14px 0;
+
+  &:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+}
+
+.contextEnginePrototype__kiBrowser {
+  min-height: 560px;
+  overflow: hidden;
+}
+
+.contextEnginePrototype__kiBrowserBody {
+  min-height: 560px;
+}
+
+.contextEnginePrototype__kiSidebar {
+  border-right: 1px solid var(--euiBorderColor);
+  max-width: 320px;
+  min-width: 280px;
+  width: 30%;
+}
+
+.contextEnginePrototype__kiSidebarHeader {
+  border-bottom: 1px solid var(--euiBorderColor);
+  padding: 12px 16px;
+}
+
+.contextEnginePrototype__kiSidebarList {
+  max-height: calc(100vh - 320px);
+  overflow: auto;
+}
+
+.contextEnginePrototype__kiEmptyList {
+  padding: 16px;
+}
+
+.contextEnginePrototype__kiListItem {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--euiBorderColor);
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  display: block;
+  padding: 12px 16px;
+  text-align: left;
+  width: 100%;
+
+  &:hover {
+    background: var(--euiColorLightestShade);
+  }
+
+  &--selected {
+    background: rgba(0, 119, 204, 0.08);
+    border-left-color: var(--euiColorPrimary);
+
+    strong {
+      color: var(--euiColorPrimary);
+    }
+  }
+}
+
+.contextEnginePrototype__kiDetail {
+  min-width: 0;
+  padding: 16px 20px;
+}
+
+.contextEnginePrototype__kiDetailStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.contextEnginePrototype__kiDetailBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contextEnginePrototype__kiTypeBadge {
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+}
+
+.contextEnginePrototype__kiMetaChips {
+  margin-top: 2px;
+}
+
+.contextEnginePrototype__kiMetaChip {
+  color: var(--euiTextSubduedColor);
+  font-size: 11px;
+  font-weight: 400;
+  padding: 2px 6px;
+}
+
+.contextEnginePrototype__kiDescription {
+  border-radius: 6px;
+  padding-inline: 0;
+}
+
+.contextEnginePrototype__kiValue {
+  border-radius: 6px;
+}
+
+.contextEnginePrototype__kiValueList {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+
+  li + li {
+    margin-top: 6px;
+  }
+}
+
+.contextEnginePrototype__kiProvenance {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.contextEnginePrototype__kiVersionRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.contextEnginePrototype__kiVersionHint {
+  line-height: 1.35;
+}
+
+.contextEnginePrototype__kiVersionTabs {
+  min-height: 24px;
+}
+
+.contextEnginePrototype__kiVersionTab {
+  border-radius: 0;
+  height: auto;
+  min-height: 0;
+  padding-block: 2px;
+  padding-inline: 2px;
+
+  &--active {
+    border-bottom: 2px solid var(--euiColorPrimary);
+    font-weight: 600;
+  }
+}
+
+.contextEnginePrototype__kiHistory {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.contextEnginePrototype__kiHistoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.contextEnginePrototype__kiHistoryItem {
+  align-items: center;
+  background: var(--euiColorEmptyShade);
+  border: 1px solid var(--euiBorderColor);
+  border-radius: 6px;
+  cursor: pointer;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  padding: 10px 12px;
+  text-align: left;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+  width: 100%;
+
+  &:hover {
+    background: var(--euiColorLightestShade);
+    border-color: var(--euiColorPrimary);
+  }
+
+  &--current {
+    background: rgba(0, 119, 204, 0.06);
+    border-color: var(--euiColorPrimary);
+  }
+}
+
+.contextEnginePrototype__kiHistoryVersion {
+  color: var(--euiTextSubduedColor);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.contextEnginePrototype__kiHistoryMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  strong {
+    font-size: 13px;
+  }
+
+  span {
+    color: var(--euiTextSubduedColor);
+    font-size: 12px;
+  }
+}
+
+.contextEnginePrototype__kiHistoryAction {
+  color: var(--euiColorPrimary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.contextEnginePrototype__issueRow {
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+
+  &:hover {
+    border-color: var(--euiColorPrimary);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+  }
+}
+
+.contextEnginePrototype__fixBox {
+  border-radius: 6px;
+}
+
+/* Lock the Kibana app scroller while the workflow editor is open. */
+body:has(.contextEnginePrototype--workflow) #app-main-scroll {
+  overflow: hidden !important;
+}
+
+.contextEnginePrototype--workflow {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+
+  .euiPageTemplate__content,
+  .euiPageTemplate__inner,
+  main {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+  }
+}
+
+.contextEnginePrototype__workflowSection {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 !important;
+
+  > .euiPageSection__content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 !important;
+    max-width: none !important;
+    width: 100%;
+  }
+}
+
+/* Match Workflows create page surfaces:
+   header/footer = plain white
+   editor band   = subdued light grey (Monaco must be transparentBackground) */
+.contextEnginePrototype__workflowShell {
+  --workflow-surface-plain: #fff;
+  --workflow-surface-subdued: #f5f7fa;
+
+  background: var(--workflow-surface-plain);
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.contextEnginePrototype__workflowTopBar {
+  background: var(--workflow-surface-plain);
+  border-bottom: 1px solid var(--euiBorderColor);
+  flex: 0 0 auto;
+  overflow: hidden;
+  padding: 12px 16px 16px;
+}
+
+.contextEnginePrototype__workflowHeaderLeft {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  overflow: hidden;
+
+  .euiButtonEmpty {
+    width: auto;
+    max-width: 100%;
+  }
+
+  .euiButtonEmpty__content {
+    justify-content: flex-start;
+  }
+}
+
+.contextEnginePrototype__workflowTitleRow {
+  margin-top: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.contextEnginePrototype__workflowTitleItem {
+  min-width: 0;
+  overflow: hidden;
+
+  h1 {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.contextEnginePrototype__workflowUnsavedBadge {
+  background: #fff3cd;
+  color: var(--euiTextColor);
+}
+
+.contextEnginePrototype__workflowNotice {
+  background: var(--workflow-surface-plain);
+  flex: 0 0 auto;
+  padding: 8px 16px 0;
+}
+
+.contextEnginePrototype__workflowBody {
+  background: var(--workflow-surface-subdued) !important;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.contextEnginePrototype__workflowEditorChrome {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 16px 0 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 10;
+}
+
+.contextEnginePrototype__workflowSchemaLink {
+  color: var(--euiTextSubduedColor);
+
+  &:hover {
+    color: var(--euiColorPrimary);
+  }
+}
+
+.contextEnginePrototype__workflowEditor {
+  background: var(--workflow-surface-subdued) !important;
+  display: flex;
+  flex: 1 1 auto;
+  height: var(--context-workflow-editor-height, 480px);
+  max-height: 100%;
+  min-height: 280px;
+  overflow: hidden;
+  padding-top: 4px;
+
+  .kibanaCodeEditor,
+  .monaco-editor,
+  .overflowingContentWidgets {
+    max-height: 100%;
+  }
+
+  .kibanaCodeEditor {
+    background: transparent !important;
+    flex: 1 1 auto;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .monaco-editor,
+  .monaco-editor .monaco-editor-background,
+  .monaco-editor .margin,
+  .monaco-editor .margin-view-overlays,
+  .monaco-editor .inputarea.ime-input {
+    background-color: transparent !important;
+  }
+}
+
+.contextEnginePrototype__workflowFooter {
+  background: var(--workflow-surface-plain);
+  border-top: 1px solid var(--euiBorderColor);
+  flex: 0 0 auto;
+  padding: 6px 12px;
+}
+
+.contextEnginePrototype__workflowActionsLabel {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.contextEnginePrototype__workflowKbd {
+  color: var(--euiTextSubduedColor);
+  display: inline-flex;
+  gap: 2px;
+
+  kbd {
+    background: var(--euiColorLightestShade);
+    border: 1px solid var(--euiBorderColor);
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 11px;
+    line-height: 1;
+    padding: 2px 4px;
+  }
+}
+
+.contextEnginePrototype__radioCard .euiText {
+  margin-left: 24px;
+  margin-top: 4px;
+}
+
+.contextEnginePrototype__efficiencyPanel {
+  margin-top: 4px;
+}
+
+.contextEnginePrototype__efficiencyStats {
+  .euiStat__title {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  .euiStat__description {
+    color: var(--euiTextSubduedColor);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}
+
+.contextEnginePrototype__agentLayout {
+  width: 100%;
+}
+
+.contextEnginePrototype__agentPackage {
+  min-width: 0;
+}
+
+.contextEnginePrototype__agentSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.contextEnginePrototype__agentStep {
+  min-width: 0;
+}
+
+.contextEnginePrototype__agentCredentials {
+  position: sticky;
+  top: 16px;
+}
+
+.contextEnginePrototype__agentCredentialValue {
+  min-width: 0;
+
+  .euiCode {
+    display: block;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 768px) {
+  .contextEnginePrototype__backstackHeader {
+    padding-bottom: 0;
+  }
+
+  .contextEnginePrototype__agentCredentials {
+    position: static;
+  }
+}
