@@ -1,0 +1,14 @@
+{
+  "type": "plugin",
+  "id": "@kbn/context-engine-5-example-plugin",
+  "owner": "@elastic/kibana-core",
+  "description": "Alternate Context Engine UI prototype (v5). Isolated from context_engine / ContextengineUI, context_engine_2, context_engine_3, and context_engine_4.",
+  "group": "platform",
+  "visibility": "private",
+  "plugin": {
+    "id": "contextEngineExampleFive",
+    "server": false,
+    "browser": true,
+    "optionalPlugins": ["agentBuilder"]
+  }
+}
