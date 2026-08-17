@@ -17,20 +17,24 @@ import {
   EuiCallOut,
   EuiCode,
   EuiCodeBlock,
+  EuiEmptyPrompt,
   EuiFieldSearch,
   EuiFieldText,
   EuiFlexGroup,
   EuiFlexGrid,
   EuiFlexItem,
   EuiFormRow,
+  EuiHealth,
   EuiHorizontalRule,
   EuiIcon,
+  EuiImage,
   EuiLink,
   EuiModal,
   EuiModalBody,
   EuiModalFooter,
   EuiModalHeader,
   EuiModalHeaderTitle,
+  EuiNotificationBadge,
   EuiPageTemplate,
   EuiPanel,
   EuiRadio,
@@ -41,6 +45,7 @@ import {
   EuiTab,
   EuiTabs,
   EuiText,
+  EuiTextArea,
   EuiTitle,
   EuiToolTip,
 } from '@elastic/eui';
@@ -56,10 +61,13 @@ import {
   valueBlockFor,
 } from './knowledge_indicators';
 import {
+  MANAGED_ELASTIC_DISPLAY_NAME,
+  MANAGED_ELASTIC_ENABLED_KI_COUNT,
   buildChatDescription,
   buildNamespaceFromWizard,
-  initialNamespaces,
+  demoEnvironmentNamespaces,
   knowledgeTotal,
+  managedElasticNamespace,
   namespaceIssueCount,
   namespaceIsHealthy,
   type Automation,
@@ -84,6 +92,41 @@ type StorageFilter = 'all' | StorageType;
 type HealthFilter = 'all' | 'healthy' | 'issues';
 type KiVersionFilter = 'all' | 'current' | 'hasNewer';
 type AgentHarness = 'claudeCode' | 'claudeSdk' | 'langchain' | 'cowork' | 'mcp';
+type NamespaceDetailTab = 'overview' | 'automations' | 'knowledge';
+type FindingSeverity = 'High' | 'Med';
+interface OverviewFinding {
+  id: string;
+  severity: FindingSeverity;
+  title: string;
+  explanation: string;
+}
+type CreatePanel = 'index' | 'sources';
+type IntentMode = 'describe' | 'traces';
+
+/** Mock: agents already running in this deployment with APM/OTel traces. */
+const traceStreams = [
+  {
+    id: 'traces-apm.agent-support.default',
+    agentName: 'Support triage agent',
+    questionCount: '1,204',
+    lastActive: '2 hours ago',
+    streamName: 'traces-apm.agent-support.default',
+  },
+  {
+    id: 'traces-apm.agent-sales.default',
+    agentName: 'Sales outreach agent',
+    questionCount: '642',
+    lastActive: 'yesterday',
+    streamName: 'traces-apm.agent-sales.default',
+  },
+  {
+    id: 'traces-otel-langgraph.docs_qa-default',
+    agentName: 'Docs Q&A agent',
+    questionCount: '318',
+    lastActive: '3 days ago',
+    streamName: 'traces-otel-langgraph.docs_qa-default',
+  },
+];
 
 interface AgentStep {
   title: string;
@@ -106,6 +149,7 @@ interface Source {
   icon: string;
 }
 
+/** Proto 4: Signals, oTel Traces, and Elastic Features are hidden for now. */
 const sourceCategories: Array<{
   id: SourceCategory;
   label: string;
@@ -119,19 +163,6 @@ const sourceCategories: Array<{
     createLabel: 'Create a new ES|QL view',
   },
   { id: 'connectors', label: 'Connectors', icon: 'plugs', createLabel: 'Add a connector' },
-  { id: 'signals', label: 'Signals', icon: 'visBarVertical', createLabel: 'Create a stream' },
-  {
-    id: 'traces',
-    label: 'oTel Traces',
-    icon: 'apmTrace',
-    createLabel: 'Connect a trace data stream',
-  },
-  {
-    id: 'features',
-    label: 'Elastic Features',
-    icon: 'database',
-    createLabel: 'Explore Elastic features',
-  },
 ];
 
 const availableSources: Source[] = [
@@ -589,14 +620,14 @@ const sanitizeNamespaceInput = (value: string) =>
 
 const validateNamespaceName = (name: string): string | undefined => {
   if (!name || name === '-') {
-    return 'Enter a namespace name.';
+    return 'Enter an AI index name.';
   }
   if (name.startsWith('-')) {
     return 'Name must start with a lowercase letter or number.';
   }
   const normalized = slugify(name);
   if (!normalized) {
-    return 'Enter a namespace name.';
+    return 'Enter an AI index name.';
   }
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalized)) {
     return 'Use lowercase letters, numbers, and hyphens only (no spaces or special characters).';
@@ -607,52 +638,148 @@ const validateNamespaceName = (name: string): string | undefined => {
   return undefined;
 };
 
-const getStorageRecommendation = (
-  sources: Source[]
-): { type: StorageType; reason: string; isMixed: boolean } => {
-  const hasTimeBased = sources.some(
-    (source) => source.category === 'traces' || source.category === 'signals'
-  );
-  const hasReference = sources.some(
-    (source) =>
-      source.category === 'esql' ||
-      source.category === 'connectors' ||
-      source.category === 'features'
-  );
-
-  if (hasTimeBased && !hasReference) {
-    return {
-      type: 'dataStream',
-      reason: 'time-based context from traces/signals.',
-      isMixed: false,
-    };
+/** Deep link open query: `/app/contextEngineExample4?open=Elastic`. */
+const readOpenIndexDeepLink = (search: string): string | null => {
+  try {
+    return new URLSearchParams(search.startsWith('?') ? search : `?${search}`).get('open');
+  } catch {
+    return null;
   }
-
-  if (hasTimeBased && hasReference) {
-    return {
-      type: 'index',
-      reason:
-        'Mixed sources default to Index; choose Data stream if this namespace is primarily time-based.',
-      isMixed: true,
-    };
-  }
-
-  return {
-    type: 'index',
-    reason: "reference context that isn't time-based.",
-    isMixed: false,
-  };
 };
 
-function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
-  const [screen, setScreen] = useState<Screen>('index');
+/**
+ * Proto demo flag for user-created indexes only (hasMonitoringData).
+ * false: Overview shows traces-connected placeholder; hides suggestions.
+ * true: Overview shows stats strip + Things we found.
+ */
+const MOCK_USER_CREATED_MONITORING_ANALYSIS_READY = false;
+
+const OVERVIEW_FINDINGS: OverviewFinding[] = [
+  {
+    id: 'entity-disambiguation',
+    severity: 'High',
+    title: 'Add a criterion-bound KI for entity disambiguation',
+    explanation: '6 failing traces share this gap. We drafted the KI from your sources.',
+  },
+  {
+    id: 'numeric-attributes',
+    severity: 'Med',
+    title: 'Extract numeric attributes (dates, amounts) as facts',
+    explanation:
+      'Extraction currently skips measurable attributes; agents invent numbers.',
+  },
+];
+
+const HOW_IT_WORKS_STORAGE_KEY = 'context.index.howItWorks.dismissed';
+
+const RELATIONSHIP_SKIP_TAGS = new Set([
+  'new',
+  'Bottom-Up',
+  'Index Metadata',
+  'UPDATE',
+  'Streams',
+  'Eager-load',
+  'Cron + webhook',
+  'Consolidation',
+  'Dedupe',
+  'Gaps',
+  'Monitoring',
+  'system',
+  'macros',
+  'entities',
+  'inventory',
+]);
+
+const automationSourceNames = (automation: Automation, namespace: Namespace) => {
+  const fromTags = automation.tags.filter(
+    (tag) => !RELATIONSHIP_SKIP_TAGS.has(tag) && !RELATIONSHIP_SKIP_TAGS.has(tag.toLowerCase())
+  );
+  const known = new Set(namespace.sourceDetails.map((source) => source.name));
+  const matched = fromTags.filter((tag) => known.has(tag));
+  if (matched.length > 0) return matched;
+  return fromTags.length > 0 ? fromTags : namespace.sourceDetails.map((source) => source.name);
+};
+
+const indicatorSourceNames = (indicator: KnowledgeIndicator, namespace: Namespace) => {
+  const known = namespace.sourceDetails.map((source) => source.name);
+  if (indicator.category === 'All streams' || indicator.category === 'All sources') {
+    return known;
+  }
+  const fromTags = indicator.tags.filter((tag) => known.includes(tag));
+  if (known.includes(indicator.category)) {
+    return [indicator.category, ...fromTags.filter((tag) => tag !== indicator.category)];
+  }
+  if (fromTags.length > 0) return fromTags;
+  return indicator.category ? [indicator.category] : [];
+};
+
+const indicatorMatchesAutomation = (
+  indicator: KnowledgeIndicator,
+  automation: Automation
+) => {
+  if (indicator.extractedBy && indicator.extractedBy === automation.title) return true;
+  const sourceTags = automation.tags.filter((tag) => !RELATIONSHIP_SKIP_TAGS.has(tag));
+  return sourceTags.some(
+    (tag) =>
+      indicator.category === tag ||
+      indicator.tags.includes(tag) ||
+      Boolean(indicator.extractedBy && indicator.extractedBy.includes(tag))
+  );
+};
+
+const indicatorsForAutomation = (
+  automation: Automation,
+  indicators: KnowledgeIndicator[]
+) => indicators.filter((indicator) => indicatorMatchesAutomation(indicator, automation));
+
+const automationTitleForIndicator = (
+  indicator: KnowledgeIndicator,
+  automations: Automation[]
+) => {
+  const exact = automations.find((automation) => automation.title === indicator.extractedBy);
+  if (exact) return exact.title;
+  const fuzzy = automations.find((automation) =>
+    indicatorMatchesAutomation(indicator, automation)
+  );
+  return fuzzy?.title || indicator.extractedBy || 'Extraction workflow';
+};
+
+function ContextEngineApp({
+  coreStart,
+  history,
+}: {
+  coreStart: CoreStart;
+  history: AppMountParameters['history'];
+}) {
+  const openIndexFromUrl =
+    readOpenIndexDeepLink(history.location.search) ??
+    readOpenIndexDeepLink(window.location.search);
+  const openManagedElastic =
+    openIndexFromUrl?.toLowerCase() === 'elastic' ||
+    openIndexFromUrl === managedElasticNamespace.name;
+
+  const [screen, setScreen] = useState<Screen>(() =>
+    openManagedElastic ? 'namespace' : 'index'
+  );
   const [activeCategory, setActiveCategory] = useState<SourceCategory>('esql');
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const [namespaceName, setNamespaceName] = useState('');
   const [storageType, setStorageType] = useState<StorageType>('index');
-  const [storageTypeTouched, setStorageTypeTouched] = useState(false);
-  const [namespaces, setNamespaces] = useState(initialNamespaces);
-  const [activeNamespace, setActiveNamespace] = useState<Namespace | null>(null);
+  const [createPanel, setCreatePanel] = useState<CreatePanel>('index');
+  const [intentMode, setIntentMode] = useState<IntentMode | null>(null);
+  const [intentDescription, setIntentDescription] = useState('');
+  const [intentTraceStream, setIntentTraceStream] = useState<string>(
+    () => traceStreams[0]?.id ?? ''
+  );
+  /** Fresh-user catalog: managed Elastic only until the first create. */
+  const [hasCreatedIndex, setHasCreatedIndex] = useState(() => openManagedElastic);
+  const [justCreatedName, setJustCreatedName] = useState<string | null>(null);
+  const [namespaces, setNamespaces] = useState<Namespace[]>(() => [
+    { ...managedElasticNamespace },
+  ]);
+  const [activeNamespace, setActiveNamespace] = useState<Namespace | null>(() =>
+    openManagedElastic ? { ...managedElasticNamespace } : null
+  );
   const [activeIssue, setActiveIssue] = useState<MonitoringIssue | null>(null);
   const [activeIndicatorId, setActiveIndicatorId] = useState<string | null>(null);
   const [selectedKiVersion, setSelectedKiVersion] = useState<number | null>(null);
@@ -680,10 +807,46 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
   const [storageFilter, setStorageFilter] = useState<StorageFilter>('all');
   const [healthFilter, setHealthFilter] = useState<HealthFilter>('all');
   const [focusMonitoring, setFocusMonitoring] = useState(false);
+  const [namespaceDetailTab, setNamespaceDetailTab] =
+    useState<NamespaceDetailTab>('overview');
+  const [approvedFindingIds, setApprovedFindingIds] = useState<string[]>([]);
+  const [dismissedJustCreatedBanner, setDismissedJustCreatedBanner] = useState(false);
+  const [showSuggestedAutomations, setShowSuggestedAutomations] = useState(false);
   const [kiTypeFilter, setKiTypeFilter] = useState<KnowledgeIndicator['type'] | null>(null);
   const [kiSearchQuery, setKiSearchQuery] = useState('');
   const [kiSourceFilter, setKiSourceFilter] = useState('all');
   const [kiVersionFilter, setKiVersionFilter] = useState<KiVersionFilter>('all');
+  const [kiAutomationFilter, setKiAutomationFilter] = useState<string | null>(null);
+  const [howItWorksDismissed, setHowItWorksDismissed] = useState(() => {
+    try {
+      return window.localStorage.getItem(HOW_IT_WORKS_STORAGE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [howItWorksVisible, setHowItWorksVisible] = useState(() => {
+    try {
+      return window.localStorage.getItem(HOW_IT_WORKS_STORAGE_KEY) !== 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  const dismissHowItWorks = () => {
+    try {
+      window.localStorage.setItem(HOW_IT_WORKS_STORAGE_KEY, 'true');
+    } catch {
+      // Ignore storage failures in proto/demo.
+    }
+    setHowItWorksDismissed(true);
+    setHowItWorksVisible(false);
+  };
+
+  // Local tab state only — writing ?tab= into the URL makes Kibana's app router
+  // treat it as a navigation and show "Unable to load page".
+  const selectNamespaceDetailTab = (tab: NamespaceDetailTab) => {
+    setNamespaceDetailTab(tab);
+  };
 
   useEffect(() => {
     if (screen !== 'workflow') return undefined;
@@ -732,14 +895,14 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
   }, [screen]);
 
   useEffect(() => {
-    if (screen !== 'namespace' || !focusMonitoring) return undefined;
-    const frame = window.requestAnimationFrame(() => {
+    if (screen !== 'namespace' || !focusMonitoring) return;
+    selectNamespaceDetailTab('overview');
+    setFocusMonitoring(false);
+    window.requestAnimationFrame(() => {
       document
-        .getElementById('context-engine-monitoring')
+        .getElementById('context-engine-4-overview-monitoring')
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      setFocusMonitoring(false);
     });
-    return () => window.cancelAnimationFrame(frame);
   }, [screen, focusMonitoring, activeNamespace?.name]);
 
   const selectedSources = useMemo(
@@ -747,18 +910,15 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
     [selectedSourceIds]
   );
   const visibleSources = availableSources.filter(({ category }) => category === activeCategory);
-  const namespaceSlug = slugify(namespaceName) || 'namespace';
-  const storagePrefix = storageType === 'dataStream' ? 'ds' : 'idx';
+  const namespaceSlug = slugify(namespaceName) || 'index';
   const namespaceNameError = validateNamespaceName(namespaceName);
-  const storageRecommendation = useMemo(
-    () => getStorageRecommendation(selectedSources),
-    [selectedSources]
-  );
-
-  useEffect(() => {
-    if (storageTypeTouched) return;
-    setStorageType(storageRecommendation.type);
-  }, [storageRecommendation.type, storageTypeTouched]);
+  const nameComplete = Boolean(namespaceName) && !namespaceNameError;
+  const intentComplete =
+    intentMode === 'describe' ||
+    (intentMode === 'traces' && Boolean(intentTraceStream));
+  const sourcesComplete = selectedSourceIds.length > 0;
+  const catalogDisplayName = (namespace: Namespace) =>
+    namespace.managed ? MANAGED_ELASTIC_DISPLAY_NAME : namespace.name;
 
   const filteredNamespaces = useMemo(() => {
     const query = namespaceQuery.trim().toLowerCase();
@@ -769,6 +929,7 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
       if (!query) return true;
       const haystack = [
         namespace.name,
+        catalogDisplayName(namespace),
         namespace.integration,
         namespace.description,
         namespace.indexName,
@@ -787,14 +948,19 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
     setActiveIndicatorId(null);
     setSelectedKiVersion(null);
     setAddedAutomations([]);
+    setShowSuggestedAutomations(false);
+    selectNamespaceDetailTab('overview');
   };
 
   const startWizard = () => {
     setSelectedSourceIds([]);
     setNamespaceName('');
     setStorageType('index');
-    setStorageTypeTouched(false);
     setActiveCategory('esql');
+    setCreatePanel('index');
+    setIntentMode(null);
+    setIntentDescription('');
+    setIntentTraceStream(traceStreams[0]?.id ?? '');
     setScreen('create');
   };
 
@@ -808,14 +974,38 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
     setSelectedSourceIds(matchedIds);
     setNamespaceName(activeNamespace.name);
     setStorageType(activeNamespace.storageType);
-    setStorageTypeTouched(true);
     setActiveCategory('esql');
+    setCreatePanel('sources');
+    setIntentMode(activeNamespace.intent?.type ?? null);
+    setIntentDescription(
+      activeNamespace.intent?.type === 'describe' ? activeNamespace.intent.value : ''
+    );
+    setIntentTraceStream(
+      activeNamespace.intent?.type === 'traces'
+        ? activeNamespace.intent.value
+        : (traceStreams[0]?.id ?? '')
+    );
     setScreen('create');
   };
 
-  const chooseStorageType = (next: StorageType) => {
-    setStorageTypeTouched(true);
-    setStorageType(next);
+  const updateActiveNamespaceStorageType = (next: StorageType) => {
+    if (!activeNamespace) return;
+    const nextPrefix = next === 'dataStream' ? '.context-ds' : '.context-idx';
+    const slug = activeNamespace.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    const nextIndexName = `${nextPrefix}-${slug}`;
+    const updated: Namespace = {
+      ...activeNamespace,
+      storageType: next,
+      indexName: nextIndexName,
+    };
+    setNamespaces((current) =>
+      current.map((item) => (item.name === activeNamespace.name ? updated : item))
+    );
+    setActiveNamespace(updated);
   };
 
   const toggleSource = (id: string) => {
@@ -826,7 +1016,17 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
 
   const createNamespace = () => {
     const normalizedName = slugify(namespaceName);
-    if (validateNamespaceName(normalizedName)) return;
+    if (validateNamespaceName(normalizedName) || !intentMode || selectedSources.length === 0) {
+      return;
+    }
+
+    const intent = {
+      type: intentMode,
+      value:
+        intentMode === 'describe'
+          ? intentDescription.trim()
+          : intentTraceStream,
+    };
 
     const sourceDetails: NamespaceSource[] = selectedSources.map((source) => ({
       name: source.name,
@@ -835,28 +1035,60 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
       icon: source.icon,
     }));
     const existing = namespaces.find((namespace) => namespace.name === normalizedName);
-    const namespace = existing
+    const built = existing
       ? {
           ...existing,
           sources: selectedSources.map(({ name }) => name),
           sourceDetails,
-          storageType,
+          storageType: 'index' as StorageType,
+          intent,
         }
-      : buildNamespaceFromWizard(
-          normalizedName,
-          selectedSources.map(({ name }) => name),
-          sourceDetails,
-          storageType
-        );
-    setNamespaces((current) =>
-      existing
-        ? current.map((item) => (item.name === normalizedName ? namespace : item))
-        : [...current, namespace]
-    );
-    setActiveNamespace(namespace);
+      : {
+          ...buildNamespaceFromWizard(
+            normalizedName,
+            selectedSources.map(({ name }) => name),
+            sourceDetails,
+            // Storage is derived from sources behind the scenes; default to index.
+            'index'
+          ),
+          intent,
+        };
+    // Fresh create: show 0 KI / extracting on the catalog card.
+    const namespace: Namespace = existing
+      ? built
+      : {
+          ...built,
+          indicators: [],
+          knowledge: {
+            playbooks: 0,
+            policies: 0,
+            faqs: 0,
+            glossaries: 0,
+            facts: 0,
+          },
+        };
+
+    setNamespaces((current) => {
+      const managed =
+        current.find((item) => item.managed) ?? { ...managedElasticNamespace };
+      if (existing) {
+        return current.map((item) => (item.name === normalizedName ? namespace : item));
+      }
+      // Proto/demo: first create reveals pre-existing env indexes + the new card.
+      if (!hasCreatedIndex) {
+        return [managed, namespace, ...demoEnvironmentNamespaces];
+      }
+      return [...current, namespace];
+    });
+    setHasCreatedIndex(true);
+    setJustCreatedName(normalizedName);
+    setDismissedJustCreatedBanner(false);
+    setActiveNamespace(null);
     setAddedAutomations([]);
     setActiveIssue(null);
-    setScreen('namespace');
+    setShowSuggestedAutomations(false);
+    selectNamespaceDetailTab('overview');
+    setScreen('index');
   };
 
   const openNamespace = (
@@ -872,8 +1104,22 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
     setSelectedKiVersion(null);
     setKiTypeFilter(null);
     setIsDefiningDescription(false);
-    setFocusMonitoring(Boolean(options?.focusMonitoring));
+    setShowSuggestedAutomations(false);
+    setApprovedFindingIds([]);
+    setKiAutomationFilter(null);
+    if (options?.focusMonitoring) {
+      selectNamespaceDetailTab('overview');
+      setFocusMonitoring(true);
+    } else {
+      selectNamespaceDetailTab('overview');
+      setFocusMonitoring(false);
+    }
     setScreen('namespace');
+  };
+
+  const openKnowledgeTabFilteredByAutomation = (automationTitle: string) => {
+    setKiAutomationFilter(automationTitle);
+    selectNamespaceDetailTab('knowledge');
   };
 
   const openKnowledgeIndicators = (type?: KnowledgeIndicator['type']) => {
@@ -1004,21 +1250,31 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
 
   const connectTraces = () => {
     if (!activeNamespace) return;
+    const isUserCreated = Boolean(activeNamespace.userCreated);
+    const analysisReady =
+      !isUserCreated ||
+      MOCK_USER_CREATED_MONITORING_ANALYSIS_READY ||
+      activeNamespace.monitoring.analysisReady === true;
+    const traceId = `traces-apm.agent-${slugify(activeNamespace.name)}.default`;
+    const traceCount = analysisReady ? 0 : 128;
     const updated: Namespace = {
       ...activeNamespace,
       monitoring: {
         ...activeNamespace.monitoring,
         connected: true,
-        traceId: `traces-apm.agent-${slugify(activeNamespace.name)}.default`,
-        traceLabel: `${activeNamespace.name} · 0 traces`,
-        traceCount: 0,
-        issuesSummary: 'No failing traces yet',
-        issues: [],
-        efficiency: activeNamespace.monitoring.efficiency || {
-          retrievalHitRate: 0,
-          tokensSavedPct: 0,
-          medianLatencyMs: 0,
-        },
+        analysisReady,
+        traceId,
+        traceLabel: `${activeNamespace.name} · ${traceCount.toLocaleString()} traces`,
+        traceCount,
+        issuesSummary: analysisReady ? 'No failing traces yet' : undefined,
+        issues: analysisReady ? activeNamespace.monitoring.issues : [],
+        efficiency: analysisReady
+          ? activeNamespace.monitoring.efficiency || {
+              retrievalHitRate: 0,
+              tokensSavedPct: 0,
+              medianLatencyMs: 0,
+            }
+          : undefined,
       },
     };
     setActiveNamespace(updated);
@@ -1067,7 +1323,7 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
     />
   );
 
-  const sourceRow = (source: Source, showType = false) => {
+  const sourceRow = (source: Source) => {
     const selected = selectedSourceIds.includes(source.id);
     return (
       <EuiPanel
@@ -1075,8 +1331,13 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
         hasBorder
         paddingSize="m"
         color={selected ? 'primary' : 'plain'}
-        className={showType ? undefined : 'contextEnginePrototype__sourceRow'}
+        className={`contextEnginePrototype__sourceRow${
+          selected ? ' contextEnginePrototype__sourceRow--selected' : ''
+        }`}
         onClick={() => toggleSource(source.id)}
+        role="checkbox"
+        aria-checked={selected}
+        aria-label={`${selected ? 'Deselect' : 'Select'} ${source.name}`}
       >
         <EuiFlexGroup alignItems="center" responsive={false} gutterSize="m">
           <EuiFlexItem grow={false}>
@@ -1092,15 +1353,15 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
               <span className="contextEnginePrototype__mono">{source.description}</span>
             </EuiText>
           </EuiFlexItem>
-          {showType && (
-            <EuiFlexItem grow={false}>
-              <EuiBadge color="hollow" className="contextEnginePrototype__typeBadge">
-                {source.typeLabel}
-              </EuiBadge>
-            </EuiFlexItem>
-          )}
           <EuiFlexItem grow={false}>
-            <EuiIcon type={selected ? 'check' : 'plus'} color="primary" aria-hidden={true} />
+            <span
+              className={`contextEnginePrototype__sourceCheck${
+                selected ? ' contextEnginePrototype__sourceCheck--selected' : ''
+              }`}
+              aria-hidden={true}
+            >
+              {selected ? <EuiIcon type="check" size="s" /> : null}
+            </span>
           </EuiFlexItem>
         </EuiFlexGroup>
       </EuiPanel>
@@ -1119,7 +1380,6 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
       { value: 'healthy', text: 'Healthy' },
       { value: 'issues', text: 'Has issues' },
     ];
-
     return (
       <>
         {pageHeader(
@@ -1131,59 +1391,248 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
             </EuiButton>,
           ]
         )}
-        <EuiPageTemplate.Section>
-          <EuiFlexGroup
-            className="contextEnginePrototype__indexToolbar"
-            gutterSize="m"
-            alignItems="flexEnd"
-            wrap
-          >
-            <EuiFlexItem grow={2} className="contextEnginePrototype__indexSearch">
-              <EuiFormRow label="Search" display="rowCompressed" fullWidth>
-                <EuiFieldSearch
-                  compressed
-                  fullWidth
-                  placeholder="Search namespaces"
-                  value={namespaceQuery}
-                  onChange={(event) => setNamespaceQuery(event.target.value)}
-                  aria-label="Search namespaces"
+        <EuiPageTemplate.Section grow={false}>
+          {!hasCreatedIndex ? (
+            <EuiFlexGroup
+              className="contextEnginePrototype__landingEmpty"
+              justifyContent="center"
+              alignItems="center"
+            >
+              <EuiFlexItem grow={false} className="contextEnginePrototype__landingEmptyItem">
+                <EuiEmptyPrompt
+                  className="contextEnginePrototype__landingPrompt"
+                  layout="horizontal"
+                  color="plain"
+                  icon={
+                    <EuiImage
+                      size="fullWidth"
+                      src={coreStart.http.basePath.prepend(
+                        '/plugins/contextEngineExampleFour/assets/empty_state.jpg'
+                      )}
+                      alt=""
+                    />
+                  }
+                  title={
+                    <h2 className="contextEnginePrototype__landingTitle">
+                      Context is ready to use
+                    </h2>
+                  }
+                  body={
+                    <>
+                      <p className="contextEnginePrototype__landingBody">
+                        You have an agent. Give it knowledge. An AI index is a live collection of
+                        facts built from your data: connect your sources once, and Context keeps
+                        extracting and refreshing what your agent needs, so it answers from
+                        knowledge instead of scanning raw data every time. The model behind it is
+                        built in; there is nothing to configure first.
+                      </p>
+                      <EuiFlexGroup
+                        gutterSize="s"
+                        alignItems="center"
+                        responsive={false}
+                        wrap
+                      >
+                        <EuiFlexItem grow={false}>
+                          <EuiButton
+                            color="primary"
+                            fill
+                            iconType="plusInCircle"
+                            onClick={startWizard}
+                          >
+                            Create AI index
+                          </EuiButton>
+                        </EuiFlexItem>
+                        <EuiFlexItem grow={false}>
+                          <EuiButtonEmpty
+                            href="https://www.elastic.co/docs"
+                            target="_blank"
+                            iconType="external"
+                            iconSide="right"
+                            aria-label="Learn what an AI index is"
+                          >
+                            Learn what an AI index is
+                          </EuiButtonEmpty>
+                        </EuiFlexItem>
+                      </EuiFlexGroup>
+                      <EuiSpacer size="xxl" />
+                      <EuiPanel
+                        hasBorder
+                        paddingSize="m"
+                        className="contextEnginePrototype__landingManagedRow"
+                        aria-label={MANAGED_ELASTIC_DISPLAY_NAME}
+                      >
+                        <EuiFlexGroup
+                          alignItems="flexStart"
+                          gutterSize="m"
+                          responsive={false}
+                        >
+                          <EuiFlexItem grow={false}>
+                            <span
+                              className="contextEnginePrototype__landingManagedIcon"
+                              aria-hidden={true}
+                            >
+                              <EuiIcon type="logoElastic" size="m" />
+                            </span>
+                          </EuiFlexItem>
+                          <EuiFlexItem className="contextEnginePrototype__landingManagedBody">
+                            <EuiFlexGroup
+                              className="contextEnginePrototype__landingManagedTitleRow"
+                              alignItems="center"
+                              gutterSize="s"
+                              responsive={false}
+                              wrap={false}
+                            >
+                              <EuiFlexItem grow={false}>
+                                <EuiText size="s">
+                                  <strong>{MANAGED_ELASTIC_DISPLAY_NAME}</strong>
+                                </EuiText>
+                              </EuiFlexItem>
+                              <EuiFlexItem grow={false}>
+                                <EuiBadge
+                                  color="hollow"
+                                  iconType="lock"
+                                  className="contextEnginePrototype__typeBadge"
+                                >
+                                  Managed
+                                </EuiBadge>
+                              </EuiFlexItem>
+                              <EuiFlexItem grow={false}>
+                                <EuiBadge
+                                  color="success"
+                                  className="contextEnginePrototype__typeBadge"
+                                >
+                                  Active
+                                </EuiBadge>
+                              </EuiFlexItem>
+                            </EuiFlexGroup>
+                            <EuiText
+                              size="xs"
+                              color="subdued"
+                              className="contextEnginePrototype__landingManagedMeta"
+                            >
+                              <p>Dashboards, Visualisations, Alerts, SLOs</p>
+                              <p>already enabled for you to use</p>
+                            </EuiText>
+                          </EuiFlexItem>
+                          <EuiFlexItem grow={false}>
+                            <EuiFlexGroup
+                              className="contextEnginePrototype__landingManagedActions"
+                              direction="column"
+                              gutterSize="xs"
+                              alignItems="flexEnd"
+                              responsive={false}
+                            >
+                              <EuiFlexItem grow={false}>
+                                <EuiButton
+                                  size="s"
+                                  color="primary"
+                                  className="contextEnginePrototype__tryChatButton"
+                                  onClick={() => {
+                                    const managed =
+                                      namespaces.find((item) => item.managed) ??
+                                      managedElasticNamespace;
+                                    setActiveNamespace(managed);
+                                    setApiKeyRevealed(false);
+                                    setAgentNotice(null);
+                                    setAgentHarness('langchain');
+                                    setScreen('agent');
+                                  }}
+                                >
+                                  Try in chat
+                                </EuiButton>
+                              </EuiFlexItem>
+                              <EuiFlexItem grow={false}>
+                                <EuiButtonEmpty
+                                  size="s"
+                                  iconType="arrowRight"
+                                  iconSide="right"
+                                  flush="right"
+                                  onClick={() => {
+                                    const managed =
+                                      namespaces.find((item) => item.managed) ??
+                                      managedElasticNamespace;
+                                    openNamespace(managed);
+                                  }}
+                                >
+                                  Open
+                                </EuiButtonEmpty>
+                              </EuiFlexItem>
+                            </EuiFlexGroup>
+                          </EuiFlexItem>
+                        </EuiFlexGroup>
+                      </EuiPanel>
+                    </>
+                  }
+                  footer={
+                    <>
+                      <EuiTitle size="xxs">
+                        <span>Need help?</span>
+                      </EuiTitle>{' '}
+                      <EuiLink href="https://www.elastic.co/docs" target="_blank">
+                        Read documentation
+                      </EuiLink>
+                    </>
+                  }
                 />
-              </EuiFormRow>
-            </EuiFlexItem>
-            <EuiFlexItem grow={false} className="contextEnginePrototype__indexFilter">
-              <EuiFormRow label="Storage type" display="rowCompressed">
-                <EuiSelect
-                  compressed
-                  options={storageFilterOptions}
-                  value={storageFilter}
-                  onChange={(event) => setStorageFilter(event.target.value as StorageFilter)}
-                  aria-label="Filter by storage type"
-                />
-              </EuiFormRow>
-            </EuiFlexItem>
-            <EuiFlexItem grow={false} className="contextEnginePrototype__indexFilter">
-              <EuiFormRow label="Health" display="rowCompressed">
-                <EuiSelect
-                  compressed
-                  options={healthFilterOptions}
-                  value={healthFilter}
-                  onChange={(event) => setHealthFilter(event.target.value as HealthFilter)}
-                  aria-label="Filter by health"
-                />
-              </EuiFormRow>
-            </EuiFlexItem>
-          </EuiFlexGroup>
-          <EuiSpacer size="xxl" />
-          {filteredNamespaces.length === 0 ? (
+              </EuiFlexItem>
+            </EuiFlexGroup>
+          ) : filteredNamespaces.length === 0 ? (
             <EuiPanel hasBorder paddingSize="l">
-              <EuiText color="subdued">No namespaces match your search or filters.</EuiText>
+              <EuiText color="subdued">No AI indexes match your search or filters.</EuiText>
             </EuiPanel>
           ) : (
-            <EuiFlexGrid columns={3} gutterSize="m">
+            <>
+              <EuiFlexGroup
+                className="contextEnginePrototype__indexToolbar"
+                gutterSize="m"
+                alignItems="flexEnd"
+                wrap
+              >
+                <EuiFlexItem grow={2} className="contextEnginePrototype__indexSearch">
+                  <EuiFormRow label="Search" display="rowCompressed" fullWidth>
+                    <EuiFieldSearch
+                      compressed
+                      fullWidth
+                      placeholder="Search AI indexes"
+                      value={namespaceQuery}
+                      onChange={(event) => setNamespaceQuery(event.target.value)}
+                      aria-label="Search AI indexes"
+                    />
+                  </EuiFormRow>
+                </EuiFlexItem>
+                <EuiFlexItem grow={false} className="contextEnginePrototype__indexFilter">
+                  <EuiFormRow label="Storage type" display="rowCompressed">
+                    <EuiSelect
+                      compressed
+                      options={storageFilterOptions}
+                      value={storageFilter}
+                      onChange={(event) => setStorageFilter(event.target.value as StorageFilter)}
+                      aria-label="Filter by storage type"
+                    />
+                  </EuiFormRow>
+                </EuiFlexItem>
+                <EuiFlexItem grow={false} className="contextEnginePrototype__indexFilter">
+                  <EuiFormRow label="Health" display="rowCompressed">
+                    <EuiSelect
+                      compressed
+                      options={healthFilterOptions}
+                      value={healthFilter}
+                      onChange={(event) => setHealthFilter(event.target.value as HealthFilter)}
+                      aria-label="Filter by health"
+                    />
+                  </EuiFormRow>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+              <EuiSpacer size="l" />
+              <EuiFlexGrid columns={3} gutterSize="l">
               {filteredNamespaces.map((namespace) => {
+                const displayName = catalogDisplayName(namespace);
                 const issueCount = namespaceIssueCount(namespace);
                 const healthy = namespaceIsHealthy(namespace);
-                const kiCount = namespace.indicators.length;
+                const isJustCreated = justCreatedName === namespace.name;
+                const kiCount = namespace.managed
+                  ? MANAGED_ELASTIC_ENABLED_KI_COUNT
+                  : knowledgeTotal(namespace.knowledge);
                 const shownSources = namespace.sources.slice(0, maxVisibleSources);
                 const hiddenSourceCount = Math.max(0, namespace.sources.length - maxVisibleSources);
                 const storageDisplay =
@@ -1193,6 +1642,9 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
                 const cardClassName = namespace.managed
                   ? 'contextEnginePrototype__namespaceCard contextEnginePrototype__namespaceCard--managed'
                   : 'contextEnginePrototype__namespaceCard';
+                const openCard = () => {
+                  openNamespace(namespace);
+                };
 
                 return (
                   <EuiFlexItem key={namespace.name}>
@@ -1200,66 +1652,60 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
                       hasBorder
                       paddingSize="m"
                       className={cardClassName}
-                      onClick={() => openNamespace(namespace)}
+                      onClick={openCard}
                       onKeyDown={(event: React.KeyboardEvent) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
-                          openNamespace(namespace);
+                          openCard();
                         }
                       }}
                       role="button"
                       tabIndex={0}
-                      aria-label={`Open ${namespace.name} namespace`}
+                      aria-label={`Open ${displayName}`}
                     >
                       <div className="contextEnginePrototype__namespaceCardBody">
                         <EuiFlexGroup
                           alignItems="center"
-                          justifyContent="spaceBetween"
-                          responsive={false}
                           gutterSize="s"
+                          responsive={false}
+                          wrap
                         >
-                          <EuiFlexItem>
+                          <EuiFlexItem grow={false}>
                             <EuiTitle size="xs">
-                              <h2>{namespace.name}</h2>
+                              <h2>{displayName}</h2>
                             </EuiTitle>
                           </EuiFlexItem>
                           {namespace.managed && (
-                            <EuiFlexItem grow={false}>
-                              <EuiText
-                                size="xs"
-                                color="subdued"
-                                className="contextEnginePrototype__managedMeta"
-                              >
-                                <EuiIcon type="lock" size="s" aria-hidden={true} /> Managed
-                              </EuiText>
-                            </EuiFlexItem>
+                            <>
+                              <EuiFlexItem grow={false}>
+                                <EuiBadge
+                                  color="hollow"
+                                  iconType="lock"
+                                  className="contextEnginePrototype__typeBadge"
+                                >
+                                  Managed
+                                </EuiBadge>
+                              </EuiFlexItem>
+                              <EuiFlexItem grow={false}>
+                                <EuiBadge
+                                  color="success"
+                                  className="contextEnginePrototype__typeBadge"
+                                >
+                                  Active
+                                </EuiBadge>
+                              </EuiFlexItem>
+                            </>
                           )}
                         </EuiFlexGroup>
 
-                        <EuiFlexGroup
+                        <EuiText
+                          size="xs"
+                          color="subdued"
                           className="contextEnginePrototype__namespaceSources"
-                          wrap
-                          responsive={false}
-                          gutterSize="xs"
                         >
-                          {shownSources.map((source) => (
-                            <EuiFlexItem grow={false} key={source}>
-                              <EuiBadge
-                                color="hollow"
-                                className="contextEnginePrototype__typeBadge"
-                              >
-                                {source}
-                              </EuiBadge>
-                            </EuiFlexItem>
-                          ))}
-                          {hiddenSourceCount > 0 && (
-                            <EuiFlexItem grow={false}>
-                              <EuiText size="xs" color="subdued">
-                                +{hiddenSourceCount} more
-                              </EuiText>
-                            </EuiFlexItem>
-                          )}
-                        </EuiFlexGroup>
+                          {shownSources.join(', ')}
+                          {hiddenSourceCount > 0 ? ` +${hiddenSourceCount}` : ''}
+                        </EuiText>
 
                         <EuiFlexGroup
                           alignItems="center"
@@ -1269,18 +1715,13 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
                         >
                           <EuiFlexItem grow={false}>
                             <EuiText size="xs" color="subdued">
-                              {storageDisplay} · {kiCount} KI
+                              {isJustCreated && kiCount === 0
+                                ? `${storageDisplay} · Extracting`
+                                : `${storageDisplay} · ${kiCount} KI`}
                             </EuiText>
                           </EuiFlexItem>
-                          <EuiFlexItem grow={false}>
-                            {healthy ? (
-                              <EuiBadge
-                                color="success"
-                                className="contextEnginePrototype__typeBadge"
-                              >
-                                Healthy
-                              </EuiBadge>
-                            ) : (
+                          {!isJustCreated && !healthy && (
+                            <EuiFlexItem grow={false}>
                               <EuiBadge
                                 color="warning"
                                 className="contextEnginePrototype__typeBadge contextEnginePrototype__healthLink"
@@ -1288,12 +1729,12 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
                                   event.stopPropagation();
                                   openNamespace(namespace, { focusMonitoring: true });
                                 }}
-                                onClickAriaLabel={`View ${issueCount} monitoring issues for ${namespace.name}`}
+                                onClickAriaLabel={`View ${issueCount} monitoring issues for ${displayName}`}
                               >
                                 {issueCount} issue{issueCount === 1 ? '' : 's'}
                               </EuiBadge>
-                            )}
-                          </EuiFlexItem>
+                            </EuiFlexItem>
+                          )}
                         </EuiFlexGroup>
                       </div>
 
@@ -1302,12 +1743,19 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
                         className="contextEnginePrototype__namespaceCardFooter"
                         responsive={false}
                         gutterSize="m"
+                        alignItems="center"
                       >
                         <EuiFlexItem>
                           <EuiText size="xs" color="subdued">
                             Integrated via
                           </EuiText>
-                          <EuiText size="s">{namespace.integration}</EuiText>
+                          {namespace.integration ? (
+                            <EuiText size="s">{namespace.integration}</EuiText>
+                          ) : (
+                            <EuiText size="s" color="subdued">
+                              Not connected yet
+                            </EuiText>
+                          )}
                         </EuiFlexItem>
                         <EuiFlexItem>
                           <EuiText size="xs" color="subdued">
@@ -1321,6 +1769,7 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
                 );
               })}
             </EuiFlexGrid>
+            </>
           )}
         </EuiPageTemplate.Section>
       </>
@@ -1329,6 +1778,114 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
 
   const renderCreate = () => {
     const activeTab = sourceCategories.find(({ id }) => id === activeCategory)!;
+    const hasAgentTraces = traceStreams.length > 0;
+    const indexStepComplete = nameComplete && intentComplete;
+    const sourcesStepComplete = sourcesComplete;
+    const stepsDone = (indexStepComplete ? 1 : 0) + (sourcesStepComplete ? 1 : 0);
+    const bothStepsComplete = indexStepComplete && sourcesStepComplete;
+    const otherStepIncomplete =
+      createPanel === 'index' ? !sourcesStepComplete : !indexStepComplete;
+    const indexTitle = nameComplete ? namespaceSlug : 'AI index';
+    const indexSubline = indexStepComplete
+      ? 'Named, intent set.'
+      : 'Name it and give it intent.';
+    const sourcesTitle =
+      selectedSources.length > 0 ? `Sources · ${selectedSources.length}` : 'Sources';
+    const sourcesSubline =
+      selectedSources.length > 0
+        ? selectedSources.map((source) => source.name).join(', ')
+        : 'ES|QL views and connectors.';
+
+    const primaryAction = (() => {
+      if (bothStepsComplete) {
+        return {
+          label: 'Create AI index',
+          disabled: false,
+          onClick: createNamespace,
+          microtext: null,
+        };
+      }
+      if (otherStepIncomplete) {
+        const goToSources = createPanel === 'index';
+        return {
+          label: goToSources ? 'Next: select sources' : 'Next: name and intent',
+          disabled: false,
+          onClick: () => setCreatePanel(goToSources ? 'sources' : 'index'),
+          microtext: (
+            <EuiText size="s" color="subdued">
+              {stepsDone} of 2 steps done
+            </EuiText>
+          ),
+        };
+      }
+      return {
+        label: 'Create AI index',
+        disabled: true,
+        onClick: createNamespace,
+        microtext: (
+          <EuiText size="s" color="subdued">
+            {createPanel === 'index'
+              ? 'Add a name and intent to create'
+              : 'Pick at least one source to create'}
+          </EuiText>
+        ),
+      };
+    })();
+
+    const stepMarkerClass = (active: boolean, complete: boolean) => {
+      if (active) return 'contextEnginePrototype__createStepMarker--active';
+      if (complete) return 'contextEnginePrototype__createStepMarker--complete';
+      return 'contextEnginePrototype__createStepMarker--incomplete';
+    };
+
+    const stepNode = (
+      id: CreatePanel,
+      title: string,
+      subline: string,
+      complete: boolean
+    ) => {
+      const active = createPanel === id;
+      return (
+        <button
+          type="button"
+          className={`contextEnginePrototype__createStep${
+            active ? ' contextEnginePrototype__createStep--active' : ''
+          }${complete && !active ? ' contextEnginePrototype__createStep--complete' : ''}${
+            !active && !complete ? ' contextEnginePrototype__createStep--incomplete' : ''
+          }`}
+          onClick={() => setCreatePanel(id)}
+          aria-pressed={active}
+        >
+          <span className="contextEnginePrototype__createStepMarkerCol" aria-hidden={true}>
+            <span
+              className={`contextEnginePrototype__createStepMarker ${stepMarkerClass(
+                active,
+                complete
+              )}`}
+            >
+              {active ? (
+                <span className="contextEnginePrototype__createStepMarkerDot" />
+              ) : complete ? (
+                <EuiIcon type="check" size="s" color="ghost" />
+              ) : null}
+            </span>
+          </span>
+          <span className="contextEnginePrototype__createStepBody">
+            <span className="contextEnginePrototype__createStepTitle">{title}</span>
+            <span className="contextEnginePrototype__createStepDesc">{subline}</span>
+          </span>
+        </button>
+      );
+    };
+
+    const nameIsEmpty = !namespaceName.trim();
+    const backingIndexPreview = nameIsEmpty ? (
+      <span className="contextEnginePrototype__backingIndexPreview contextEnginePrototype__backingIndexPreview--placeholder">
+        {'.context-idx-<your-name>'}
+      </span>
+    ) : (
+      <EuiCode>.context-idx-{namespaceSlug}</EuiCode>
+    );
 
     return (
       <>
@@ -1339,246 +1896,388 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
             </EuiButtonEmpty>
             <EuiSpacer size="s" />
             <EuiTitle size="l">
-              <h1>Create new AI index</h1>
+              <h1>Create AI index</h1>
             </EuiTitle>
             <EuiSpacer size="xs" />
             <EuiText color="subdued">
-              Name your AI index, pick sources, and choose storage — or add sources later.
+              An AI index is a live collection of knowledge from your data, ready for any agent to
+              retrieve.
             </EuiText>
           </div>
         </EuiPageTemplate.Section>
 
         <EuiPageTemplate.Section>
-          <EuiFlexGroup direction="column" gutterSize="m">
-            <EuiFlexItem>
-              <EuiPanel hasBorder paddingSize="l">
-                <EuiTitle size="s">
-                  <h2>Name</h2>
-                </EuiTitle>
-                <EuiSpacer size="m" />
-                <EuiFormRow
-                  fullWidth
-                  isInvalid={Boolean(namespaceName && namespaceNameError)}
-                  error={namespaceName && namespaceNameError ? [namespaceNameError] : undefined}
-                  helpText="Lowercase letters, numbers, and hyphens only — matching Elasticsearch index naming rules."
-                >
-                  <EuiFieldText
+          <EuiFlexGroup
+            className="contextEnginePrototype__createLayout"
+            gutterSize="l"
+            alignItems="flexStart"
+            responsive={true}
+          >
+            <EuiFlexItem grow={false} className="contextEnginePrototype__createMapColumn">
+              <EuiPanel
+                hasBorder
+                paddingSize="m"
+                className="contextEnginePrototype__createMap"
+              >
+                <div className="contextEnginePrototype__createStepper">
+                  {stepNode('index', indexTitle, indexSubline, indexStepComplete)}
+                  {stepNode('sources', sourcesTitle, sourcesSubline, sourcesStepComplete)}
+                </div>
+
+                <div className="contextEnginePrototype__createAgentEducation">
+                  <EuiIcon type="bulb" size="s" aria-hidden={true} />
+                  <EuiText size="xs" color="subdued">
+                    After create, connect any agent to retrieve from this index. You will do that
+                    from the index page.
+                  </EuiText>
+                </div>
+              </EuiPanel>
+            </EuiFlexItem>
+
+            <EuiFlexItem className="contextEnginePrototype__createPanelColumn">
+              {createPanel === 'index' ? (
+                <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__createPanel">
+                  <EuiTitle size="s">
+                    <h2>Name and intent</h2>
+                  </EuiTitle>
+                  <EuiSpacer size="xs" />
+                  <EuiText size="s" color="subdued">
+                    What this index is called, and what it should help your agent do.
+                  </EuiText>
+
+                  <EuiSpacer size="l" />
+                  <EuiFormRow
+                    label="Name"
                     fullWidth
-                    placeholder="e.g. support-ticket-triage"
-                    value={namespaceName}
                     isInvalid={Boolean(namespaceName && namespaceNameError)}
-                    onChange={(event) =>
-                      setNamespaceName(sanitizeNamespaceInput(event.target.value))
+                    error={
+                      namespaceName && namespaceNameError ? [namespaceNameError] : undefined
                     }
-                    aria-label="AI index name"
-                  />
-                </EuiFormRow>
-                <EuiSpacer size="s" />
-                <EuiText size="xs" color="subdued">
-                  uses{' '}
-                  <EuiCode>
-                    .context-{storagePrefix}-{namespaceSlug}
-                  </EuiCode>{' '}
-                  to store pre-computed context.
-                </EuiText>
-              </EuiPanel>
-            </EuiFlexItem>
+                    helpText={
+                      <>
+                        Lowercase letters, numbers, and hyphens. Backing index:{' '}
+                        {backingIndexPreview}
+                      </>
+                    }
+                  >
+                    <EuiFieldText
+                      fullWidth
+                      placeholder="e.g. support-ticket-triage"
+                      value={namespaceName}
+                      isInvalid={Boolean(namespaceName && namespaceNameError)}
+                      onChange={(event) =>
+                        setNamespaceName(sanitizeNamespaceInput(event.target.value))
+                      }
+                      aria-label="AI index name"
+                    />
+                  </EuiFormRow>
 
-            <EuiFlexItem>
-              <EuiPanel hasBorder paddingSize="l">
-                <EuiFlexGroup alignItems="center" responsive={false} gutterSize="s">
-                  <EuiFlexItem grow={false}>
-                    <EuiTitle size="s">
-                      <h2>Sources</h2>
-                    </EuiTitle>
-                  </EuiFlexItem>
-                  <EuiFlexItem grow={false}>
-                    <EuiBadge color="primary">{selectedSources.length}</EuiBadge>
-                  </EuiFlexItem>
-                </EuiFlexGroup>
-                <EuiSpacer size="s" />
-                <EuiText size="s" color="subdued">
-                  Pick what this AI index should build context from. You can add more than one.
-                </EuiText>
-
-                <EuiSpacer size="m" />
-                <EuiTabs>
-                  {sourceCategories.map((category) => {
-                    const count = selectedSources.filter(
-                      (source) => source.category === category.id
-                    ).length;
-                    return (
-                      <EuiTab
-                        key={category.id}
-                        isSelected={activeCategory === category.id}
-                        onClick={() => setActiveCategory(category.id)}
-                        prepend={<EuiIcon type={category.icon} size="s" aria-hidden={true} />}
-                        append={count > 0 ? <EuiBadge color="primary">{count}</EuiBadge> : undefined}
+                  <EuiSpacer size="l" />
+                  <EuiText size="s">
+                    <strong>Intent</strong>
+                  </EuiText>
+                  <EuiSpacer size="xs" />
+                  <EuiText size="s" color="subdued">
+                    Tell the engine what this index should help your agent do. Choose one way to
+                    provide it:
+                  </EuiText>
+                  <EuiSpacer size="m" />
+                  <EuiFlexGroup gutterSize="m" responsive={false}>
+                    <EuiFlexItem>
+                      <EuiPanel
+                        hasBorder
+                        paddingSize="m"
+                        className={`contextEnginePrototype__intentCard${
+                          intentMode === 'describe'
+                            ? ' contextEnginePrototype__intentCard--selected'
+                            : ''
+                        }`}
+                        onClick={() => setIntentMode('describe')}
+                        role="radio"
+                        aria-checked={intentMode === 'describe'}
+                        tabIndex={0}
+                        onKeyDown={(event: React.KeyboardEvent) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setIntentMode('describe');
+                          }
+                        }}
                       >
-                        {category.label}
-                      </EuiTab>
-                    );
-                  })}
-                </EuiTabs>
-                <EuiSpacer size="m" />
-
-                <EuiFlexGroup direction="column" gutterSize="s">
-                  {visibleSources.map((source) => (
-                    <EuiFlexItem key={source.id}>{sourceRow(source)}</EuiFlexItem>
-                  ))}
-                  <EuiFlexItem>
-                    <EuiPanel
-                      hasBorder
-                      paddingSize="s"
-                      className="contextEnginePrototype__dashedAction"
-                    >
-                      <EuiButtonEmpty iconType="plus" flush="left">
-                        {activeTab.createLabel}
-                      </EuiButtonEmpty>
-                    </EuiPanel>
-                  </EuiFlexItem>
-                </EuiFlexGroup>
-
-                <EuiSpacer size="l" />
-                <EuiTitle size="xs">
-                  <h3>Selected sources</h3>
-                </EuiTitle>
-                <EuiSpacer size="s" />
-                {selectedSources.length > 0 ? (
-                  <EuiFlexGroup direction="column" gutterSize="s">
-                    {selectedSources.map((source) => (
-                      <EuiFlexItem key={`selected-${source.id}`}>
-                        {sourceRow(source, true)}
-                      </EuiFlexItem>
-                    ))}
+                        <EuiFlexGroup alignItems="flexStart" gutterSize="s" responsive={false}>
+                          <EuiFlexItem grow={false}>
+                            <EuiRadio
+                              id="intent-describe"
+                              checked={intentMode === 'describe'}
+                              onChange={() => setIntentMode('describe')}
+                              label=""
+                            />
+                          </EuiFlexItem>
+                          <EuiFlexItem>
+                            <EuiText size="s">
+                              <strong>Describe it myself</strong>
+                            </EuiText>
+                            <EuiText size="xs" color="subdued">
+                              Write a sentence or two in your own words.
+                            </EuiText>
+                          </EuiFlexItem>
+                        </EuiFlexGroup>
+                      </EuiPanel>
+                    </EuiFlexItem>
+                    <EuiFlexItem>
+                      <EuiPanel
+                        hasBorder
+                        paddingSize="m"
+                        className={`contextEnginePrototype__intentCard${
+                          intentMode === 'traces'
+                            ? ' contextEnginePrototype__intentCard--selected'
+                            : ''
+                        }${
+                          !hasAgentTraces
+                            ? ' contextEnginePrototype__intentCard--disabled'
+                            : ''
+                        }`}
+                        onClick={
+                          hasAgentTraces
+                            ? () => {
+                                setIntentMode('traces');
+                                if (!intentTraceStream && traceStreams[0]) {
+                                  setIntentTraceStream(traceStreams[0].id);
+                                }
+                              }
+                            : undefined
+                        }
+                        role="radio"
+                        aria-checked={intentMode === 'traces'}
+                        aria-disabled={!hasAgentTraces}
+                        tabIndex={hasAgentTraces ? 0 : -1}
+                        onKeyDown={
+                          hasAgentTraces
+                            ? (event: React.KeyboardEvent) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  setIntentMode('traces');
+                                  if (!intentTraceStream && traceStreams[0]) {
+                                    setIntentTraceStream(traceStreams[0].id);
+                                  }
+                                }
+                              }
+                            : undefined
+                        }
+                      >
+                        <EuiFlexGroup alignItems="flexStart" gutterSize="s" responsive={false}>
+                          <EuiFlexItem grow={false}>
+                            <EuiRadio
+                              id="intent-traces"
+                              checked={intentMode === 'traces'}
+                              disabled={!hasAgentTraces}
+                              onChange={() => {
+                                if (!hasAgentTraces) return;
+                                setIntentMode('traces');
+                                if (!intentTraceStream && traceStreams[0]) {
+                                  setIntentTraceStream(traceStreams[0].id);
+                                }
+                              }}
+                              label=""
+                            />
+                          </EuiFlexItem>
+                          <EuiFlexItem>
+                            <EuiText size="s">
+                              <strong>Use an existing agent&apos;s traces</strong>
+                            </EuiText>
+                            <EuiText size="xs" color="subdued">
+                              Borrow the questions an agent already answers today.
+                            </EuiText>
+                            {!hasAgentTraces && (
+                              <>
+                                <EuiSpacer size="xs" />
+                                <EuiText size="xs" color="subdued">
+                                  No running agents with traces yet.
+                                </EuiText>
+                              </>
+                            )}
+                          </EuiFlexItem>
+                        </EuiFlexGroup>
+                      </EuiPanel>
+                    </EuiFlexItem>
                   </EuiFlexGroup>
-                ) : (
-                  <EuiText size="s" color="subdued">
-                    No sources selected. You can add them later.
-                  </EuiText>
-                )}
-              </EuiPanel>
-            </EuiFlexItem>
 
-            <EuiFlexItem>
-              <EuiPanel hasBorder paddingSize="l">
-                <EuiTitle size="s">
-                  <h2>Storage type</h2>
-                </EuiTitle>
-                <EuiText size="s" color="subdued">
-                  Choose how this AI index stores pre-computed context. We recommend a default from
-                  your selected sources.
-                </EuiText>
-                {storageRecommendation.isMixed && (
-                  <>
-                    <EuiSpacer size="s" />
-                    <EuiText size="s" color="subdued">
-                      {storageRecommendation.reason}
-                    </EuiText>
-                  </>
-                )}
-                <EuiSpacer size="m" />
-                <EuiPanel
-                  hasBorder
-                  paddingSize="m"
-                  color={storageType === 'index' ? 'primary' : 'plain'}
-                  className="contextEnginePrototype__radioCard"
-                  onClick={() => chooseStorageType('index')}
-                >
-                  <EuiRadio
-                    id="storage-index"
-                    name="storageType"
-                    checked={storageType === 'index'}
-                    onChange={() => chooseStorageType('index')}
-                    label={
-                      <EuiFlexGroup alignItems="center" gutterSize="s" responsive={false} wrap>
-                        <EuiFlexItem grow={false}>
-                          <span>
-                            <strong>Index</strong> <EuiBadge>idx</EuiBadge>
-                          </span>
-                        </EuiFlexItem>
-                        {storageRecommendation.type === 'index' && (
-                          <EuiFlexItem grow={false}>
-                            <EuiBadge color="hollow" className="contextEnginePrototype__typeBadge">
-                              Recommended
-                            </EuiBadge>
-                          </EuiFlexItem>
-                        )}
-                      </EuiFlexGroup>
-                    }
-                  />
-                  <EuiText size="s" color="subdued">
-                    Enterprise data — docs, tickets, knowledge bases and other reference context
-                    that isn&apos;t time-based.
-                  </EuiText>
-                  {storageRecommendation.type === 'index' && !storageRecommendation.isMixed && (
+                  {intentMode === 'describe' && (
                     <>
-                      <EuiSpacer size="xs" />
-                      <EuiText size="xs" color="subdued">
-                        Recommended: {storageRecommendation.reason}
+                      <EuiSpacer size="m" />
+                      <EuiText
+                        size="xs"
+                        className="contextEnginePrototype__intentMicroLabel"
+                      >
+                        YOUR DESCRIPTION
                       </EuiText>
+                      <EuiSpacer size="xs" />
+                      <EuiTextArea
+                        fullWidth
+                        rows={4}
+                        placeholder="Help my support agents resolve cases using past tickets and our internal docs."
+                        value={intentDescription}
+                        onChange={(event) => setIntentDescription(event.target.value)}
+                        aria-label="Intent description"
+                      />
+                    </>
+                  )}
+
+                  {intentMode === 'traces' && (
+                    <>
+                      <EuiSpacer size="m" />
+                      <EuiText
+                        size="xs"
+                        className="contextEnginePrototype__intentMicroLabel"
+                      >
+                        PICK A RUNNING AGENT
+                      </EuiText>
+                      <EuiSpacer size="xs" />
+                      <EuiText size="s" color="subdued">
+                        These agents already run in your deployment and send traces. Their real
+                        questions tell the engine what this index should help with. This does not
+                        connect the agent to the index.
+                      </EuiText>
+                      <EuiSpacer size="m" />
+                      {hasAgentTraces ? (
+                        <EuiPanel hasBorder paddingSize="s" color="subdued">
+                          <EuiFlexGroup direction="column" gutterSize="s">
+                            {traceStreams.map((option) => {
+                              const selected = intentTraceStream === option.id;
+                              return (
+                                <EuiFlexItem key={option.id}>
+                                  <EuiPanel
+                                    hasBorder
+                                    paddingSize="s"
+                                    className={`contextEnginePrototype__sourceRow${
+                                      selected
+                                        ? ' contextEnginePrototype__sourceRow--selected'
+                                        : ''
+                                    }`}
+                                    onClick={() => setIntentTraceStream(option.id)}
+                                    role="radio"
+                                    aria-checked={selected}
+                                  >
+                                    <EuiFlexGroup
+                                      alignItems="center"
+                                      gutterSize="s"
+                                      responsive={false}
+                                    >
+                                      <EuiFlexItem grow={false}>
+                                        <EuiRadio
+                                          id={`trace-${option.id}`}
+                                          checked={selected}
+                                          onChange={() => setIntentTraceStream(option.id)}
+                                          label=""
+                                        />
+                                      </EuiFlexItem>
+                                      <EuiFlexItem>
+                                        <EuiText size="s">
+                                          <strong>{option.agentName}</strong>
+                                        </EuiText>
+                                        <EuiText size="xs" color="subdued">
+                                          {option.questionCount} questions · last active{' '}
+                                          {option.lastActive} · <EuiCode>{option.streamName}</EuiCode>
+                                        </EuiText>
+                                      </EuiFlexItem>
+                                    </EuiFlexGroup>
+                                  </EuiPanel>
+                                </EuiFlexItem>
+                              );
+                            })}
+                          </EuiFlexGroup>
+                        </EuiPanel>
+                      ) : (
+                        <EuiPanel hasBorder paddingSize="m" color="subdued">
+                          <EuiText size="s" color="subdued">
+                            No agent traces found. This option needs an agent already running with
+                            tracing enabled.{' '}
+                            <EuiLink onClick={() => setIntentMode('describe')}>
+                              Describe the intent instead
+                            </EuiLink>
+                            .
+                          </EuiText>
+                        </EuiPanel>
+                      )}
                     </>
                   )}
                 </EuiPanel>
-                <EuiSpacer size="s" />
-                <EuiPanel
-                  hasBorder
-                  paddingSize="m"
-                  color={storageType === 'dataStream' ? 'primary' : 'plain'}
-                  className="contextEnginePrototype__radioCard"
-                  onClick={() => chooseStorageType('dataStream')}
-                >
-                  <EuiRadio
-                    id="storage-stream"
-                    name="storageType"
-                    checked={storageType === 'dataStream'}
-                    onChange={() => chooseStorageType('dataStream')}
-                    label={
-                      <EuiFlexGroup alignItems="center" gutterSize="s" responsive={false} wrap>
-                        <EuiFlexItem grow={false}>
-                          <span>
-                            <strong>Data stream</strong> <EuiBadge>ds</EuiBadge>
-                          </span>
-                        </EuiFlexItem>
-                        {storageRecommendation.type === 'dataStream' && (
-                          <EuiFlexItem grow={false}>
-                            <EuiBadge color="hollow" className="contextEnginePrototype__typeBadge">
-                              Recommended
-                            </EuiBadge>
-                          </EuiFlexItem>
-                        )}
-                      </EuiFlexGroup>
-                    }
-                  />
+              ) : (
+                <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__createPanel">
+                  <EuiTitle size="s">
+                    <h2>Sources</h2>
+                  </EuiTitle>
+                  <EuiSpacer size="xs" />
                   <EuiText size="s" color="subdued">
-                    Observability & security — time-based context for agents (logs, metrics,
-                    traces, alerts).
+                    Where the knowledge lives. Automations will read these and extract what your
+                    agent needs. Pick at least one; add more anytime.
                   </EuiText>
-                  {storageRecommendation.type === 'dataStream' && (
-                    <>
-                      <EuiSpacer size="xs" />
-                      <EuiText size="xs" color="subdued">
-                        Recommended: {storageRecommendation.reason}
-                      </EuiText>
-                    </>
-                  )}
-                </EuiPanel>
-              </EuiPanel>
-            </EuiFlexItem>
 
-            <EuiFlexItem>
-              <EuiFlexGroup justifyContent="flexEnd">
+                  <EuiSpacer size="m" />
+                  <EuiTabs>
+                    {sourceCategories.map((category) => {
+                      const count = selectedSources.filter(
+                        (source) => source.category === category.id
+                      ).length;
+                      return (
+                        <EuiTab
+                          key={category.id}
+                          isSelected={activeCategory === category.id}
+                          onClick={() => setActiveCategory(category.id)}
+                          prepend={
+                            <EuiIcon type={category.icon} size="s" aria-hidden={true} />
+                          }
+                          append={
+                            count > 0 ? <EuiBadge color="primary">{count}</EuiBadge> : undefined
+                          }
+                        >
+                          {category.label}
+                        </EuiTab>
+                      );
+                    })}
+                  </EuiTabs>
+                  <EuiSpacer size="m" />
+
+                  <EuiFlexGroup direction="column" gutterSize="s">
+                    {visibleSources.map((source) => (
+                      <EuiFlexItem key={source.id}>{sourceRow(source)}</EuiFlexItem>
+                    ))}
+                    <EuiFlexItem>
+                      <EuiPanel
+                        hasBorder
+                        paddingSize="s"
+                        className="contextEnginePrototype__dashedAction"
+                      >
+                        <EuiButtonEmpty iconType="plus" flush="left">
+                          {activeTab.createLabel}
+                        </EuiButtonEmpty>
+                      </EuiPanel>
+                    </EuiFlexItem>
+                  </EuiFlexGroup>
+                </EuiPanel>
+              )}
+
+              <EuiSpacer size="m" />
+              <EuiFlexGroup
+                className="contextEnginePrototype__createFooter"
+                alignItems="center"
+                gutterSize="m"
+                responsive={false}
+                wrap
+              >
                 <EuiFlexItem grow={false}>
                   <EuiButton
                     fill
                     iconSide="right"
                     iconType="arrowRight"
-                    disabled={Boolean(namespaceNameError)}
-                    onClick={createNamespace}
+                    disabled={primaryAction.disabled}
+                    onClick={primaryAction.onClick}
                   >
-                    Create AI index
+                    {primaryAction.label}
                   </EuiButton>
                 </EuiFlexItem>
+                {primaryAction.microtext ? (
+                  <EuiFlexItem grow={false}>{primaryAction.microtext}</EuiFlexItem>
+                ) : null}
               </EuiFlexGroup>
             </EuiFlexItem>
           </EuiFlexGroup>
@@ -1614,10 +2313,9 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
 
   const producesLabel = (type: string) => `Produces: ${badgeLabel(type)}`;
 
-  const renderActiveAutomation = (automation: Automation) => {
-    const sourceTag = automation.tags.find(
-      (tag) => !['new', 'Bottom-Up', 'Index Metadata', 'UPDATE'].includes(tag)
-    );
+  const renderActiveAutomation = (automation: Automation, namespace: Namespace) => {
+    const sourceNames = automationSourceNames(automation, namespace);
+    const producedCount = indicatorsForAutomation(automation, namespace.indicators).length;
     return (
       <div key={automation.id} className="contextEnginePrototype__listRow">
         <EuiFlexGroup alignItems="flexStart" responsive={false} gutterSize="m">
@@ -1629,13 +2327,40 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
               {producesLabel(automation.type)}
               {' · '}
               {ownershipLabel(automation.ownership)}
-              {sourceTag ? ` · ${sourceTag}` : ''}
               {automation.evidence ? ` · ${automation.evidence}` : ''}
             </EuiText>
             <EuiSpacer size="xs" />
             <EuiText size="s" color="subdued">
               {automation.description}
             </EuiText>
+            <EuiSpacer size="s" />
+            <div className="contextEnginePrototype__relationshipLine">
+              <span className="contextEnginePrototype__relationshipLabel">READS</span>
+              {sourceNames.map((sourceName) => (
+                <EuiBadge
+                  key={sourceName}
+                  color="hollow"
+                  className="contextEnginePrototype__relationshipChip"
+                >
+                  {sourceName}
+                </EuiBadge>
+              ))}
+              <EuiIcon type="arrowRight" size="s" color="subdued" aria-hidden={true} />
+              <span className="contextEnginePrototype__relationshipLabel">PRODUCES</span>
+              <button
+                type="button"
+                className="contextEnginePrototype__relationshipChipButton"
+                onClick={() => openKnowledgeTabFilteredByAutomation(automation.title)}
+              >
+                <EuiBadge
+                  color="accent"
+                  iconType="aggregate"
+                  className="contextEnginePrototype__relationshipChip contextEnginePrototype__relationshipChip--accent"
+                >
+                  {producedCount} Knowledge Indicators ›
+                </EuiBadge>
+              </button>
+            </div>
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
             <EuiButtonEmpty
@@ -1654,7 +2379,9 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
 
   const renderNamespace = () => {
     const namespace = activeNamespace || namespaces[0];
+    const displayName = catalogDisplayName(namespace);
     const kiTotal = knowledgeTotal(namespace.knowledge);
+    const activeAutomationCount = namespace.automations.length;
     const pendingSuggestions = namespace.suggestedAutomations.filter(
       ({ id }) => !addedAutomations.includes(id)
     );
@@ -1670,12 +2397,709 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
       { type: 'FACT', label: 'facts', count: namespace.knowledge.facts },
     ].filter(({ count }) => count > 0);
 
-    const highIssueCount = namespace.monitoring.issues.filter(
-      ({ severity }) => severity === 'high'
-    ).length;
-    const showIssuesBanner =
-      namespace.monitoring.connected && namespace.monitoring.issues.length > 0;
-    const showConnectBanner = !namespace.monitoring.connected;
+    const suggestedSourceNames = Array.from(
+      new Set(
+        pendingSuggestions.flatMap((automation) =>
+          automation.tags.filter((tag) => namespace.sources.includes(tag))
+        )
+      )
+    );
+    const suggestedFromLabel = (
+      suggestedSourceNames.length > 0 ? suggestedSourceNames : namespace.sources
+    ).join(' and ');
+
+    const descriptionPanel = (
+      <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__detailSection">
+        <div className="contextEnginePrototype__sectionHeader">
+          <div>
+            <EuiTitle size="xs">
+              <h2 className="contextEnginePrototype__sectionTitle">
+                <EuiIcon type="document" size="m" aria-hidden={true} />
+                Description
+              </h2>
+            </EuiTitle>
+          </div>
+          <div className="contextEnginePrototype__sectionActions">
+            <EuiButtonEmpty
+              size="s"
+              iconType="sparkles"
+              isLoading={isDefiningDescription}
+              onClick={defineDescriptionWithChat}
+            >
+              Generate description
+            </EuiButtonEmpty>
+            <EuiButtonEmpty size="s" iconType="pencil">
+              Edit
+            </EuiButtonEmpty>
+          </div>
+        </div>
+        <EuiText size="s" color={isDefiningDescription ? 'subdued' : undefined}>
+          {isDefiningDescription
+            ? "Generating a description from this namespace's sources, Knowledge Indicators, and automations…"
+            : namespace.description}
+        </EuiText>
+      </EuiPanel>
+    );
+
+    const sourcesPanel = (
+      <EuiPanel
+        hasBorder
+        paddingSize="l"
+        className="contextEnginePrototype__detailSection"
+        id="context-engine-4-sources"
+      >
+        <div className="contextEnginePrototype__sectionHeader">
+          <div>
+            <EuiTitle size="xs">
+              <h2>Sources</h2>
+            </EuiTitle>
+            <EuiText size="s" color="subdued">
+              {namespace.managed
+                ? 'Managed sources for this index. Elastic keeps these up to date.'
+                : 'Data feeding this index. Add a source to refresh context and suggestions.'}
+            </EuiText>
+          </div>
+          <div className="contextEnginePrototype__sectionActions">
+            {namespace.managed ? (
+              <EuiButtonEmpty
+                size="s"
+                iconType="eye"
+                onClick={() => {
+                  document
+                    .getElementById('context-engine-4-sources')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+              >
+                View sources
+              </EuiButtonEmpty>
+            ) : (
+              <EuiButtonEmpty size="s" iconType="pencil" onClick={editSourcesFromNamespace}>
+                Edit sources
+              </EuiButtonEmpty>
+            )}
+          </div>
+        </div>
+        <div className="contextEnginePrototype__list">
+          {namespace.sourceDetails.map((source) => (
+            <div key={source.name} className="contextEnginePrototype__listRow">
+              <EuiFlexGroup alignItems="center" responsive={false} gutterSize="m">
+                <EuiFlexItem grow={false}>
+                  <EuiIcon type={source.icon} aria-hidden={true} />
+                </EuiFlexItem>
+                <EuiFlexItem>
+                  <EuiText size="s">
+                    <strong>{source.name}</strong>
+                  </EuiText>
+                  <EuiText size="xs" color="subdued">
+                    {source.typeLabel}
+                    {source.subtitle ? ` · ${source.subtitle}` : ''}
+                  </EuiText>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+            </div>
+          ))}
+        </div>
+      </EuiPanel>
+    );
+
+    const automationsPanel = (
+      <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__detailSection">
+        <div className="contextEnginePrototype__sectionHeader">
+          <div>
+            <EuiTitle size="xs">
+              <h2 className="contextEnginePrototype__sectionTitle">
+                <EuiIcon type="play" size="m" aria-hidden={true} />
+                Automations
+              </h2>
+            </EuiTitle>
+            <EuiText size="s" color="subdued">
+              Extract and refresh Knowledge Indicators from sources.
+            </EuiText>
+          </div>
+          <div className="contextEnginePrototype__sectionActions">
+            <EuiButtonEmpty size="s" iconType="plusInCircle">
+              Add automation
+            </EuiButtonEmpty>
+          </div>
+        </div>
+
+        {pendingSuggestions.length > 0 && (
+          <>
+            <EuiSpacer size="s" />
+            <EuiText size="xs" color="subdued">
+              <strong>Suggested automations</strong>
+            </EuiText>
+            <EuiPanel
+              color="primary"
+              paddingSize="s"
+              hasBorder
+              className="contextEnginePrototype__suggestionBlock"
+            >
+              <EuiFlexGroup
+                alignItems="center"
+                justifyContent="spaceBetween"
+                gutterSize="m"
+                responsive={false}
+                wrap
+              >
+                <EuiFlexItem grow={false}>
+                  <EuiFlexGroup alignItems="center" gutterSize="s" responsive={false}>
+                    <EuiFlexItem grow={false}>
+                      <EuiIcon type="plusInCircle" color="primary" aria-hidden={true} />
+                    </EuiFlexItem>
+                    <EuiFlexItem>
+                      <EuiText size="s">
+                        {`${pendingSuggestions.length} suggested automation${
+                          pendingSuggestions.length === 1 ? '' : 's'
+                        } ready to add${suggestedFromLabel ? ` from ${suggestedFromLabel}` : ''}`}
+                      </EuiText>
+                    </EuiFlexItem>
+                  </EuiFlexGroup>
+                </EuiFlexItem>
+                <EuiFlexItem grow={false}>
+                  <EuiButtonEmpty
+                    size="xs"
+                    flush="both"
+                    onClick={() => setShowSuggestedAutomations((current) => !current)}
+                  >
+                    {showSuggestedAutomations ? 'Hide' : 'Review'}
+                  </EuiButtonEmpty>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+              {showSuggestedAutomations && (
+                <div className="contextEnginePrototype__list">
+                  {pendingSuggestions.map((automation) => (
+                    <div key={automation.id} className="contextEnginePrototype__listRow">
+                      <EuiFlexGroup alignItems="center" responsive={false} gutterSize="m">
+                        <EuiFlexItem>
+                          <EuiText size="s">
+                            <strong>{automation.title}</strong>
+                          </EuiText>
+                          <EuiText size="xs" color="subdued">
+                            {producesLabel(automation.type)}
+                            {' · New'}
+                            {automation.tags.includes('UPDATE') ? ' · Update available' : ''}
+                            {' · '}
+                            {automation.description}
+                          </EuiText>
+                        </EuiFlexItem>
+                        <EuiFlexItem grow={false}>
+                          <EuiButton
+                            size="s"
+                            iconType="plus"
+                            onClick={() => addSuggestedAutomation(automation)}
+                          >
+                            Add
+                          </EuiButton>
+                        </EuiFlexItem>
+                      </EuiFlexGroup>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </EuiPanel>
+            <EuiSpacer size="m" />
+          </>
+        )}
+
+        <div className="contextEnginePrototype__activeAutomations">
+          <EuiText size="xs" color="subdued">
+            <strong>Active</strong>
+          </EuiText>
+          <div className="contextEnginePrototype__list">
+            {namespace.automations.length === 0 ? (
+              <EuiText size="s" color="subdued">
+                {pendingSuggestions.length > 0
+                  ? 'No active automations yet. Add a suggestion above to get started.'
+                  : 'No automations yet.'}
+              </EuiText>
+            ) : (
+              namespace.automations.map((automation) =>
+                renderActiveAutomation(automation, namespace)
+              )
+            )}
+          </div>
+        </div>
+      </EuiPanel>
+    );
+
+    const tabKnowledgeIndicators = kiAutomationFilter
+      ? namespace.indicators.filter((indicator) => {
+          const automation = namespace.automations.find(
+            (item) => item.title === kiAutomationFilter
+          );
+          if (!automation) {
+            return indicator.extractedBy === kiAutomationFilter;
+          }
+          return indicatorMatchesAutomation(indicator, automation);
+        })
+      : namespace.indicators;
+
+    const knowledgePanel = (
+      <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__detailSection">
+        <div className="contextEnginePrototype__sectionHeader">
+          <div>
+            <EuiTitle size="xs">
+              <h2 className="contextEnginePrototype__sectionTitle">
+                <EuiIcon type="aggregate" size="m" aria-hidden={true} />
+                Knowledge Indicators
+              </h2>
+            </EuiTitle>
+            <EuiText size="s" color="subdued">
+              {tabKnowledgeIndicators.length} in <EuiCode>{namespace.indexName}</EuiCode>
+              {knowledgeSummaryParts.length > 0 && !kiAutomationFilter && (
+                <>
+                  {' · '}
+                  {knowledgeSummaryParts.map((part, index) => (
+                    <React.Fragment key={part.type}>
+                      {index > 0 && ' · '}
+                      <EuiLink onClick={() => openKnowledgeIndicators(part.type)}>
+                        {part.count} {part.label}
+                      </EuiLink>
+                    </React.Fragment>
+                  ))}
+                </>
+              )}
+            </EuiText>
+          </div>
+          <div className="contextEnginePrototype__sectionActions">
+            <EuiButtonEmpty
+              size="s"
+              iconSide="right"
+              iconType="arrowRight"
+              onClick={() => openKnowledgeIndicators()}
+            >
+              Open browser
+            </EuiButtonEmpty>
+          </div>
+        </div>
+
+        {kiAutomationFilter && (
+          <>
+            <EuiPanel
+              color="primary"
+              paddingSize="s"
+              hasBorder
+              className="contextEnginePrototype__kiFilterBar"
+              data-test-subj="contextEngineKiAutomationFilter"
+            >
+              <EuiFlexGroup
+                alignItems="center"
+                justifyContent="spaceBetween"
+                gutterSize="m"
+                responsive={false}
+                wrap
+              >
+                <EuiFlexItem>
+                  <EuiText size="s">
+                    Produced by {kiAutomationFilter} · {tabKnowledgeIndicators.length} Knowledge
+                    Indicators
+                  </EuiText>
+                </EuiFlexItem>
+                <EuiFlexItem grow={false}>
+                  <EuiButtonEmpty size="xs" flush="both" onClick={() => setKiAutomationFilter(null)}>
+                    ✕ Clear filter
+                  </EuiButtonEmpty>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+            </EuiPanel>
+            <EuiSpacer size="m" />
+          </>
+        )}
+
+        <div className="contextEnginePrototype__list">
+          {tabKnowledgeIndicators.length === 0 ? (
+            <EuiText size="s" color="subdued">
+              No Knowledge Indicators match this filter.
+            </EuiText>
+          ) : (
+            tabKnowledgeIndicators.map((indicator) => {
+              const automationTitle = automationTitleForIndicator(
+                indicator,
+                namespace.automations
+              );
+              const sources = indicatorSourceNames(indicator, namespace);
+              return (
+                <div key={indicator.id} className="contextEnginePrototype__listRow">
+                  <EuiText size="s">
+                    <strong>{indicator.title}</strong>
+                  </EuiText>
+                  <EuiText size="xs" color="subdued">
+                    {badgeLabel(indicator.type)} · {indicator.category}
+                  </EuiText>
+                  <div className="contextEnginePrototype__relationshipLine">
+                    <span className="contextEnginePrototype__relationshipLabel">FROM</span>
+                    <button
+                      type="button"
+                      className="contextEnginePrototype__relationshipChipButton"
+                      onClick={() => openKnowledgeTabFilteredByAutomation(automationTitle)}
+                    >
+                      <EuiBadge
+                        color="accent"
+                        iconType="gear"
+                        className="contextEnginePrototype__relationshipChip contextEnginePrototype__relationshipChip--accent"
+                      >
+                        {automationTitle}
+                      </EuiBadge>
+                    </button>
+                    <span className="contextEnginePrototype__relationshipDot" aria-hidden={true}>
+                      ·
+                    </span>
+                    {sources.map((sourceName) => (
+                      <EuiBadge
+                        key={sourceName}
+                        color="hollow"
+                        className="contextEnginePrototype__relationshipChip"
+                      >
+                        {sourceName}
+                      </EuiBadge>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </EuiPanel>
+    );
+
+    const howItWorksCallout = howItWorksVisible ? (
+      <EuiPanel
+        hasBorder
+        paddingSize="m"
+        className="contextEnginePrototype__howItWorks"
+        data-test-subj="contextEngineHowItWorks"
+      >
+        <EuiFlexGroup
+          alignItems="center"
+          justifyContent="spaceBetween"
+          gutterSize="s"
+          responsive={false}
+        >
+          <EuiFlexItem>
+            <EuiTitle size="xs">
+              <h2>How this index works</h2>
+            </EuiTitle>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiButtonIcon
+              iconType="cross"
+              color="text"
+              aria-label="Dismiss how this index works"
+              onClick={dismissHowItWorks}
+              data-test-subj="contextEngineHowItWorksDismiss"
+            />
+          </EuiFlexItem>
+        </EuiFlexGroup>
+        <EuiSpacer size="s" />
+        <div className="contextEnginePrototype__howItWorksFlow" aria-hidden={true}>
+          <div className="contextEnginePrototype__howItWorksBox contextEnginePrototype__howItWorksBox--source">
+            <strong>Sources</strong>
+            <span>Your data</span>
+          </div>
+          <div className="contextEnginePrototype__howItWorksArrow">
+            <span>read by</span>
+            <EuiIcon type="arrowRight" size="s" />
+          </div>
+          <div className="contextEnginePrototype__howItWorksBox contextEnginePrototype__howItWorksBox--automation">
+            <strong>Automations</strong>
+            <span>Extract knowledge</span>
+          </div>
+          <div className="contextEnginePrototype__howItWorksArrow">
+            <span>produce</span>
+            <EuiIcon type="arrowRight" size="s" />
+          </div>
+          <div className="contextEnginePrototype__howItWorksBox contextEnginePrototype__howItWorksBox--ki">
+            <strong>Knowledge Indicators</strong>
+            <span>What agents retrieve</span>
+          </div>
+        </div>
+        <EuiSpacer size="s" />
+        <EuiText size="xs" color="subdued" className="contextEnginePrototype__howItWorksCopy">
+          Agents retrieve Knowledge Indicators, not raw data. Each indicator shows the automation
+          and sources it came from.
+        </EuiText>
+      </EuiPanel>
+    ) : null;
+
+    const hasMonitoringData =
+      !namespace.userCreated ||
+      MOCK_USER_CREATED_MONITORING_ANALYSIS_READY ||
+      namespace.monitoring.analysisReady === true;
+    const showConnectedAwaitingAnalysis =
+      Boolean(namespace.userCreated) &&
+      namespace.monitoring.connected &&
+      !hasMonitoringData;
+    const issueCount = namespace.monitoring.issues.length;
+    const efficiency = namespace.monitoring.efficiency;
+    const visibleFindings = hasMonitoringData ? OVERVIEW_FINDINGS : [];
+    const isJustCreatedDetail =
+      justCreatedName === namespace.name && !dismissedJustCreatedBanner;
+
+    const overviewStatsPanel = (
+      <EuiPanel
+        hasBorder
+        paddingSize="m"
+        className="contextEnginePrototype__detailSection"
+        id="context-engine-4-overview-monitoring"
+        data-test-subj="contextEngineOverviewStats"
+      >
+        {hasMonitoringData ? (
+          <EuiFlexGroup
+            gutterSize="none"
+            responsive={false}
+            className="contextEnginePrototype__overviewStats"
+          >
+            <EuiFlexItem className="contextEnginePrototype__overviewStatCell">
+              <EuiStat
+                title={efficiency ? `${efficiency.retrievalHitRate}%` : 'n/a'}
+                description="Retrieval hit rate"
+                titleSize="m"
+                textAlign="left"
+                titleColor="success"
+              />
+            </EuiFlexItem>
+            <EuiFlexItem className="contextEnginePrototype__overviewStatCell">
+              <EuiStat
+                title={efficiency ? `${efficiency.tokensSavedPct}%` : 'n/a'}
+                description="Tokens saved vs baseline"
+                titleSize="m"
+                textAlign="left"
+                titleColor="success"
+              />
+            </EuiFlexItem>
+            <EuiFlexItem className="contextEnginePrototype__overviewStatCell">
+              <EuiStat
+                title={efficiency ? `${efficiency.medianLatencyMs}ms` : 'n/a'}
+                description="Median latency"
+                titleSize="m"
+                textAlign="left"
+              />
+            </EuiFlexItem>
+            <EuiFlexItem className="contextEnginePrototype__overviewStatCell">
+              <EuiStat
+                title={(namespace.monitoring.traceCount ?? 0).toLocaleString()}
+                description="Traces analysed"
+                titleSize="m"
+                textAlign="left"
+              />
+            </EuiFlexItem>
+            <EuiFlexItem className="contextEnginePrototype__overviewStatCell">
+              {issueCount > 0 ? (
+                <button
+                  type="button"
+                  className="contextEnginePrototype__overviewStatButton"
+                  onClick={() => {
+                    selectNamespaceDetailTab('overview');
+                    window.requestAnimationFrame(() => {
+                      document
+                        .getElementById('context-engine-4-things-we-found')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    });
+                  }}
+                  aria-label={`View ${issueCount} issues`}
+                >
+                  <EuiStat
+                    title={String(issueCount)}
+                    description="Issues"
+                    titleSize="m"
+                    textAlign="left"
+                    titleColor="warning"
+                  />
+                </button>
+              ) : (
+                <EuiStat
+                  title={String(issueCount)}
+                  description="Issues"
+                  titleSize="m"
+                  textAlign="left"
+                />
+              )}
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        ) : showConnectedAwaitingAnalysis ? (
+          <div data-test-subj="contextEngineMonitoringConnectionState">
+            <EuiFlexGroup alignItems="center" gutterSize="m" responsive={false} wrap>
+              <EuiFlexItem grow={false}>
+                <EuiHealth color="success">Traces connected</EuiHealth>
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiCode>{namespace.monitoring.traceId}</EuiCode>
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiText size="s">
+                  {(namespace.monitoring.traceCount ?? 0).toLocaleString()} traces
+                </EuiText>
+              </EuiFlexItem>
+            </EuiFlexGroup>
+            <EuiSpacer size="s" />
+            <EuiText size="s" color="subdued">
+              Issue detection and efficiency metrics will populate here automatically.
+            </EuiText>
+          </div>
+        ) : (
+          <EuiText size="s" color="subdued">
+            No traces yet · metrics appear once an agent starts retrieving.
+          </EuiText>
+        )}
+      </EuiPanel>
+    );
+
+    const thingsWeFoundPanel =
+      visibleFindings.length > 0 ? (
+        <EuiPanel
+          hasBorder
+          paddingSize="l"
+          className="contextEnginePrototype__detailSection"
+          id="context-engine-4-things-we-found"
+          data-test-subj="contextEngineThingsWeFound"
+        >
+          <div className="contextEnginePrototype__sectionHeader">
+            <div>
+              <EuiTitle size="xs">
+                <h2>Things we found</h2>
+              </EuiTitle>
+              <EuiText size="s" color="subdued">
+                Approve to improve this index automatically.
+              </EuiText>
+            </div>
+          </div>
+          <div className="contextEnginePrototype__list">
+            {visibleFindings.map((finding, index) => {
+              const approved = approvedFindingIds.includes(finding.id);
+              const relatedIssue = namespace.monitoring.issues[index];
+              return (
+                <div key={finding.id} className="contextEnginePrototype__listRow">
+                  <EuiFlexGroup
+                    alignItems="center"
+                    responsive={false}
+                    gutterSize="m"
+                    justifyContent="spaceBetween"
+                  >
+                    <EuiFlexItem>
+                      <EuiFlexGroup
+                        alignItems="flexStart"
+                        gutterSize="s"
+                        responsive={false}
+                      >
+                        <EuiFlexItem grow={false}>
+                          <EuiBadge color="warning">{finding.severity}</EuiBadge>
+                        </EuiFlexItem>
+                        <EuiFlexItem>
+                          <EuiText size="s">
+                            <strong>{finding.title}</strong>
+                          </EuiText>
+                          <EuiText size="xs" color="subdued">
+                            {finding.explanation}
+                          </EuiText>
+                        </EuiFlexItem>
+                      </EuiFlexGroup>
+                    </EuiFlexItem>
+                    <EuiFlexItem grow={false}>
+                      {approved ? (
+                        <EuiFlexGroup alignItems="center" gutterSize="xs" responsive={false}>
+                          <EuiFlexItem grow={false}>
+                            <EuiIcon type="checkInCircleFilled" color="success" />
+                          </EuiFlexItem>
+                          <EuiFlexItem grow={false}>
+                            <EuiText size="s" color="success">
+                              Approved
+                            </EuiText>
+                          </EuiFlexItem>
+                        </EuiFlexGroup>
+                      ) : (
+                        <EuiFlexGroup gutterSize="s" responsive={false} alignItems="center">
+                          <EuiFlexItem grow={false}>
+                            <EuiButton
+                              size="s"
+                              onClick={() =>
+                                setApprovedFindingIds((current) =>
+                                  current.includes(finding.id)
+                                    ? current
+                                    : [...current, finding.id]
+                                )
+                              }
+                            >
+                              Approve
+                            </EuiButton>
+                          </EuiFlexItem>
+                          <EuiFlexItem grow={false}>
+                            <EuiButtonEmpty
+                              size="s"
+                              iconSide="right"
+                              iconType="arrowRight"
+                              onClick={() => {
+                                if (relatedIssue) {
+                                  setActiveIssue(relatedIssue);
+                                  setScreen('issue');
+                                }
+                              }}
+                            >
+                              Review
+                            </EuiButtonEmpty>
+                          </EuiFlexItem>
+                        </EuiFlexGroup>
+                      )}
+                    </EuiFlexItem>
+                  </EuiFlexGroup>
+                </div>
+              );
+            })}
+          </div>
+        </EuiPanel>
+      ) : null;
+
+    const tabLabelWithCount = (label: string, count: number) => (
+      <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+        <EuiFlexItem grow={false}>{label}</EuiFlexItem>
+        <EuiFlexItem grow={false}>
+          <EuiNotificationBadge>{count}</EuiNotificationBadge>
+        </EuiFlexItem>
+      </EuiFlexGroup>
+    );
+
+    // Use EuiTabs + panel (not EuiTabbedContent): controlled EuiTabbedContent with
+    // autoFocus="selected" crashes via focusTab() when selectedTabId is unset.
+    const detailTabItems: Array<{
+      id: NamespaceDetailTab;
+      name: React.ReactNode;
+    }> = [
+      { id: 'overview', name: 'Overview' },
+      { id: 'automations', name: tabLabelWithCount('Automations', activeAutomationCount) },
+      { id: 'knowledge', name: tabLabelWithCount('Knowledge Indicators', kiTotal) },
+    ];
+
+    const selectedDetailContent = (() => {
+      switch (namespaceDetailTab) {
+        case 'automations':
+          return automationsPanel;
+        case 'knowledge':
+          return knowledgePanel;
+        case 'overview':
+        default:
+          return (
+            <>
+              {howItWorksCallout}
+              {overviewStatsPanel}
+              {thingsWeFoundPanel}
+              {descriptionPanel}
+              {sourcesPanel}
+            </>
+          );
+      }
+    })();
+
+    const tabIntro =
+      namespaceDetailTab === 'automations' ? (
+        <EuiText size="xs" color="subdued" className="contextEnginePrototype__tabIntro">
+          Automations read your sources on a schedule and produce the Knowledge Indicators.
+        </EuiText>
+      ) : namespaceDetailTab === 'knowledge' ? (
+        <EuiText size="xs" color="subdued" className="contextEnginePrototype__tabIntro">
+          The knowledge your agents retrieve. Each indicator shows the automation and sources it
+          came from.
+        </EuiText>
+      ) : null;
 
     return (
       <>
@@ -1700,11 +3124,38 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
               <EuiFlexGroup alignItems="center" responsive={false} gutterSize="s" wrap>
                 <EuiFlexItem grow={false}>
                   <EuiTitle size="l">
-                    <h1>{namespace.name}</h1>
+                    <h1>{displayName}</h1>
                   </EuiTitle>
                 </EuiFlexItem>
+                {howItWorksDismissed && !howItWorksVisible && (
+                  <EuiFlexItem grow={false}>
+                    <EuiToolTip content="How this index works">
+                      <EuiButtonIcon
+                        iconType="info"
+                        color="primary"
+                        aria-label="How this index works"
+                        onClick={() => {
+                          setHowItWorksVisible(true);
+                          selectNamespaceDetailTab('overview');
+                        }}
+                        data-test-subj="contextEngineHowItWorksReopen"
+                      />
+                    </EuiToolTip>
+                  </EuiFlexItem>
+                )}
+                {namespace.managed && (
+                  <EuiFlexItem grow={false}>
+                    <EuiBadge
+                      color="hollow"
+                      iconType="lock"
+                      className="contextEnginePrototype__typeBadge"
+                    >
+                      Managed
+                    </EuiBadge>
+                  </EuiFlexItem>
+                )}
                 <EuiFlexItem grow={false}>
-                  <EuiBadge color="hollow" className="contextEnginePrototype__typeBadge">
+                  <EuiBadge color="success" className="contextEnginePrototype__typeBadge">
                     Active
                   </EuiBadge>
                 </EuiFlexItem>
@@ -1726,12 +3177,14 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
                 <EuiFlexItem grow={false}>
                   <EuiToolTip content="Open the integration package to use this namespace in an agent">
                     <EuiButton
+                      id="context-engine-4-use-in-agent"
                       iconType="bolt"
                       onClick={() => {
                         const ns = activeNamespace || namespaces[0];
                         setAgentHarness(agentHarnessFromIntegration(ns.integration));
                         setApiKeyRevealed(false);
                         setAgentNotice(null);
+                        setDismissedJustCreatedBanner(true);
                         setScreen('agent');
                       }}
                       aria-label="Open the integration package to use this namespace in an agent"
@@ -1747,12 +3200,12 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
 
         <EuiPageTemplate.Section>
           <div className="contextEnginePrototype__detailStack">
-            {showIssuesBanner && (
-              <EuiCallOut
-                color="warning"
-                iconType="warning"
-                size="s"
-                className="contextEnginePrototype__healthBanner"
+            {isJustCreatedDetail && (
+              <EuiPanel
+                hasBorder
+                paddingSize="s"
+                data-test-subj="contextEngineJustCreatedBanner"
+                className="contextEnginePrototype__justCreatedBanner"
               >
                 <EuiFlexGroup
                   alignItems="center"
@@ -1763,411 +3216,51 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
                 >
                   <EuiFlexItem>
                     <EuiText size="s">
-                      {namespace.monitoring.issuesSummary ||
-                        `${namespace.monitoring.issues.length} KI-addressable issues`}
-                      {highIssueCount > 0
-                        ? ` · ${highIssueCount} high issue${highIssueCount === 1 ? '' : 's'}`
-                        : ''}
+                      Automations are extracting knowledge from your sources. Next: connect an
+                      agent so it can retrieve from this index.
                     </EuiText>
                   </EuiFlexItem>
                   <EuiFlexItem grow={false}>
-                    <EuiLink onClick={() => setFocusMonitoring(true)}>Review issues →</EuiLink>
-                  </EuiFlexItem>
-                </EuiFlexGroup>
-              </EuiCallOut>
-            )}
-            {showConnectBanner && (
-              <EuiPanel
-                color="subdued"
-                paddingSize="s"
-                hasBorder
-                className="contextEnginePrototype__healthBanner"
-              >
-                <EuiFlexGroup
-                  alignItems="center"
-                  justifyContent="spaceBetween"
-                  gutterSize="m"
-                  responsive={false}
-                  wrap
-                >
-                  <EuiFlexItem>
-                    <EuiFlexGroup alignItems="center" gutterSize="s" responsive={false}>
-                      <EuiFlexItem grow={false}>
-                        <EuiIcon type="visBarVerticalStacked" color="subdued" />
-                      </EuiFlexItem>
-                      <EuiFlexItem>
-                        <EuiText size="s">
-                          No traces connected yet · connect traces to monitor this AI index
-                        </EuiText>
-                      </EuiFlexItem>
-                    </EuiFlexGroup>
+                    <EuiButtonEmpty
+                      size="s"
+                      onClick={() => {
+                        setDismissedJustCreatedBanner(true);
+                        document
+                          .getElementById('context-engine-4-use-in-agent')
+                          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        document.getElementById('context-engine-4-use-in-agent')?.focus();
+                      }}
+                    >
+                      Use in an agent
+                    </EuiButtonEmpty>
                   </EuiFlexItem>
                   <EuiFlexItem grow={false}>
-                    <EuiLink onClick={connectTraces}>Connect traces</EuiLink>
+                    <EuiButtonIcon
+                      iconType="cross"
+                      color="text"
+                      aria-label="Dismiss"
+                      onClick={() => setDismissedJustCreatedBanner(true)}
+                    />
                   </EuiFlexItem>
                 </EuiFlexGroup>
               </EuiPanel>
             )}
 
-            <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__detailSection">
-              <div className="contextEnginePrototype__sectionHeader">
-                <div>
-                  <EuiTitle size="xs">
-                    <h2 className="contextEnginePrototype__sectionTitle">
-                      <EuiIcon type="document" size="m" aria-hidden={true} />
-                      Description
-                    </h2>
-                  </EuiTitle>
-                </div>
-                <div className="contextEnginePrototype__sectionActions">
-                  <EuiButtonEmpty
-                    size="s"
-                    iconType="sparkles"
-                    isLoading={isDefiningDescription}
-                    onClick={defineDescriptionWithChat}
-                  >
-                    Generate description
-                  </EuiButtonEmpty>
-                  <EuiButtonEmpty size="s" iconType="pencil">
-                    Edit
-                  </EuiButtonEmpty>
-                </div>
-              </div>
-              <EuiText size="s" color={isDefiningDescription ? 'subdued' : undefined}>
-                {isDefiningDescription
-                  ? "Generating a description from this namespace's sources, Knowledge Indicators, and automations…"
-                  : namespace.description}
-              </EuiText>
-            </EuiPanel>
-
-            <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__detailSection">
-              <div className="contextEnginePrototype__sectionHeader">
-                <div>
-                  <EuiTitle size="xs">
-                    <h2>Sources</h2>
-                  </EuiTitle>
-                  <EuiText size="s" color="subdued">
-                    Data feeding this namespace. Add a source to refresh context and suggestions.
-                  </EuiText>
-                </div>
-                <div className="contextEnginePrototype__sectionActions">
-                  <EuiButtonEmpty size="s" iconType="pencil" onClick={editSourcesFromNamespace}>
-                    Edit sources
-                  </EuiButtonEmpty>
-                </div>
-              </div>
-              <div className="contextEnginePrototype__list">
-                {namespace.sourceDetails.map((source) => (
-                  <div key={source.name} className="contextEnginePrototype__listRow">
-                    <EuiFlexGroup alignItems="center" responsive={false} gutterSize="m">
-                      <EuiFlexItem grow={false}>
-                        <EuiIcon type={source.icon} aria-hidden={true} />
-                      </EuiFlexItem>
-                      <EuiFlexItem>
-                        <EuiText size="s">
-                          <strong>{source.name}</strong>
-                        </EuiText>
-                        <EuiText size="xs" color="subdued">
-                          {source.typeLabel}
-                          {source.subtitle ? ` · ${source.subtitle}` : ''}
-                        </EuiText>
-                      </EuiFlexItem>
-                    </EuiFlexGroup>
-                  </div>
-                ))}
-              </div>
-            </EuiPanel>
-
-            <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__detailSection">
-              <div className="contextEnginePrototype__sectionHeader">
-                <div>
-                  <EuiTitle size="xs">
-                    <h2 className="contextEnginePrototype__sectionTitle">
-                      <EuiIcon type="play" size="m" aria-hidden={true} />
-                      Automations
-                    </h2>
-                  </EuiTitle>
-                  <EuiText size="s" color="subdued">
-                    Extract and refresh Knowledge Indicators from sources.
-                  </EuiText>
-                </div>
-                <div className="contextEnginePrototype__sectionActions">
-                  <EuiButtonEmpty size="s" iconType="plusInCircle">
-                    Add automation
-                  </EuiButtonEmpty>
-                </div>
-              </div>
-
-              {pendingSuggestions.length > 0 && (
-                <EuiPanel
-                  color="subdued"
-                  hasBorder
-                  paddingSize="m"
-                  className="contextEnginePrototype__suggestionBlock"
+            <EuiTabs>
+              {detailTabItems.map((tab) => (
+                <EuiTab
+                  key={tab.id}
+                  isSelected={namespaceDetailTab === tab.id}
+                  onClick={() => selectNamespaceDetailTab(tab.id)}
                 >
-                  <EuiText size="xs" color="subdued">
-                    <strong>Suggested</strong>
-                  </EuiText>
-                  <div className="contextEnginePrototype__list">
-                    {pendingSuggestions.map((automation) => (
-                      <div key={automation.id} className="contextEnginePrototype__listRow">
-                        <EuiFlexGroup alignItems="center" responsive={false} gutterSize="m">
-                          <EuiFlexItem>
-                            <EuiText size="s">
-                              <strong>{automation.title}</strong>
-                            </EuiText>
-                            <EuiText size="xs" color="subdued">
-                              {producesLabel(automation.type)}
-                              {' · New'}
-                              {automation.tags.includes('UPDATE') ? ' · Update available' : ''}
-                              {' · '}
-                              {automation.description}
-                            </EuiText>
-                          </EuiFlexItem>
-                          <EuiFlexItem grow={false}>
-                            <EuiButton
-                              size="s"
-                              iconType="plus"
-                              onClick={() => addSuggestedAutomation(automation)}
-                            >
-                              Add
-                            </EuiButton>
-                          </EuiFlexItem>
-                        </EuiFlexGroup>
-                      </div>
-                    ))}
-                  </div>
-                </EuiPanel>
-              )}
-
-              <div className="contextEnginePrototype__activeAutomations">
-                <EuiText size="xs" color="subdued">
-                  <strong>Active</strong>
-                </EuiText>
-                <div className="contextEnginePrototype__list">
-                  {namespace.automations.length === 0 ? (
-                    <EuiText size="s" color="subdued">
-                      {pendingSuggestions.length > 0
-                        ? 'No active automations yet. Add a suggestion above to get started.'
-                        : 'No automations yet.'}
-                    </EuiText>
-                  ) : (
-                    namespace.automations.map((automation) => renderActiveAutomation(automation))
-                  )}
-                </div>
-              </div>
-            </EuiPanel>
-
-            <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__detailSection">
-              <div className="contextEnginePrototype__sectionHeader">
-                <div>
-                  <EuiTitle size="xs">
-                    <h2 className="contextEnginePrototype__sectionTitle">
-                      <EuiIcon type="aggregate" size="m" aria-hidden={true} />
-                      Knowledge Indicators
-                    </h2>
-                  </EuiTitle>
-                  <EuiText size="s" color="subdued">
-                    {kiTotal} in <EuiCode>{namespace.indexName}</EuiCode>
-                    {knowledgeSummaryParts.length > 0 && (
-                      <>
-                        {' · '}
-                        {knowledgeSummaryParts.map((part, index) => (
-                          <React.Fragment key={part.type}>
-                            {index > 0 && ' · '}
-                            <EuiLink onClick={() => openKnowledgeIndicators(part.type)}>
-                              {part.count} {part.label}
-                            </EuiLink>
-                          </React.Fragment>
-                        ))}
-                      </>
-                    )}
-                  </EuiText>
-                </div>
-                <div className="contextEnginePrototype__sectionActions">
-                  <EuiButtonEmpty
-                    size="s"
-                    iconSide="right"
-                    iconType="arrowRight"
-                    onClick={() => openKnowledgeIndicators()}
-                  >
-                    View all
-                  </EuiButtonEmpty>
-                </div>
-              </div>
-            </EuiPanel>
-
-            <EuiPanel
-              hasBorder
-              paddingSize="l"
-              className="contextEnginePrototype__detailSection"
-              id="context-engine-monitoring"
-            >
-              <div className="contextEnginePrototype__sectionHeader">
-                <div>
-                  <EuiTitle size="xs">
-                    <h2 className="contextEnginePrototype__sectionTitle">
-                      <EuiIcon type="stats" size="m" aria-hidden={true} />
-                      Monitoring
-                    </h2>
-                  </EuiTitle>
-                  <EuiText size="s" color="subdued">
-                    {namespace.monitoring.connected
-                      ? namespace.monitoring.issuesSummary ||
-                        `${namespace.monitoring.traceCount?.toLocaleString() || 0} traces connected`
-                      : 'Connect traces to refine automations from real agent activity.'}
-                  </EuiText>
-                </div>
-                <div className="contextEnginePrototype__sectionActions">
-                  {!namespace.monitoring.connected && (
-                    <EuiButton size="s" iconType="visBarVerticalStacked" onClick={connectTraces}>
-                      Connect traces
-                    </EuiButton>
-                  )}
-                </div>
-              </div>
-
-              {namespace.monitoring.connected && (
-                <div className="contextEnginePrototype__list">
-                  <div className="contextEnginePrototype__listRow">
-                    <EuiFlexGroup alignItems="center" responsive={false} gutterSize="m">
-                      <EuiFlexItem>
-                        <EuiText size="s">
-                          <strong>Traces</strong>
-                        </EuiText>
-                        <EuiText size="xs" color="subdued">
-                          <span className="contextEnginePrototype__mono">
-                            {namespace.monitoring.traceId}
-                          </span>
-                          {' · '}
-                          {namespace.monitoring.traceLabel ||
-                            `${namespace.monitoring.traceCount?.toLocaleString() || 0} traces`}
-                        </EuiText>
-                      </EuiFlexItem>
-                      <EuiFlexItem grow={false}>
-                        <EuiButtonEmpty size="s" iconSide="right" iconType="arrowRight">
-                          View in Discover
-                        </EuiButtonEmpty>
-                      </EuiFlexItem>
-                    </EuiFlexGroup>
-                  </div>
-
-                  {namespace.monitoring.issues.length === 0 ? (
-                    <EuiText size="s" color="subdued">
-                      No KI-addressable issues detected yet.
-                    </EuiText>
-                  ) : (
-                    namespace.monitoring.issues.map((issue) => (
-                      <button
-                        key={issue.id}
-                        type="button"
-                        className="contextEnginePrototype__listRow contextEnginePrototype__listRow--button"
-                        onClick={() => {
-                          setActiveIssue(issue);
-                          setScreen('issue');
-                        }}
-                      >
-                        <EuiFlexGroup alignItems="flexStart" responsive={false} gutterSize="m">
-                          <EuiFlexItem grow={false}>
-                            <EuiIcon
-                              type="warning"
-                              color={issue.severity === 'high' ? 'danger' : 'warning'}
-                              aria-hidden={true}
-                            />
-                          </EuiFlexItem>
-                          <EuiFlexItem>
-                            <EuiText size="s">
-                              <strong>{issue.title}</strong>
-                            </EuiText>
-                            <EuiText size="xs" color="subdued">
-                              {badgeLabel(issue.severity)} · {issue.traces} traces ·{' '}
-                              {issue.description}
-                            </EuiText>
-                          </EuiFlexItem>
-                          <EuiFlexItem grow={false}>
-                            <EuiIcon type="arrowRight" color="subdued" aria-hidden={true} />
-                          </EuiFlexItem>
-                        </EuiFlexGroup>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-
-              {(namespace.monitoring.connected || namespace.monitoring.efficiency) && (
-                <EuiPanel
-                  color="subdued"
-                  hasBorder
-                  paddingSize="m"
-                  className="contextEnginePrototype__efficiencyPanel"
-                >
-                  <EuiText size="xs" color="subdued">
-                    <strong>Efficiency</strong>
-                  </EuiText>
-                  <EuiSpacer size="xs" />
-                  <EuiText size="xs" color="subdued">
-                    Payoff vs a no-context baseline — hit rate, tokens, and retrieval latency.
-                  </EuiText>
-                  <EuiSpacer size="m" />
-                  <EuiFlexGroup gutterSize="m" className="contextEnginePrototype__efficiencyStats">
-                    <EuiFlexItem>
-                      <EuiStat
-                        title={
-                          namespace.monitoring.efficiency
-                            ? `${namespace.monitoring.efficiency.retrievalHitRate}%`
-                            : '—'
-                        }
-                        description="Retrieval hit rate"
-                        titleSize="m"
-                        textAlign="left"
-                      />
-                    </EuiFlexItem>
-                    <EuiFlexItem>
-                      <EuiStat
-                        title={
-                          namespace.monitoring.efficiency
-                            ? `${namespace.monitoring.efficiency.tokensSavedPct}%`
-                            : '—'
-                        }
-                        description="Tokens saved vs baseline"
-                        titleSize="m"
-                        textAlign="left"
-                      />
-                    </EuiFlexItem>
-                    <EuiFlexItem>
-                      <EuiStat
-                        title={
-                          namespace.monitoring.efficiency
-                            ? `${namespace.monitoring.efficiency.medianLatencyMs}ms`
-                            : '—'
-                        }
-                        description="Median retrieval latency"
-                        titleSize="m"
-                        textAlign="left"
-                      />
-                    </EuiFlexItem>
-                  </EuiFlexGroup>
-                </EuiPanel>
-              )}
-
-              {!namespace.monitoring.connected && !namespace.monitoring.efficiency && (
-                <EuiPanel
-                  color="subdued"
-                  hasBorder
-                  paddingSize="m"
-                  className="contextEnginePrototype__efficiencyPanel"
-                >
-                  <EuiText size="xs" color="subdued">
-                    <strong>Efficiency</strong>
-                  </EuiText>
-                  <EuiSpacer size="xs" />
-                  <EuiText size="s" color="subdued">
-                    Connect traces to measure retrieval hit rate, tokens saved, and median latency
-                    vs a no-context baseline.
-                  </EuiText>
-                </EuiPanel>
-              )}
-            </EuiPanel>
+                  {tab.name}
+                </EuiTab>
+              ))}
+            </EuiTabs>
+            {tabIntro}
+            <div className="contextEnginePrototype__detailStack" role="tabpanel">
+              {selectedDetailContent}
+            </div>
           </div>
         </EuiPageTemplate.Section>
       </>
@@ -2181,7 +3274,7 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
       return (
         <EuiPageTemplate.Section>
           <EuiButtonEmpty iconType="arrowLeft" onClick={() => setScreen('namespace')}>
-            Back to {namespace.name}
+            Back to {catalogDisplayName(namespace)}
           </EuiButtonEmpty>
           <EuiSpacer size="m" />
           <EuiText>No issue selected.</EuiText>
@@ -2203,7 +3296,7 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
             color="primary"
             className="contextEnginePrototype__backstackLink"
           >
-            Back to {namespace.name}
+            Back to {catalogDisplayName(namespace)}
           </EuiButtonEmpty>
           <EuiSpacer size="s" />
           <EuiTitle size="l">
@@ -2358,16 +3451,10 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
   const renderKnowledge = () => {
     const namespace = activeNamespace || namespaces[0];
     const allIndicators = namespace.indicators;
-    const sourceOptions = Array.from(
-      new Set(allIndicators.map((indicator) => indicator.category))
-    ).sort();
     const query = kiSearchQuery.trim().toLowerCase();
 
     const indicators = allIndicators.filter((indicator) => {
       if (kiTypeFilter && indicator.type !== kiTypeFilter) return false;
-      if (kiSourceFilter !== 'all' && indicator.category !== kiSourceFilter) return false;
-      if (kiVersionFilter === 'current' && hasVersionHistory(indicator)) return false;
-      if (kiVersionFilter === 'hasNewer' && !hasVersionHistory(indicator)) return false;
       if (!query) return true;
       const haystack = [
         indicator.title,
@@ -2405,7 +3492,7 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
             color="primary"
             className="contextEnginePrototype__backstackLink"
           >
-            Back to {namespace.name}
+            Back to {catalogDisplayName(namespace)}
           </EuiButtonEmpty>
           <EuiSpacer size="s" />
           <EuiTitle size="l">
@@ -2458,76 +3545,12 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
                       compressed
                       aria-label="Search Knowledge Indicators"
                     />
-                    <EuiSpacer size="s" />
-                    <EuiFlexGroup direction="column" gutterSize="s">
-                      <EuiFlexItem>
-                        <EuiSelect
-                          compressed
-                          fullWidth
-                          aria-label="Filter by type"
-                          options={[
-                            { value: 'all', text: 'All types' },
-                            { value: 'FACT', text: 'Fact' },
-                            { value: 'PLAYBOOK', text: 'Playbook' },
-                            { value: 'POLICY', text: 'Policy' },
-                            { value: 'FAQ', text: 'FAQ' },
-                            { value: 'GLOSSARY', text: 'Glossary' },
-                          ]}
-                          value={kiTypeFilter || 'all'}
-                          onChange={(event) => {
-                            const value = event.target.value;
-                            setKiTypeFilter(
-                              value === 'all' ? null : (value as KnowledgeIndicator['type'])
-                            );
-                          }}
-                        />
-                      </EuiFlexItem>
-                      <EuiFlexItem>
-                        <EuiSelect
-                          compressed
-                          fullWidth
-                          aria-label="Filter by source"
-                          options={[
-                            { value: 'all', text: 'All sources' },
-                            ...sourceOptions.map((source) => ({ value: source, text: source })),
-                          ]}
-                          value={kiSourceFilter}
-                          onChange={(event) => setKiSourceFilter(event.target.value)}
-                        />
-                      </EuiFlexItem>
-                      <EuiFlexItem>
-                        <EuiSelect
-                          compressed
-                          fullWidth
-                          aria-label="Filter by version status"
-                          options={[
-                            { value: 'all', text: 'All version statuses' },
-                            { value: 'current', text: 'Current (single version)' },
-                            { value: 'hasNewer', text: 'Has newer version' },
-                          ]}
-                          value={kiVersionFilter}
-                          onChange={(event) =>
-                            setKiVersionFilter(event.target.value as KiVersionFilter)
-                          }
-                        />
-                      </EuiFlexItem>
-                    </EuiFlexGroup>
                   </div>
                   <div className="contextEnginePrototype__kiSidebarList">
                     {indicators.length === 0 ? (
                       <div className="contextEnginePrototype__kiEmptyList">
                         <EuiText size="s" color="subdued">
-                          No KIs match these filters.{' '}
-                          <EuiLink
-                            onClick={() => {
-                              setKiTypeFilter(null);
-                              setKiSearchQuery('');
-                              setKiSourceFilter('all');
-                              setKiVersionFilter('all');
-                            }}
-                          >
-                            Clear filters
-                          </EuiLink>
+                          No Knowledge Indicators match this search.
                         </EuiText>
                       </div>
                     ) : (
@@ -2836,7 +3859,10 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
                       setScreen('namespace');
                     }}
                   >
-                    Back to {activeNamespace?.name || 'namespace'}
+                    Back to{' '}
+                    {activeNamespace
+                      ? catalogDisplayName(activeNamespace)
+                      : 'namespace'}
                   </EuiButtonEmpty>
                   <EuiFlexGroup
                     alignItems="center"
@@ -3142,11 +4168,11 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
             color="primary"
             className="contextEnginePrototype__backstackLink"
           >
-            Back to {namespace.name}
+            Back to {catalogDisplayName(namespace)}
           </EuiButtonEmpty>
           <EuiSpacer size="s" />
           <EuiTitle size="l">
-            <h1>Connect {namespace.name} to your agent</h1>
+            <h1>Connect {catalogDisplayName(namespace)} to your agent</h1>
           </EuiTitle>
           <EuiSpacer size="xs" />
           <EuiText size="s" color="subdued">
@@ -3334,6 +4360,9 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
     <KibanaRenderContextProvider {...coreStart}>
       <EuiPageTemplate
         offset={0}
+        // grow fills viewport height and overflows #app-main-scroll; only the
+        // workflow editor needs a full-height shell.
+        grow={screen === 'workflow'}
         className={`contextEnginePrototype${
           screen === 'workflow' ? ' contextEnginePrototype--workflow' : ''
         }`}
@@ -3344,7 +4373,10 @@ function ContextEngineApp({ coreStart }: { coreStart: CoreStart }) {
   );
 }
 
-export const renderApp = (coreStart: CoreStart, element: AppMountParameters['element']) => {
-  ReactDOM.render(<ContextEngineApp coreStart={coreStart} />, element);
+export const renderApp = (
+  coreStart: CoreStart,
+  { element, history }: Pick<AppMountParameters, 'element' | 'history'>
+) => {
+  ReactDOM.render(<ContextEngineApp coreStart={coreStart} history={history} />, element);
   return () => ReactDOM.unmountComponentAtNode(element);
 };

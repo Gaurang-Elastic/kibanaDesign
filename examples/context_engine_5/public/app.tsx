@@ -3936,16 +3936,17 @@ function ContextEngineApp({
                     forceState={sourcesAdvancedOpen ? 'open' : 'closed'}
                     onToggle={(isOpen) => setSourcesAdvancedOpen(isOpen)}
                     buttonContent={
-                      <EuiText size="s">
+                      <EuiText size="s" color="primary">
                         <strong>
                           Storage: {storageType === 'dataStream' ? 'data stream' : 'index'} · cannot
                           change later · Advanced
                         </strong>
                       </EuiText>
                     }
-                    paddingSize="m"
+                    paddingSize="none"
                     className="contextEnginePrototype__sourcesAdvanced"
                   >
+                    <EuiSpacer size="m" />
                     <EuiText size="s" color="subdued">
                       Should knowledge expire automatically? Time-based data (logs, metrics,
                       events) can expire; reference data stays until changed.
@@ -5593,6 +5594,7 @@ function ContextEngineApp({
           iconSide="right"
           iconType={improvementsExpanded ? 'arrowUp' : 'arrowRight'}
           flush="left"
+          className="contextEnginePrototype__improvementsViewAll"
           onClick={() => setImprovementsExpanded((current) => !current)}
         >
           {improvementsExpanded

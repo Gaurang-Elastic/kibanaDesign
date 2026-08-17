@@ -1,9 +1,11 @@
 # Restart notes — Context Engine prototype (proto 1)
 
-Saved before Cursor restart (2026-07-27).
+Saved before Cursor restart (2026-07-29).
 
 After restart, tell the agent: **restart the prototype terminals**  
-(For proto 2: **restart the Context Engine 2 prototype terminals**)
+(All protos: **restart all prototype terminals** · Proto 2 only: **restart the Context Engine 2 prototype terminals**)
+
+Master overview: `/Users/gaurang/Documents/CursorDesign/RESTART.md`
 
 ---
 
@@ -25,13 +27,12 @@ After restart, tell the agent: **restart the prototype terminals**
 
 | # | Role | Command | Port / URL |
 |---|---|---|---|
-| 1 | Elasticsearch | `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use --delete-prefix 24.17.0 && yarn es snapshot` | `9200` |
-| 2 | Kibana + plugin | `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use --delete-prefix 24.17.0 && yarn start --plugin-path=examples/context_engine --port=5602` | `5602` |
+| 1 | Elasticsearch (shared) | `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use --delete-prefix 24.17.0 && yarn es snapshot` | `9200` |
+| 2 | Kibana + plugin | `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use --delete-prefix 24.17.0 && yarn start --plugin-path=examples/context_engine --port=5602` | `5602` → `5603` |
 
-- Last Kibana basepath: `/wcp` (2026-07-27) — changes every fresh start
-- Sidenav: **Agents → Context** (sparkles icon)
+- Last Kibana basepath: `/clt` (2026-07-29) — changes every fresh start
+- Sidenav: **Agents → Context** (`memory` icon)
 - Proto 2 (if also running): `5604` / `5605` — see `examples/context_engine_2/RESTART.md`
-- Optimizer should report **218 bundles** when the plugin is loaded
 
 **Important:** basepath changes on every fresh Kibana start. After restart, use the URL from logs:  
 `basepath proxy server running at http://localhost:5602/<code>`
@@ -40,7 +41,7 @@ After restart, tell the agent: **restart the prototype terminals**
 
 ## Restart procedure
 
-Order: **ES first**, then Kibana.
+Order: **ES first** (skip if already on `9200`), then Kibana.
 
 ### Terminal 1 — Elasticsearch
 
@@ -60,12 +61,18 @@ export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"
 nvm use --delete-prefix 24.17.0 && yarn start --plugin-path=examples/context_engine --port=5602
 ```
 
-Wait for: `Kibana is now available` and `218 bundles`.
+Wait for: `Kibana is now available`.
 
 Then open:
 
 ```text
 http://localhost:5602/<basepath>/app/contextEngineExample
+```
+
+Current (until next restart):
+
+```text
+http://localhost:5602/clt/app/contextEngineExample
 ```
 
 ---

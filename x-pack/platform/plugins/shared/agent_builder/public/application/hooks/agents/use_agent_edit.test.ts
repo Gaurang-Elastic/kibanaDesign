@@ -66,6 +66,8 @@ const baseConfiguration: AgentEditState['configuration'] = {
   enable_elastic_capabilities: false,
   workflow_ids: [],
   plugin_ids: [],
+  ai_index_ids: [],
+  context_enabled: true,
 };
 
 describe('useAgentEdit submit (create/clone branch)', () => {

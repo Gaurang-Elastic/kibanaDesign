@@ -26,6 +26,7 @@ import { queryKeys } from '../../query_keys';
 import { duplicateName } from '../../utils/duplicate_name';
 import { searchParamNames } from '../../search_param_names';
 import { cleanInvalidToolReferences } from '../../utils/tool_selection_utils';
+import { sanitizePersistedAiIndexIds } from '../../utils/ai_indexes';
 
 export type AgentEditState = Omit<AgentDefinition, 'type' | 'readonly'>;
 
@@ -49,6 +50,8 @@ const emptyState = (): AgentEditState => ({
     enable_elastic_capabilities: false,
     workflow_ids: [],
     plugin_ids: [],
+    ai_index_ids: [],
+    context_enabled: true,
   },
 });
 
@@ -126,6 +129,11 @@ export function useAgentEdit({
         access_mode: AgentAccessControlMode.Public,
         entries: [],
       };
+      agentState.configuration = {
+        ...agentState.configuration,
+        ai_index_ids: sanitizePersistedAiIndexIds(agentState.configuration?.ai_index_ids),
+        context_enabled: agentState.configuration?.context_enabled ?? true,
+      };
       if (isClone) {
         agentState.id = duplicateName(agentState.id);
       }
@@ -135,7 +143,17 @@ export function useAgentEdit({
 
   const submit = useCallback(
     async (data: AgentEditState) => {
-      const requestData = cleanInvalidToolReferences(data, tools);
+      const requestData = cleanInvalidToolReferences(
+        {
+          ...data,
+          configuration: {
+            ...data.configuration,
+            ai_index_ids: sanitizePersistedAiIndexIds(data.configuration.ai_index_ids),
+            context_enabled: data.configuration.context_enabled ?? true,
+          },
+        },
+        tools
+      );
 
       if (editingAgentId) {
         const { id, access_control, ...updatedAgent } = requestData;

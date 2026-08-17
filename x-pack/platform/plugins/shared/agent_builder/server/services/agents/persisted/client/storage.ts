@@ -51,6 +51,7 @@ const storageSettings = {
           plugin_ids: types.keyword({}),
           skill_ids: types.keyword({}),
           connector_ids: types.keyword({}),
+          ai_index_ids: types.keyword({}),
         },
         dynamic: false,
       }),
@@ -89,6 +90,8 @@ export interface AgentConfigurationProperties {
   workflow_ids?: string[];
   plugin_ids?: string[];
   connector_ids?: string[];
+  ai_index_ids?: string[];
+  context_enabled?: boolean;
 }
 
 export type AgentProfileStorageSettings = typeof storageSettings;

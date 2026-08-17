@@ -21,6 +21,7 @@ import { AGENT_BUILDER_UI_EBT } from '@kbn/agent-builder-common';
 import { getEbtProps } from '@kbn/ebt-click';
 import { labels } from '../../../../utils/i18n';
 import { WorkflowPicker } from '../../../tools/form/components/workflow/workflow_picker';
+import { AiIndicesSection } from './ai_indices_section';
 import type { EditDetailsFormData } from './types';
 
 const { editDetails: flyoutLabels } = labels.agentOverview;
@@ -78,6 +79,9 @@ export const CustomizationSection: React.FC<CustomizationSectionProps> = ({
           </EuiFlexItem>
         </EuiFlexGroup>
       </EuiPanel>
+
+      <EuiSpacer size="m" />
+      <AiIndicesSection />
 
       {showWorkflowSection && (
         <>

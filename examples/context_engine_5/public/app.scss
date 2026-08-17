@@ -339,6 +339,22 @@
 .contextEnginePrototype__sourcesAdvanced {
   border-top: 1px solid var(--euiBorderColor);
   padding-top: 8px;
+
+  // Keep accordion body flush with the title (no indent from paddingSize).
+  .euiAccordion__childWrapper {
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+
+  .euiAccordion__button {
+    color: var(--euiColorPrimary);
+    text-decoration: none;
+
+    &:hover,
+    &:focus {
+      text-decoration: underline;
+    }
+  }
 }
 
 .contextEnginePrototype__kiRollupCard {
@@ -1749,6 +1765,16 @@ body:has(.contextEnginePrototype--workflow) #app-main-scroll {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.contextEnginePrototype__improvementsViewAll {
+  display: inline-flex;
+  justify-content: flex-start;
+  width: auto;
+
+  .euiButtonEmpty__content {
+    justify-content: flex-start;
+  }
 }
 
 .contextEnginePrototype__improvementCard {

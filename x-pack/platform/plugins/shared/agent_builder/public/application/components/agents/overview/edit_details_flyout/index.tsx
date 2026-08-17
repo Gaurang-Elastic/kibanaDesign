@@ -38,6 +38,7 @@ import { useToasts } from '../../../../hooks/use_toasts';
 import { queryKeys } from '../../../../query_keys';
 import { labels } from '../../../../utils/i18n';
 import { FLYOUT_WIDTH } from '../../common/constants';
+import { sanitizePersistedAiIndexIds } from '../../../../utils/ai_indexes';
 import { AccessSection } from './access_section';
 import { CustomInstructionsSection } from './custom_instructions_section';
 import { CustomizationSection } from './customization_section';
@@ -81,6 +82,8 @@ export const EditDetailsFlyout: React.FC<EditDetailsFlyoutProps> = ({
         enable_elastic_capabilities: agent.configuration?.enable_elastic_capabilities ?? false,
         workflow_ids: agent.configuration?.workflow_ids ?? [],
         instructions: agent.configuration?.instructions ?? '',
+        ai_index_ids: sanitizePersistedAiIndexIds(agent.configuration?.ai_index_ids),
+        context_enabled: agent.configuration?.context_enabled ?? true,
       },
     },
     mode: 'onBlur',
@@ -101,6 +104,8 @@ export const EditDetailsFlyout: React.FC<EditDetailsFlyoutProps> = ({
           enable_elastic_capabilities: data.configuration.enable_elastic_capabilities,
           workflow_ids: data.configuration.workflow_ids,
           instructions: data.configuration.instructions,
+          ai_index_ids: sanitizePersistedAiIndexIds(data.configuration.ai_index_ids),
+          context_enabled: data.configuration.context_enabled ?? true,
         },
       }),
     onSuccess: () => {

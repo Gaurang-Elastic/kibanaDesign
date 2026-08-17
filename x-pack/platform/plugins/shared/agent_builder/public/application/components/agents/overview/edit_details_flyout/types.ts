@@ -18,5 +18,7 @@ export interface EditDetailsFormData {
     enable_elastic_capabilities: boolean;
     workflow_ids: string[];
     instructions: string;
+    ai_index_ids: string[];
+    context_enabled: boolean;
   };
 }

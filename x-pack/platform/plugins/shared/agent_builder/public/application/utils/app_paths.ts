@@ -32,6 +32,7 @@ export const appPaths = {
     toolsNew: '/manage/tools/new',
     toolDetails: ({ toolId }: { toolId: string }) => `/manage/tools/${toolId}`,
     toolsBulkImport: '/manage/tools/bulk_import_mcp',
+    context: '/manage/context',
     skills: '/manage/skills',
     skillsNew: '/manage/skills/new',
     skillDetails: ({ skillId }: { skillId: string }) => `/manage/skills/${skillId}`,

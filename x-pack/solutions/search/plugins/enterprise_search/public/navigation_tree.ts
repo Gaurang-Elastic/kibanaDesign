@@ -76,6 +76,10 @@ export const getNavigationTreeDefinition = ({
             {
               icon: 'productAgent',
               link: 'agent_builder',
+              // Deep link defaultPath is `/agents`, so manage routes (tools, context, etc.)
+              // would not match without an explicit active check.
+              getIsActive: ({ pathNameSerialized, prepend }) =>
+                pathNameSerialized.startsWith(prepend('/app/agent_builder')),
             },
             // Proto 1 — only appears when examples/context_engine is loaded
             {
@@ -86,6 +90,21 @@ export const getNavigationTreeDefinition = ({
             {
               icon: 'memory',
               link: 'contextEngineExample2' as AppDeepLinkId,
+            },
+            // Proto 3 — only appears when examples/context_engine_3 is loaded
+            {
+              icon: 'memory',
+              link: 'contextEngineExample3' as AppDeepLinkId,
+            },
+            // Proto 4 — only appears when examples/context_engine_4 is loaded
+            {
+              icon: 'memory',
+              link: 'contextEngineExample4' as AppDeepLinkId,
+            },
+            // Proto 5 — only appears when examples/context_engine_5 is loaded
+            {
+              icon: 'memory',
+              link: 'contextEngineExample5' as AppDeepLinkId,
             },
             {
               icon: 'productDiscover',

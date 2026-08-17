@@ -50,23 +50,24 @@ export const SidebarNavList: React.FC<SidebarNavListProps> = ({ items, isActive,
   return (
     <EuiFlexGroup direction="column" gutterSize="l">
       <EuiFlexGroup direction="column" gutterSize="xs">
-        {items.map((item) => (
-          <EuiFlexItem grow={false} key={item.path}>
-            <Link
-              to={item.path}
-              css={isActive(item.path) ? activeLinkStyles : baseLinkStyles}
-              onClick={onItemClick}
-              {...getEbtProps({
-                element: AGENT_BUILDER_UI_EBT.element.sidebar,
-                action: AGENT_BUILDER_UI_EBT.action.navSidebar.SIDEBAR_NAVIGATION_CLICK,
-                detail: item.path.split('/').filter(Boolean).pop() ?? item.path,
-              })}
-            >
-              {item.icon && <EuiIcon type={item.icon} size="s" aria-hidden={true} />}
-              {item.label}
-            </Link>
-          </EuiFlexItem>
-        ))}
+        {items.map((item) => {
+          const detail = item.path.split('/').filter(Boolean).pop() ?? item.path;
+          const ebtProps = getEbtProps({
+            element: AGENT_BUILDER_UI_EBT.element.sidebar,
+            action: AGENT_BUILDER_UI_EBT.action.navSidebar.SIDEBAR_NAVIGATION_CLICK,
+            detail,
+          });
+          const linkCss = isActive(item.path) ? activeLinkStyles : baseLinkStyles;
+
+          return (
+            <EuiFlexItem grow={false} key={item.path}>
+              <Link to={item.path} css={linkCss} onClick={onItemClick} {...ebtProps}>
+                {item.icon && <EuiIcon type={item.icon} size="s" aria-hidden={true} />}
+                {item.label}
+              </Link>
+            </EuiFlexItem>
+          );
+        })}
       </EuiFlexGroup>
     </EuiFlexGroup>
   );

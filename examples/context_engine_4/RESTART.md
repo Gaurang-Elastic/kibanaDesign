@@ -1,10 +1,10 @@
-# Restart notes — Context Engine 5 prototype
+# Restart notes — Context Engine 4 prototype
 
-Saved 2026-08-03. Forked from proto 4; see `/Users/gaurang/Documents/CursorDesign/TERMINALS_SNAPSHOT.md` for shared ES notes.
+Saved 2026-07-31. Snapshot pattern matches proto 3; see `/Users/gaurang/Documents/CursorDesign/TERMINALS_SNAPSHOT.md` for shared ES notes.
 
-Alternate proto. Do **not** confuse with proto 1 (`context_engine` / ContextengineUI), proto 2 (`context_engine_2` / Contextengine2), proto 3 (`context_engine_3` / Contextengine3), or proto 4 (`context_engine_4` / Contextengine4).
+Alternate proto. Do **not** confuse with proto 1 (`context_engine` / ContextengineUI), proto 2 (`context_engine_2` / Contextengine2), or proto 3 (`context_engine_3` / Contextengine3).
 
-After restart, tell the agent: **restart the Context Engine 5 prototype terminals**  
+After restart, tell the agent: **restart the Context Engine 4 prototype terminals**  
 (All protos: **restart all prototype terminals**)
 
 Master overview: `/Users/gaurang/Documents/CursorDesign/RESTART.md`
@@ -18,43 +18,42 @@ Master overview: `/Users/gaurang/Documents/CursorDesign/RESTART.md`
 | Path | `/Users/gaurang/Documents/CursorDesign/kibana-context-engine` |
 | Branch | `cursor/context-engine-example` |
 | Node | `24.17.0` |
-| Plugin | `examples/context_engine_5` (`@kbn/context-engine-5-example-plugin`) |
-| Plugin id | `contextEngineExampleFive` (digits not allowed in `plugin.id`) |
-| App id | `contextEngineExample5` |
-| Standalone copy | `/Users/gaurang/Documents/CursorDesign/Contextengine5` |
+| Plugin | `examples/context_engine_4` (`@kbn/context-engine-4-example-plugin`) |
+| Plugin id | `contextEngineExampleFour` (digits not allowed in `plugin.id`) |
+| App id | `contextEngineExample4` |
+| Standalone copy | `/Users/gaurang/Documents/CursorDesign/Contextengine4` |
 
 ---
 
 ## Currently running
 
-Saved **2026-08-15** (pre Cursor update). See also workspace `TERMINALS_SNAPSHOT.md`.
+Saved **2026-08-12** (pre Cursor update). See also workspace `TERMINALS_SNAPSHOT.md`.
 
 | # | Role | Command | Port / URL |
 |---|---|---|---|
 | 1 | Elasticsearch (shared) | `yarn es snapshot` | `9200` |
-| 2 | Kibana + plugin | `yarn start --plugin-path=examples/context_engine_5 --port=5610 --dev.basePathProxyTarget=5611` | `5610` / `5611` |
+| 2 | Kibana + plugin | `yarn start --plugin-path=examples/context_engine_4 --port=5608 --dev.basePathProxyTarget=5609` | `5608` / `5609` |
 
-- Live sessions: `168403` (ES), `168404` (proto 5)
-- Last Kibana basepath at save: `/yul` → `http://localhost:5610/yul/app/contextEngineExample5` (changes every fresh start)
-- Sidenav: **Context** (below Agents) / Search nav `contextEngineExample5` (`memory` icon)
+- Last Kibana basepath at save: `/xut` → `http://localhost:5608/xut/app/contextEngineExample4` (changes every fresh start)
+- Sidenav: **Context** (below Agents) / Search nav `contextEngineExample4` (`memory` icon)
 - Agent Builder manage Context deep-links remain on proto 3 (`contextEngineExample3`) by design
-- After Cursor update, say: **restart the Context Engine 5 prototype terminals**
+- After Cursor update, say: **restart the Context Engine 4 prototype terminals**
 
 ## Ports
 
 | Role | Port |
 |---|---|
 | Elasticsearch (shared) | `9200` |
-| Proto 5 Kibana proxy | `5610` |
-| Proto 5 Kibana server | `5611` |
+| Proto 4 Kibana proxy | `5608` |
+| Proto 4 Kibana server | `5609` |
 
-Proto 1 uses `5602`/`5603`. Proto 2 uses `5604`/`5605`. Proto 3 uses `5606`/`5607`. Proto 4 uses `5608`/`5609`. Never reuse those for proto 5.
+Proto 1 uses `5602`/`5603`. Proto 2 uses `5604`/`5605`. Proto 3 uses `5606`/`5607`. Never reuse those for proto 4.
 
 **Important:** basepath changes on every fresh Kibana start. After restart, use the URL from logs:  
-`basepath proxy server running at http://localhost:5610/<code>`
+`basepath proxy server running at http://localhost:5608/<code>`
 
 ```text
-http://localhost:5610/<basepath>/app/contextEngineExample5
+http://localhost:5608/<basepath>/app/contextEngineExample4
 ```
 
 ---
@@ -73,12 +72,12 @@ nvm use --delete-prefix 24.17.0 && yarn es snapshot
 
 Wait for log: `publish_address {127.0.0.1:9200}`
 
-### Terminal 2 — Kibana + Context Engine 5
+### Terminal 2 — Kibana + Context Engine 4
 
 ```sh
 cd /Users/gaurang/Documents/CursorDesign/kibana-context-engine
 export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"
-nvm use --delete-prefix 24.17.0 && yarn start --plugin-path=examples/context_engine_5 --port=5610 --dev.basePathProxyTarget=5611
+nvm use --delete-prefix 24.17.0 && yarn start --plugin-path=examples/context_engine_4 --port=5608 --dev.basePathProxyTarget=5609
 ```
 
 Wait for: `Kibana is now available`.
@@ -86,7 +85,7 @@ Wait for: `Kibana is now available`.
 Then open:
 
 ```text
-http://localhost:5610/<basepath>/app/contextEngineExample5
+http://localhost:5608/<basepath>/app/contextEngineExample4
 ```
 
 ---

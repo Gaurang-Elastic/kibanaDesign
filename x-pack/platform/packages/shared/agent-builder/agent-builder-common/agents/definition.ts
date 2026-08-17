@@ -125,6 +125,18 @@ export interface AgentConfiguration {
   connector_ids?: string[];
 
   /**
+   * Optional list of user-attached AI index IDs for Context retrieval.
+   * Default indices from baseConfig are always applied and must not be stored here.
+   */
+  ai_index_ids?: string[];
+
+  /**
+   * When false, Context retrieval is off for this agent. Index selections are preserved
+   * and apply again when Context is turned back on. Defaults to true when unset.
+   */
+  context_enabled?: boolean;
+
+  /**
    * Custom configuration for the research step of the agent.
    */
   research?: AgentResearchStepConfiguration;

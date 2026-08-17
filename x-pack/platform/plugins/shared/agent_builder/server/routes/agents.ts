@@ -292,6 +292,25 @@ export function registerAgentRoutes({
                   ),
                   plugin_ids: schema.maybe(PLUGINS_SCHEMA),
                   connector_ids: schema.maybe(CONNECTORS_SCHEMA),
+                  ai_index_ids: schema.maybe(
+                    schema.arrayOf(
+                      schema.string({
+                        meta: {
+                          description:
+                            'Optional list of user-attached AI index IDs for Context retrieval. Default indices are always applied and must not be stored here.',
+                        },
+                      }),
+                      { maxSize: 100 }
+                    )
+                  ),
+                  context_enabled: schema.maybe(
+                    schema.boolean({
+                      meta: {
+                        description:
+                          'When false, Context retrieval is off for this agent. Index selections are preserved.',
+                      },
+                    })
+                  ),
                 },
                 {
                   meta: { description: 'Configuration settings for the agent.' },
@@ -422,6 +441,25 @@ export function registerAgentRoutes({
                     ),
                     plugin_ids: schema.maybe(PLUGINS_SCHEMA),
                     connector_ids: schema.maybe(CONNECTORS_SCHEMA),
+                    ai_index_ids: schema.maybe(
+                      schema.arrayOf(
+                        schema.string({
+                          meta: {
+                            description:
+                              'Updated list of user-attached AI index IDs for Context retrieval. Default indices are always applied and must not be stored here.',
+                          },
+                        }),
+                        { maxSize: 100 }
+                      )
+                    ),
+                    context_enabled: schema.maybe(
+                      schema.boolean({
+                        meta: {
+                          description:
+                            'When false, Context retrieval is off for this agent. Index selections are preserved.',
+                        },
+                      })
+                    ),
                   },
                   {
                     meta: { description: 'Updated configuration settings for the agent.' },

@@ -1,10 +1,13 @@
 # Restart notes — Context Engine 2 prototype
 
-Saved before Cursor restart (2026-07-27).
+Saved before Cursor restart (2026-07-29).
 
 Alternate proto. Do **not** confuse with proto 1 (`context_engine` / ContextengineUI).
 
-After restart, tell the agent: **restart the Context Engine 2 prototype terminals**
+After restart, tell the agent: **restart the Context Engine 2 prototype terminals**  
+(All protos: **restart all prototype terminals**)
+
+Master overview: `/Users/gaurang/Documents/CursorDesign/RESTART.md`
 
 ---
 
@@ -13,6 +16,7 @@ After restart, tell the agent: **restart the Context Engine 2 prototype terminal
 | | |
 |---|---|
 | Path | `/Users/gaurang/Documents/CursorDesign/kibana-context-engine` |
+| Branch | `cursor/context-engine-example` |
 | Node | `24.17.0` |
 | Plugin | `examples/context_engine_2` (`@kbn/context-engine-2-example-plugin`) |
 | Plugin id | `contextEngineExampleTwo` (digits not allowed in `plugin.id`) |
@@ -25,11 +29,11 @@ After restart, tell the agent: **restart the Context Engine 2 prototype terminal
 
 | # | Role | Command | Port / URL |
 |---|---|---|---|
-| 1 | Elasticsearch | `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use --delete-prefix 24.17.0 && yarn es snapshot` | `9200` |
+| 1 | Elasticsearch (shared) | `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use --delete-prefix 24.17.0 && yarn es snapshot` | `9200` |
 | 2 | Kibana + plugin | `export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use --delete-prefix 24.17.0 && yarn start --plugin-path=examples/context_engine_2 --port=5604 --dev.basePathProxyTarget=5605` | `5604` (proxy) / `5605` (server) |
 
-- Last Kibana basepath: `/qnm` (2026-07-27) — changes every fresh start
-- Sidenav: **Agents → Context** (`memory` icon). Wired in `enterprise_search` nav tree as `contextEngineExample2` (proto 1 keeps `contextEngineExample` / `memory`)
+- Last Kibana basepath: `/kcy` (2026-07-29) — changes every fresh start
+- Sidenav: **Context 2** / Search nav `contextEngineExample2` (`memory` icon)
 - Proto 1 (if also running): `5602` proxy → default target `5603`
 
 **Why not 5603?** Dev mode defaults `dev.basePathProxyTarget` to `5603`. Proto 1 on `5602` already owns that port, so proto 2 must use a different proxy + target pair (`5604` / `5605`).
@@ -72,5 +76,5 @@ http://localhost:5604/<basepath>/app/contextEngineExample2
 Current (until next restart):
 
 ```text
-http://localhost:5604/qnm/app/contextEngineExample2
+http://localhost:5604/kcy/app/contextEngineExample2
 ```

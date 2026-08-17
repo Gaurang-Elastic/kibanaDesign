@@ -49,6 +49,7 @@ import { isPreExecutionWorkflowEnabled } from '../../../../utils/is_pre_executio
 import { ACCESS_CONTROL_MODE_LABELS } from '../../../../utils/access_control_mode_i18n';
 import type { AgentFormData } from '../agent_form';
 import { truncateAvatarSymbol } from '../agent_form_validation';
+import { AiIndicesSettingsSection } from './ai_indices_settings_section';
 
 interface AgentSettingsTabProps {
   control: Control<AgentFormData>;
@@ -340,6 +341,14 @@ export const AgentSettingsTab: React.FC<AgentSettingsTabProps> = ({
           />
         </EuiFlexItem>
       </EuiFlexGroup>
+
+      <EuiHorizontalRule />
+
+      <AiIndicesSettingsSection
+        control={control}
+        formState={formState}
+        isFormDisabled={isFormDisabled}
+      />
 
       <EuiHorizontalRule />
 
