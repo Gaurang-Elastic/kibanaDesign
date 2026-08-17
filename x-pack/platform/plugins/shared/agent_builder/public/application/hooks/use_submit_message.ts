@@ -41,8 +41,21 @@ export const useSubmitMessage = () => {
       if (isEmbeddedContext) {
         setConversationId?.(targetId);
       } else if (agentId) {
+        const currentParams = new URLSearchParams(window.location.search);
+        const navigationParams: Record<string, string> = {};
+        const concept = currentParams.get('concept');
+        const keepContextEngineSelected = currentParams.get('ce_agent') === '1';
+
+        if (concept) {
+          navigationParams.concept = concept;
+        }
+        if (keepContextEngineSelected) {
+          navigationParams.ce_agent = '1';
+        }
+
         navigateToAgentBuilderUrl(
-          appPaths.agent.conversations.byId({ agentId, conversationId: targetId })
+          appPaths.agent.conversations.byId({ agentId, conversationId: targetId }),
+          navigationParams
         );
       }
     },

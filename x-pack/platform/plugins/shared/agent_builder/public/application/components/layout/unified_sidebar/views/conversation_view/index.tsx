@@ -33,9 +33,11 @@ import { useRouteAccessConfig } from '../../../../../hooks/use_route_access_conf
 import { useNavigation } from '../../../../../hooks/use_navigation';
 import { useValidateAgentId } from '../../../../../hooks/agents/use_validate_agent_id';
 import { useAgentBuilderAgents } from '../../../../../hooks/agents/use_agents';
+import { useAgentBuilderAgentById } from '../../../../../hooks/agents/use_agent_by_id';
 import { useLastAgentId } from '../../../../../hooks/use_last_agent_id';
 import { useConversationList } from '../../../../../hooks/use_conversation_list';
 import { useStreamingContext } from '../../../../../context/streaming/streaming_context';
+import { isContextEngineAgent } from '../../../../../utils/is_context_engine_agent';
 import { SidebarNavList } from '../../shared/sidebar_nav_list';
 
 import { ConversationFooter } from './conversation_footer';
@@ -70,13 +72,14 @@ const conversationListScrollRegionLabel = i18n.translate(
 );
 
 export const ConversationSidebarView: React.FC = () => {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const agentId = getAgentIdFromPath(pathname) ?? agentBuilderDefaultAgentId;
   const conversationId = getConversationIdFromPath(pathname);
   const { euiTheme } = useEuiTheme();
   const { navigateToAgentBuilderUrl } = useNavigation();
   const validateAgentId = useValidateAgentId();
   const { isFetched: isAgentsFetched } = useAgentBuilderAgents();
+  const { agent } = useAgentBuilderAgentById(agentId);
   const lastAgentId = useLastAgentId();
   const routeAccessConfig = useRouteAccessConfig();
 
@@ -87,12 +90,24 @@ export const ConversationSidebarView: React.FC = () => {
   const isNewConversationRoute =
     conversationId === 'new' || pathname === appPaths.agent.root({ agentId });
 
-  const navItems = useMemo(
-    () => getAgentSettingsNavItems(agentId, routeAccessConfig),
-    [agentId, routeAccessConfig]
-  );
+  const contextEngineMode = isContextEngineAgent({ agentId, agentName: agent?.name, search });
+  const overviewPath = appPaths.agent.overview({ agentId });
+  const isConversationRoute = Boolean(conversationId) || pathname === appPaths.agent.root({ agentId });
 
-  const isActive = (path: string) => pathname === path;
+  const navItems = useMemo(() => {
+    const baseItems = getAgentSettingsNavItems(agentId, routeAccessConfig);
+    if (!contextEngineMode) {
+      return baseItems;
+    }
+    return baseItems.map((item) => ({
+      ...item,
+      path: `${item.path}?concept=1&ce_setup=1`,
+    }));
+  }, [agentId, routeAccessConfig, contextEngineMode]);
+
+  const isActive = (path: string) =>
+    pathname === path.split('?')[0] ||
+    (contextEngineMode && isConversationRoute && path.split('?')[0] === overviewPath);
 
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
 
@@ -112,9 +127,10 @@ export const ConversationSidebarView: React.FC = () => {
     // We also check that lastAgentId itself is valid before redirecting: if local storage
     // holds a stale/invalid ID too, navigating to it would trigger this effect again and
     // cause an infinite redirect loop.
+    const shouldTreatAsNewConversation = !conversationId || conversationId === 'new';
     if (
       isAgentsFetched &&
-      !conversationId &&
+      shouldTreatAsNewConversation &&
       !validateAgentId(agentId) &&
       validateAgentId(lastAgentId)
     ) {
@@ -131,6 +147,16 @@ export const ConversationSidebarView: React.FC = () => {
 
   const handlePressNewConversation = () => {
     removeAllErrors();
+    const currentParams = new URLSearchParams(search);
+    const shouldKeepContextEngineSelection =
+      contextEngineMode || currentParams.get('ce_agent') === '1';
+    if (shouldKeepContextEngineSelection) {
+      navigateToAgentBuilderUrl(appPaths.agent.conversations.new({ agentId }), {
+        concept: currentParams.get('concept') ?? '1',
+        ce_agent: '1',
+      });
+      return;
+    }
     navigateToAgentBuilderUrl(appPaths.agent.conversations.new({ agentId }));
   };
 

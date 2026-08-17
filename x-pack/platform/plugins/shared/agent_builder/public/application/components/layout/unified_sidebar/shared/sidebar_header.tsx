@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom-v5-compat';
+import { useLocation } from 'react-router-dom-v5-compat';
 
 import {
   EuiButtonEmpty,
@@ -58,6 +59,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
 }) => {
   const { euiTheme } = useEuiTheme();
   const navigate = useNavigate();
+  const { search } = useLocation();
   const { navigateToAgentBuilderUrl } = useNavigation();
 
   const headerStyles = css`
@@ -103,6 +105,16 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
                 size="s"
                 aria-label={labels.newConversation}
                 onClick={() => {
+                  const currentParams = new URLSearchParams(search);
+                  const shouldKeepContextEngineSelection =
+                    currentParams.get('ce_setup') === '1' || currentParams.get('ce_agent') === '1';
+                  if (shouldKeepContextEngineSelection) {
+                    navigateToAgentBuilderUrl(appPaths.agent.conversations.new({ agentId }), {
+                      concept: currentParams.get('concept') ?? '1',
+                      ce_agent: '1',
+                    });
+                    return;
+                  }
                   navigateToAgentBuilderUrl(appPaths.agent.conversations.new({ agentId }));
                 }}
                 {...getEbtProps({

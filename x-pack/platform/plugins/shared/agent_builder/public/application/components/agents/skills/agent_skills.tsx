@@ -14,6 +14,7 @@ import {
   EuiFlexGroup,
   EuiFlexItem,
   EuiLoadingSpinner,
+  EuiPanel,
   EuiPopover,
   EuiSpacer,
   EuiText,
@@ -24,7 +25,7 @@ import { AGENT_BUILDER_UI_EBT } from '@kbn/agent-builder-common';
 import { getEbtProps } from '@kbn/ebt-click';
 import { useQueryClient } from '@kbn/react-query';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { useAgentBuilderAgentById } from '../../../hooks/agents/use_agent_by_id';
 import { useCanUpdateAgent } from '../../../hooks/agents/use_can_update_agent';
 import { useSkillsService } from '../../../hooks/skills/use_skills';
@@ -35,6 +36,11 @@ import { useUiPrivileges } from '../../../hooks/use_ui_privileges';
 import { queryKeys } from '../../../query_keys';
 import { searchParamNames } from '../../../search_param_names';
 import { appPaths } from '../../../utils/app_paths';
+import { isContextEngineAgent } from '../../../utils/is_context_engine_agent';
+import {
+  CONTEXT_ENGINE_CREATED_SKILLS,
+  getContextEngineSkillsPublished,
+} from '../../../utils/context_engine_state';
 import { labels } from '../../../utils/i18n';
 import { PageWrapper } from '../common/page_wrapper';
 import { useListDetailPageStyles } from '../common/styles';
@@ -48,6 +54,7 @@ import { useSkillsMutation } from './use_skills_mutation';
 
 export const AgentSkills: React.FC = () => {
   const { agentId } = useParams<{ agentId: string }>();
+  const { search } = useLocation();
   const styles = useListDetailPageStyles();
   const { createAgentBuilderUrl } = useNavigation();
   const queryClient = useQueryClient();
@@ -181,12 +188,113 @@ export const AgentSkills: React.FC = () => {
   const showCustomizeEmptyState = activeSkills.length === 0 && !searchQuery.trim();
 
   const isLoading = agentLoading || skillsLoading;
+  const contextEngineMode = isContextEngineAgent({ agentId, agentName: agent?.name, search });
+  const contextEngineSkillsPublished = getContextEngineSkillsPublished();
+  const contextEngineSkillRows = useMemo<PublicSkillSummary[]>(
+    () =>
+      CONTEXT_ENGINE_CREATED_SKILLS.map((skill) => ({
+        id: skill.id,
+        name: skill.name,
+        description: skill.description,
+        readonly: false,
+        experimental: false,
+        referenced_content_count: 0,
+      })),
+    []
+  );
+  const [selectedContextEngineSkillId, setSelectedContextEngineSkillId] = useState<string>(
+    CONTEXT_ENGINE_CREATED_SKILLS[0]?.id ?? ''
+  );
 
   if (isLoading) {
     return (
       <EuiFlexGroup alignItems="center" justifyContent="center" css={styles.loadingSpinner}>
         <EuiLoadingSpinner size="xl" />
       </EuiFlexGroup>
+    );
+  }
+
+  if (contextEngineMode && contextEngineSkillsPublished) {
+    const selectedContextSkill = CONTEXT_ENGINE_CREATED_SKILLS.find(
+      (skill) => skill.id === selectedContextEngineSkillId
+    );
+
+    return (
+      <PageWrapper>
+        <div css={styles.header}>
+          <EuiFlexGroup alignItems="center" justifyContent="spaceBetween">
+            <EuiFlexItem grow={false}>
+              <EuiTitle size="l">
+                <h1>{labels.skills.title}</h1>
+              </EuiTitle>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+
+          <EuiSpacer size="m" />
+          <EuiText size="m" color="default">
+            {labels.agentSkills.pageDescription}
+          </EuiText>
+        </div>
+
+        <EuiFlexGroup gutterSize="none" responsive={false} css={styles.body}>
+          <EuiFlexItem grow={false} css={styles.searchColumn}>
+            <div css={styles.searchInputWrapper}>
+              <EuiFieldSearch
+                placeholder={labels.agentSkills.searchActiveSkillsPlaceholder}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                incremental
+                fullWidth
+              />
+            </div>
+
+            <EuiFlexGroup direction="column" gutterSize="xs" css={styles.scrollableList}>
+              {contextEngineSkillRows
+                .filter((skill) =>
+                  searchQuery.trim()
+                    ? skill.name.toLowerCase().includes(searchQuery.toLowerCase())
+                    : true
+                )
+                .map((skill) => (
+                <EuiFlexItem key={skill.id} grow={false}>
+                  <ActiveSkillRow
+                    skill={skill}
+                    isSelected={selectedContextEngineSkillId === skill.id}
+                    onSelect={(selectedSkill) => setSelectedContextEngineSkillId(selectedSkill.id)}
+                    onRemove={() => undefined}
+                    isAutoIncluded={false}
+                    canEditAgent={false}
+                  />
+                </EuiFlexItem>
+                ))}
+            </EuiFlexGroup>
+          </EuiFlexItem>
+
+          <EuiFlexItem css={styles.detailPanelWrapper}>
+            <EuiPanel hasBorder paddingSize="l" css={styles.detailPanel}>
+              <EuiTitle size="s">
+                <h2>{selectedContextSkill?.name ?? 'Skill detail'}</h2>
+              </EuiTitle>
+              <EuiSpacer size="m" />
+              <EuiText size="m" color="subdued">
+                <p>{selectedContextSkill?.description ?? ''}</p>
+              </EuiText>
+              <EuiSpacer size="m" />
+              <EuiTitle size="xs">
+                <h3>Instructions</h3>
+              </EuiTitle>
+              <EuiSpacer size="s" />
+              <EuiText size="s">
+                <ul>
+                  {(selectedContextSkill?.instructions ?? []).map((instruction) => (
+                    <li key={instruction}>{instruction}</li>
+                  ))}
+                </ul>
+              </EuiText>
+            </EuiPanel>
+          </EuiFlexItem>
+        </EuiFlexGroup>
+      </PageWrapper>
     );
   }
 

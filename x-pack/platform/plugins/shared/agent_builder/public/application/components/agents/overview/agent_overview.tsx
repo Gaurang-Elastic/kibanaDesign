@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import {
   EuiFlexGroup,
   EuiHorizontalRule,
@@ -27,6 +27,7 @@ import { useKibana } from '../../../hooks/use_kibana';
 import { useNavigation } from '../../../hooks/use_navigation';
 import { appPaths } from '../../../utils/app_paths';
 import { isPreExecutionWorkflowEnabled } from '../../../utils/is_pre_execution_workflow_enabled';
+import { isContextEngineAgent } from '../../../utils/is_context_engine_agent';
 import { AgentHeader } from './agent_header';
 import { CapabilitiesSection } from './capabilities_section';
 import { EditDetailsFlyout } from './edit_details_flyout';
@@ -36,6 +37,10 @@ import { AccessFlyout } from '../access/access_flyout';
 import { AccessSummaryCard } from '../access/access_summary_card';
 import { useCanUpdateAgentAccess } from '../../../hooks/agents/use_can_update_agent_access';
 import {
+  ContextEngineOverview,
+  CONTEXT_ENGINE_SETUP_PARAM,
+} from '../../context_engine';
+import {
   getActivePlugins,
   getActiveSkills,
   getActiveTools,
@@ -43,6 +48,7 @@ import {
 
 export const AgentOverview: React.FC = () => {
   const { agentId } = useParams<{ agentId: string }>();
+  const { search } = useLocation();
   const { euiTheme } = useEuiTheme();
   const { docLinksService } = useAgentBuilderServices();
   const { navigateToAgentBuilderUrl, createAgentBuilderUrl } = useNavigation();
@@ -93,6 +99,7 @@ export const AgentOverview: React.FC = () => {
   }, [agent, allTools, enableElasticCapabilities, defaultToolIdSet]);
 
   const connectorsCount = agent?.configuration?.connector_ids?.length ?? 0;
+  const contextEngineMode = isContextEngineAgent({ agentId, agentName: agent?.name, search });
 
   if (isLoading || !agent) {
     return (
@@ -114,6 +121,26 @@ export const AgentOverview: React.FC = () => {
     overflow-y: auto;
     height: 100%;
   `;
+
+  if (contextEngineMode) {
+    const setupAgentId = agentId === 'context-engine-agent' ? 'elastic-ai-agent' : agentId!;
+    return (
+      <PageWrapper>
+        <ContextEngineOverview
+          onBeginSetup={() => {
+            const searchParams = new URLSearchParams(window.location.search);
+            searchParams.set(CONTEXT_ENGINE_SETUP_PARAM, '1');
+            if (!searchParams.get('concept')) {
+              searchParams.set('concept', '1');
+            }
+            navigateToAgentBuilderUrl(
+              `${appPaths.agent.conversations.new({ agentId: setupAgentId })}?${searchParams.toString()}`
+            );
+          }}
+        />
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>

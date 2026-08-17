@@ -7,6 +7,7 @@
 
 import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom-v5-compat';
+import { useLocation } from 'react-router-dom';
 
 import {
   EuiFlexGroup,
@@ -20,6 +21,8 @@ import { ConversationDisplayStatus, ConversationRoundStatus } from '@kbn/agent-b
 import { appPaths } from '../../../../../utils/app_paths';
 import { useStreamingContext } from '../../../../../context/streaming/streaming_context';
 import { useConversationList } from '../../../../../hooks/use_conversation_list';
+import { useAgentBuilderAgentById } from '../../../../../hooks/agents/use_agent_by_id';
+import { isContextEngineAgent } from '../../../../../utils/is_context_engine_agent';
 import {
   createConversationListItemStyles,
   createActiveConversationListItemStyles,
@@ -67,9 +70,12 @@ export const ConversationList: React.FC<ConversationListProps> = ({
   isNewConversationRoute,
   onItemClick,
 }) => {
+  const { search } = useLocation();
   const { euiTheme } = useEuiTheme();
   const { conversations = [], isLoading } = useConversationList({ agentId });
+  const { agent } = useAgentBuilderAgentById(agentId);
   const { activeStreams, byConversationId } = useStreamingContext();
+  const contextEngineMode = isContextEngineAgent({ agentId, agentName: agent?.name, search });
 
   const sortedConversations = useMemo(
     () =>
@@ -99,6 +105,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
 
   // If there are no conversations, show 1 mock conversation item that links to the new conversation route
   if (sortedConversations.length === 0) {
+    if (contextEngineMode) {
+      return null;
+    }
+
     return (
       <EuiFlexGroup direction="column" gutterSize="xs">
         <EuiFlexItem grow={false}>

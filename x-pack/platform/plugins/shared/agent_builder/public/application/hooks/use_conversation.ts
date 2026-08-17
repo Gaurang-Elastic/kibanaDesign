@@ -131,10 +131,14 @@ export const useAgentId = () => {
   const conversationId = useConversationId();
   const isNewConversation = !conversationId;
   const getNewConversationAgentId = useGetNewConversationAgentId();
+  const validateAgentId = useValidateAgentId();
 
   // For new conversations, URL (context.agentId) is the source of truth
   if (isNewConversation) {
-    return context.agentId ?? getNewConversationAgentId();
+    if (validateAgentId(context.agentId)) {
+      return context.agentId;
+    }
+    return getNewConversationAgentId();
   }
 
   // For existing conversations, use the conversation's stored agent_id
