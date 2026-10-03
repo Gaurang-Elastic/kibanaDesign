@@ -11,7 +11,23 @@ export type Proto11GoalId = 'indices' | 'multi' | 'docs' | 'entities' | 'gaps';
 
 export type Proto11TemplateId = 'overview' | 'xsource' | 'digest' | 'profiles' | 'gaps';
 
-export type Proto11SourceId = 'nginx-access' | 'nginx-error' | 'cpu' | 'runbooks' | 'k8s';
+export type Proto11SourceId =
+  | 'nginx-access'
+  | 'nginx-error'
+  | 'cpu'
+  | 'runbooks'
+  | 'k8s'
+  | 'enrollment'
+  | 'tuition'
+  | 'peers';
+
+export type Proto11SampleScenario = 'web-ops' | 'higher-ed';
+
+export interface ConnectedAgent {
+  name: string;
+  /** Relative time of the last retrieval. Undefined until one is recorded. */
+  lastRetrieval?: string;
+}
 
 export type Proto11RunStatus = 'firstPass' | 'sampleReady' | 'running' | 'enabled' | 'needsAgent';
 
@@ -24,6 +40,9 @@ export type Proto11FixState = 'none' | 'rerunning' | 'fixed' | 'done';
 export interface Proto11Meta {
   goal: Proto11GoalId;
   sample?: boolean;
+  /** Which sample dataset. Undefined on older samples, which are web-ops. */
+  scenario?: Proto11SampleScenario;
+  connectedAgents?: ConnectedAgent[];
   /** Frozen at creation so editing Sources does not change a running pass. */
   sourceIds: Proto11SourceId[];
   /** Templates that run in the first pass. */

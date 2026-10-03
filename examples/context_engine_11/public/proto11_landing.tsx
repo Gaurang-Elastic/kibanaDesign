@@ -47,7 +47,7 @@ import {
   type Proto11Proposal,
 } from './proto11_data';
 import { Proto11SamplePanel } from './proto11_sample_panel';
-import type { Proto11SourceId } from './proto11_types';
+import type { Proto11SampleScenario, Proto11SourceId } from './proto11_types';
 import { TRACES_DOCS_HREF, TraceRow } from './traces_panel';
 
 type TraceSelector = 'elastic_agents' | 'genai_libraries';
@@ -166,7 +166,7 @@ export const Proto11Landing = ({
   docsHref: string;
   onCreateFromGoal: (options: Omit<CreateFromGoalOptions, 'takenNames'>) => void;
   onCreateEmpty: () => void;
-  onExploreSample: () => void;
+  onExploreSample: (scenario: Proto11SampleScenario) => void;
 }) => {
   const stacked = useStackedColumns();
 

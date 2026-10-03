@@ -54,6 +54,8 @@ export interface Proto11KnowledgeProps {
   checkHidden: boolean;
   onLookedAt: (id: string) => void;
   onHideCheck: () => void;
+  /** Rendered first, above Check a few. */
+  testQuestion?: React.ReactNode;
 }
 
 interface SourceGroup {
@@ -484,6 +486,7 @@ export const KnowledgeTab = ({
       <EuiText size="s" color="subdued" className="contextEnginePrototype__kiSubtitleWrap">
         <p className="contextEnginePrototype__kiSubtitle">The knowledge your agents retrieve.</p>
       </EuiText>
+      {proto11?.testQuestion}
       {showCheck && proto11 ? (
         <EuiPanel
           hasBorder

@@ -79,18 +79,20 @@ import {
 } from './demo_flags';
 import {
   PROTO11_TICK_MS,
-  SAMPLE_INDEX_NAME,
   advanceProto11,
   createProto11Namespace,
   createSampleNamespace,
   indicatorSourceGroup,
   proto11AddedLine,
   proto11StatusPill,
+  sampleNameFor,
+  sampleScenarioOf,
   sourceHasOutstandingRejections,
   startFullRun,
   startRerun,
   type CreateFromGoalOptions,
 } from './proto11_data';
+import { Proto11ConnectedAgentsPanel } from './proto11_agents_panel';
 import { Proto11Landing } from './proto11_landing';
 import {
   Proto11FixFlyout,
@@ -98,7 +100,8 @@ import {
   Proto11RunCallout,
   Proto11SampleCallout,
 } from './proto11_overview';
-import type { Proto11Meta } from './proto11_types';
+import { Proto11TestQuestion } from './proto11_test_question';
+import type { ConnectedAgent, Proto11Meta, Proto11SampleScenario } from './proto11_types';
 import { ImprovementsTab } from './improvements_tab';
 import { initialOpenImprovementCount } from './improvements_data';
 import type { OverviewImprovement } from './improvements_data';
@@ -142,12 +145,13 @@ import { TABLE_SPARKLES_TYPE } from './register_table_sparkles';
 
 type Screen = 'index' | 'create' | 'detail';
 type DetailTab = 'overview' | 'knowledge' | 'improvements';
-type EditablePanel = 'description' | 'traces' | 'sources';
+type EditablePanel = 'description' | 'traces' | 'sources' | 'agents';
 
 const EDITABLE_PANEL_LABEL: Record<EditablePanel, string> = {
   description: 'Description',
   traces: 'Agent traces',
   sources: 'Sources',
+  agents: 'Connected agents',
 };
 
 const tracesSignature = (traces: IndexTrace[]) =>
@@ -554,6 +558,8 @@ function ContextEngineApp({
   const [pendingSourcesScroll, setPendingSourcesScroll] = useState(false);
   const [tracesEditing, setTracesEditing] = useState(false);
   const [tracesDraft, setTracesDraft] = useState<IndexTrace[]>([]);
+  const [agentsEditing, setAgentsEditing] = useState(false);
+  const [agentsDraft, setAgentsDraft] = useState<ConnectedAgent[]>([]);
   const [automationsAddOpen, setAutomationsAddOpen] = useState(false);
   const [automationsMenuOpen, setAutomationsMenuOpen] = useState<string | null>(null);
   const [catalogActionsOpen, setCatalogActionsOpen] = useState<string | null>(null);
@@ -775,6 +781,7 @@ function ContextEngineApp({
     setSourcesEditing(false);
     setEditIntentOpen(false);
     setTracesEditing(false);
+    setAgentsEditing(false);
     setPendingPanelSwitch(null);
     setAutomationsAddOpen(false);
     setAutomationsMenuOpen(null);
@@ -845,16 +852,16 @@ function ContextEngineApp({
     openDetail(created);
   };
 
-  const trySample = () => {
-    const existing = namespaces.find((item) => item.proto11?.sample);
+  const trySample = (scenario: Proto11SampleScenario) => {
+    const existing = namespaces.find((item) => sampleScenarioOf(item) === scenario);
     if (existing) {
       openDetail(existing);
       return;
     }
-    const created = createSampleNamespace();
+    const created = createSampleNamespace(scenario);
     setNamespaces((current) => [
       created,
-      ...current.filter((item) => item.name !== SAMPLE_INDEX_NAME),
+      ...current.filter((item) => item.name !== sampleNameFor(scenario)),
     ]);
     openDetail(created);
   };
@@ -882,6 +889,7 @@ function ContextEngineApp({
     setSourcesEditing(false);
     setEditIntentOpen(false);
     setTracesEditing(false);
+    setAgentsEditing(false);
     setPendingPanelSwitch(null);
     setAutomationsAddOpen(false);
     setAutomationsMenuOpen(null);
@@ -1788,10 +1796,12 @@ function ContextEngineApp({
     const activeEditPanel: EditablePanel | null = editIntentOpen
       ? 'description'
       : tracesEditing
-        ? 'traces'
-        : sourcesEditing
-          ? 'sources'
-          : null;
+      ? 'traces'
+      : sourcesEditing
+      ? 'sources'
+      : agentsEditing
+      ? 'agents'
+      : null;
     const anyEditing = activeEditPanel !== null;
     const sourcesListDirty =
       sourcesSignature(allDraftSources(sourcesDraft)) !== sourcesSignature(namespace.sources);
@@ -1811,18 +1821,29 @@ function ContextEngineApp({
       (SHOW_MEMORY_TOGGLE && memoryDraft !== (namespace.memoryEnabled !== false));
     const tracesDirty =
       tracesSignature(tracesDraft) !== tracesSignature(namespace.traces ?? []);
+    const connectedAgents = meta?.connectedAgents ?? [];
+    const agentsDirty =
+      agentsDraft.map((item) => item.name).join('\n') !==
+      connectedAgents.map((item) => item.name).join('\n');
     const isPanelDirty = (panel: EditablePanel) => {
       if (panel === 'description') return descriptionDirty;
       if (panel === 'traces') return tracesDirty;
+      if (panel === 'agents') return agentsDirty;
       return sourcesDirty;
     };
     const closeActiveEditor = () => {
       setEditIntentOpen(false);
       setTracesEditing(false);
+      setAgentsEditing(false);
       setSourcesDraft(draftFromSources(namespace.sources));
       setSourcesEditing(false);
     };
     const openEditor = (panel: EditablePanel) => {
+      if (panel === 'agents') {
+        setAgentsDraft(connectedAgents);
+        setAgentsEditing(true);
+        return;
+      }
       if (panel === 'description') {
         setIntentDraft(namespace.intent);
         setMemoryDraft(namespace.memoryEnabled !== false);
@@ -1865,6 +1886,11 @@ function ContextEngineApp({
       setPendingPanelSwitch(null);
       setTracesEditing(false);
     };
+    const saveAgents = () => {
+      updateProto11Meta(namespace.name, { connectedAgents: agentsDraft });
+      setPendingPanelSwitch(null);
+      setAgentsEditing(false);
+    };
     const saveSourcesEditor = () => {
       replaceNamespace({
         ...namespace,
@@ -1899,6 +1925,24 @@ function ContextEngineApp({
       </EuiButton>
     );
     const canEditPanels = !namespace.managed;
+    const connectAgentActions = () => {
+      if (!canEditPanels) return undefined;
+      if (agentsEditing) return headerEditButtons(agentsDirty, saveAgents);
+      if (connectedAgents.length > 0) return panelEditLink(() => requestEdit('agents'));
+      if (anyEditing) return panelAddEmpty('Connect an agent', () => requestEdit('agents'));
+      const onlyCallToAction =
+        Boolean(meta) &&
+        !meta?.sample &&
+        (meta?.phase === 'fullRun' || meta?.phase === 'complete') &&
+        fixFlyoutFor === null;
+      return onlyCallToAction ? (
+        panelAddFilled('Connect an agent', () => requestEdit('agents'))
+      ) : (
+        <EuiButton size="s" onClick={() => requestEdit('agents')}>
+          Connect an agent
+        </EuiButton>
+      );
+    };
     const hasDescription = Boolean(namespace.intent);
     const hasTraces = (namespace.traces?.length ?? 0) > 0;
     const hasSources = namespace.sources.length > 0;
@@ -2606,6 +2650,17 @@ function ContextEngineApp({
                   ) : null}
                 </EuiPanel>
               )}
+              {meta ? (
+                <Proto11ConnectedAgentsPanel
+                  namespaceName={namespace.name}
+                  agents={connectedAgents}
+                  editing={agentsEditing}
+                  draft={agentsDraft}
+                  onDraftChange={setAgentsDraft}
+                  agentBuilderHref={coreStart.http.basePath.prepend('/app/agent_builder')}
+                  actions={connectAgentActions()}
+                />
+              ) : null}
             </div>
           ) : effectiveTab === 'knowledge' ? (
             <KnowledgeTab
@@ -2637,6 +2692,9 @@ function ContextEngineApp({
                           lookedAt: [...meta.lookedAt.filter((item) => item !== id), id],
                         }),
                       onHideCheck: () => updateProto11Meta(namespace.name, { checkHidden: true }),
+                      testQuestion: (
+                        <Proto11TestQuestion key={namespace.name} namespace={namespace} />
+                      ),
                     }
                   : undefined
               }

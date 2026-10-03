@@ -10,26 +10,21 @@
 import React, { useEffect, useState } from 'react';
 import {
   EuiBadge,
-  EuiButtonEmpty,
-  EuiCodeBlock,
+  EuiContextMenuItem,
   EuiFlexGroup,
   EuiFlexItem,
-  EuiFlyout,
-  EuiFlyoutBody,
-  EuiFlyoutFooter,
-  EuiFlyoutHeader,
   EuiIcon,
   EuiLink,
   EuiPanel,
-  EuiProgress,
+  EuiPopover,
   EuiSpacer,
   EuiText,
   EuiTitle,
-  useGeneratedHtmlId,
 } from '@elastic/eui';
 
-import { toIndicatorDocument, typeLabel, type KnowledgeIndicator } from './knowledge_indicators';
 import { SAMPLE_COUNTS, SAMPLE_DEMOS, sampleIndicator, type SampleDemo } from './proto11_data';
+import { ComparisonBar, KiJsonFlyout, KiPreviewCard } from './proto11_ki_preview';
+import type { Proto11SampleScenario } from './proto11_types';
 
 /** Ask, first card, second card, third card, comparison. About four seconds with the slide-ins. */
 const STAGE_DELAYS_MS = [0, 800, 1500, 2200, 3200];
@@ -41,56 +36,10 @@ const PIPELINE: Array<{ icon: string; label: string; count?: number }> = [
   { icon: 'productAgent', label: 'Agent' },
 ];
 
-const SampleKiFlyout = ({
-  indicator,
-  sourceName,
-  onClose,
-}: {
-  indicator: KnowledgeIndicator;
-  sourceName: string;
-  onClose: () => void;
-}) => {
-  const titleId = useGeneratedHtmlId({ prefix: 'proto11SampleKi' });
-  return (
-    <EuiFlyout ownFocus size="m" onClose={onClose} aria-labelledby={titleId}>
-      <EuiFlyoutHeader hasBorder>
-        <EuiTitle size="s">
-          <h2 id={titleId}>{indicator.title}</h2>
-        </EuiTitle>
-        <EuiSpacer size="s" />
-        <EuiFlexGroup gutterSize="xs" responsive={false} wrap alignItems="center">
-          <EuiFlexItem grow={false}>
-            <EuiBadge color="hollow">Sample</EuiBadge>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiBadge color="hollow">{typeLabel(indicator.type)}</EuiBadge>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiBadge color="hollow">{sourceName}</EuiBadge>
-          </EuiFlexItem>
-        </EuiFlexGroup>
-      </EuiFlyoutHeader>
-      <EuiFlyoutBody>
-        <EuiCodeBlock language="json" fontSize="s" paddingSize="m" isCopyable>
-          {JSON.stringify(toIndicatorDocument(indicator), null, 2)}
-        </EuiCodeBlock>
-      </EuiFlyoutBody>
-      <EuiFlyoutFooter>
-        <EuiButtonEmpty onClick={onClose}>Close</EuiButtonEmpty>
-      </EuiFlyoutFooter>
-    </EuiFlyout>
-  );
-};
-
-const ComparisonRow = ({ label, tokens, max }: { label: string; tokens: number; max: number }) => (
-  <div>
-    <EuiText size="xs">
-      <p>{label}</p>
-    </EuiText>
-    <EuiSpacer size="xs" />
-    <EuiProgress value={tokens} max={max} size="s" color="subdued" aria-label={label} />
-  </div>
-);
+const SAMPLE_MENU: Array<{ scenario: Proto11SampleScenario; label: string }> = [
+  { scenario: 'web-ops', label: 'Web operations' },
+  { scenario: 'higher-ed', label: 'Higher education' },
+];
 
 const DemoRun = ({
   demo,
@@ -127,43 +76,21 @@ const DemoRun = ({
         if (!found) return null;
         const { indicator, sourceName } = found;
         return (
-          <EuiPanel
+          <KiPreviewCard
             key={id}
-            hasBorder
-            paddingSize="s"
-            className="contextEnginePrototype__proto11Enter"
-            onClick={() => onOpenIndicator(id)}
-            aria-label={`Open ${indicator.title}`}
-            data-test-subj="proto11SampleKiCard"
-          >
-            <EuiText size="s" textAlign="left">
-              <strong>{indicator.title}</strong>
-            </EuiText>
-            <EuiSpacer size="xs" />
-            <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
-              <EuiFlexItem grow={false}>
-                <EuiBadge color="hollow">{typeLabel(indicator.type)}</EuiBadge>
-              </EuiFlexItem>
-              <EuiFlexItem grow={false}>
-                <EuiText size="xs" color="subdued">
-                  {sourceName}
-                </EuiText>
-              </EuiFlexItem>
-            </EuiFlexGroup>
-          </EuiPanel>
+            indicator={indicator}
+            sourceName={sourceName}
+            onOpen={() => onOpenIndicator(id)}
+          />
         );
       })}
       {stage >= STAGE_DELAYS_MS.length ? (
         <div className="contextEnginePrototype__proto11Enter" data-test-subj="proto11SampleCompare">
-          <ComparisonRow
-            label={demo.withContext.label}
-            tokens={demo.withContext.tokens}
-            max={max}
-          />
+          <ComparisonBar label={demo.withContext.label} value={demo.withContext.tokens} max={max} />
           <EuiSpacer size="s" />
-          <ComparisonRow
+          <ComparisonBar
             label={demo.withoutContext.label}
-            tokens={demo.withoutContext.tokens}
+            value={demo.withoutContext.tokens}
             max={max}
           />
           <EuiSpacer size="s" />
@@ -182,11 +109,12 @@ export const Proto11SamplePanel = ({
   onExploreSample,
 }: {
   docsHref: string;
-  onExploreSample: () => void;
+  onExploreSample: (scenario: Proto11SampleScenario) => void;
 }) => {
   const [demoIndex, setDemoIndex] = useState<number | null>(null);
   const [stage, setStage] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [exploreOpen, setExploreOpen] = useState(false);
 
   useEffect(() => {
     if (demoIndex === null) return;
@@ -272,9 +200,37 @@ export const Proto11SamplePanel = ({
       <EuiSpacer size="l" />
       <EuiFlexGroup gutterSize="l" alignItems="center" responsive={false} wrap>
         <EuiFlexItem grow={false}>
-          <EuiLink onClick={onExploreSample} data-test-subj="proto11TrySample">
-            Explore the sample AI index
-          </EuiLink>
+          <EuiPopover
+            button={
+              <EuiLink
+                onClick={() => setExploreOpen((isOpen) => !isOpen)}
+                data-test-subj="proto11TrySample"
+              >
+                Explore the sample AI index{' '}
+                <EuiIcon type="chevronSingleDown" size="s" aria-hidden={true} />
+              </EuiLink>
+            }
+            aria-label="Sample AI indices"
+            isOpen={exploreOpen}
+            closePopover={() => setExploreOpen(false)}
+            panelPaddingSize="none"
+            anchorPosition="downLeft"
+          >
+            <div>
+              {SAMPLE_MENU.map(({ scenario, label }) => (
+                <EuiContextMenuItem
+                  key={scenario}
+                  onClick={() => {
+                    setExploreOpen(false);
+                    onExploreSample(scenario);
+                  }}
+                  data-test-subj={`proto11Sample-${scenario}`}
+                >
+                  {label}
+                </EuiContextMenuItem>
+              ))}
+            </div>
+          </EuiPopover>
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
           <EuiLink href={docsHref} target="_blank" external>
@@ -283,9 +239,10 @@ export const Proto11SamplePanel = ({
         </EuiFlexItem>
       </EuiFlexGroup>
       {open ? (
-        <SampleKiFlyout
+        <KiJsonFlyout
           indicator={open.indicator}
           sourceName={open.sourceName}
+          sample
           onClose={() => setOpenId(null)}
         />
       ) : null}

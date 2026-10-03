@@ -27,6 +27,7 @@ import {
 import type {
   Proto11GoalId,
   Proto11Meta,
+  Proto11SampleScenario,
   Proto11SourceId,
   Proto11TemplateId,
 } from './proto11_types';
@@ -90,8 +91,35 @@ export const WEB_OPS_SOURCES: WebOpsSource[] = [
   },
 ];
 
+export const HIGHER_ED_SAMPLE_NAME = 'sample-higher-ed';
+
+/** About 90 fields across the three indices. Values are invented. */
+const HIGHER_ED_SOURCES: WebOpsSource[] = [
+  {
+    id: 'enrollment',
+    name: 'enrollment-outcomes',
+    kind: 'Index',
+    summary: 'Cohort outcomes by programme, about 2,400 documents',
+    keywords: ['enrol\\w*', 'graduat\\w*', 'retention', 'cohorts?', 'programmes?', 'outcomes?'],
+  },
+  {
+    id: 'tuition',
+    name: 'tuition-and-fees',
+    kind: 'Index',
+    summary: 'Tuition and mandatory fees by academic year, about 1,800 documents',
+    keywords: ['tuition', 'fees?', 'costs?', 'prices?'],
+  },
+  {
+    id: 'peers',
+    name: 'peer-institutions',
+    kind: 'Index',
+    summary: 'Published rates and tuition for peer universities, about 2,800 documents',
+    keywords: ['peers?', 'compar\\w*', 'institutions?', 'universit\\w*'],
+  },
+];
+
 const sourceById = (id: Proto11SourceId) =>
-  WEB_OPS_SOURCES.find((source) => source.id === id) as WebOpsSource;
+  [...WEB_OPS_SOURCES, ...HIGHER_ED_SOURCES].find((source) => source.id === id) as WebOpsSource;
 
 const RUNBOOKS_CONNECTOR_ID = 'sre-runbooks';
 const TRACES_SOURCE_NAME = 'Agent traces';
@@ -686,6 +714,121 @@ const fillerKis: PortedKi[] = FILLER.flatMap(({ template, source, titles }) =>
 
 const PORTED_KIS: PortedKi[] = [...HAND_WRITTEN, ...fillerKis];
 
+// ---------- Knowledge Indicators (higher-ed sample) ----------
+
+const HIGHER_ED_KIS: PortedKi[] = [
+  {
+    id: 'he-001',
+    source: 'enrollment',
+    template: 'overview',
+    type: 'index_metadata',
+    title: 'enrollment-outcomes index overview',
+    description: 'Cohort outcomes by programme. One document per entry cohort, programme and year.',
+    content: [
+      'Use this index for retention and graduation questions. Each document is one entry cohort in one programme, measured at the end of an academic year.',
+      '- cohort.entry_year: the year the cohort started. Graduation rates are reported against this year, not the year of measurement.',
+      '- programme.name and programme.level: level is undergraduate or graduate.',
+      '- outcome.grad_rate_4yr and outcome.grad_rate_6yr: ratios from 0 to 1. Multiply by 100 for a percentage.',
+      '- outcome.retention_rate_y1: share of the cohort enrolled again in year two.',
+    ].join('\n'),
+    attributes: {
+      doc_count: 2400,
+      field_count: 30,
+      timestamp_field: 'measured_at',
+      primary_entities: ['programme.name', 'cohort.entry_year'],
+      tags: ['enrollment', 'graduation', 'retention'],
+      example_esql:
+        'FROM enrollment-outcomes\n| WHERE programme.level == "undergraduate" AND cohort.entry_year == 2020\n| STATS grad_rate_4yr = AVG(outcome.grad_rate_4yr) BY programme.name\n| SORT grad_rate_4yr DESC',
+    },
+    related: ['he-003', 'he-004'],
+  },
+  {
+    id: 'he-002',
+    source: 'tuition',
+    template: 'overview',
+    type: 'index_metadata',
+    title: 'tuition-and-fees index overview',
+    description:
+      'Published tuition and mandatory fees. One document per programme per academic year.',
+    content: [
+      'Use this index for tuition, fee and cost questions. Each document is one programme in one academic year.',
+      '- academic_year: a keyword such as "2025-26". Sort on academic_year_start, not on the string.',
+      '- tuition.annual_usd: published annual tuition before aid.',
+      '- fees.mandatory_usd: required fees, kept separate from tuition.',
+      '- fees.change_from_prior_pct: change against the prior academic year, already computed.',
+    ].join('\n'),
+    attributes: {
+      doc_count: 1800,
+      field_count: 26,
+      timestamp_field: 'academic_year_start',
+      primary_entities: ['programme.name', 'academic_year'],
+      tags: ['tuition', 'fees'],
+      example_esql:
+        'FROM tuition-and-fees\n| WHERE academic_year == "2025-26"\n| STATS tuition = AVG(tuition.annual_usd), fees = AVG(fees.mandatory_usd) BY programme.level',
+    },
+    related: ['he-004', 'he-005'],
+  },
+  {
+    id: 'he-003',
+    source: 'peers',
+    template: 'overview',
+    type: 'index_metadata',
+    title: 'peer-institutions index overview',
+    description: 'Published figures for peer universities. One document per institution per year.',
+    content: [
+      'Use this index to compare with peer universities. Figures are the ones each institution publishes.',
+      '- institution.unit_id: join on this. Institution names vary between sources.',
+      '- institution.region and institution.size_band: filter on these to pick a fair peer set.',
+      '- published.grad_rate_6yr: peers publish six-year rates only, so compare like with like.',
+      '- published.tuition_usd: published annual tuition.',
+    ].join('\n'),
+    attributes: {
+      doc_count: 2800,
+      field_count: 34,
+      timestamp_field: 'report_year',
+      primary_entities: ['institution.unit_id', 'institution.name'],
+      tags: ['peers', 'benchmark'],
+      example_esql:
+        'FROM peer-institutions\n| WHERE report_year == 2025 AND institution.region == "Northeast"\n| STATS grad_rate_6yr = AVG(published.grad_rate_6yr), tuition = AVG(published.tuition_usd) BY institution.size_band',
+    },
+    related: ['he-001', 'he-004'],
+  },
+  {
+    id: 'he-004',
+    source: 'peers',
+    template: 'overview',
+    type: 'query_guide',
+    title: 'Answering "how do we compare with peers?"',
+    description: 'Join our outcomes and tuition to peer figures on institution and year.',
+    content:
+      'Join on institution.unit_id and report year. Use six-year graduation rates on both sides, because peers do not publish four-year rates. Take our tuition from tuition-and-fees for the same academic year.',
+    attributes: {
+      join_keys: ['institution.unit_id', 'report_year'],
+      tags: ['peers', 'join'],
+      example_esql:
+        'FROM peer-institutions\n| WHERE report_year == 2025\n| STATS peer_grad_6yr = AVG(published.grad_rate_6yr), peer_tuition = AVG(published.tuition_usd) BY institution.size_band\n| SORT peer_grad_6yr DESC',
+    },
+    related: ['he-001', 'he-002', 'he-003'],
+  },
+  {
+    id: 'he-005',
+    source: 'tuition',
+    template: 'overview',
+    type: 'query_guide',
+    title: 'Answering "what changed in fees?"',
+    description: 'Use the change field rather than diffing two years.',
+    content:
+      'Use fees.change_from_prior_pct, which is already computed against the prior academic year. Do not diff two years yourself: programmes are renamed between years, and a diff counts them twice.',
+    attributes: {
+      field: 'fees.change_from_prior_pct',
+      tags: ['fees', 'change'],
+      example_esql:
+        'FROM tuition-and-fees\n| WHERE academic_year == "2025-26" AND fees.change_from_prior_pct != 0\n| KEEP programme.name, fees.mandatory_usd, fees.change_from_prior_pct\n| SORT fees.change_from_prior_pct DESC',
+    },
+    related: ['he-002'],
+  },
+];
+
 export interface FailureGroup {
   source: Proto11SourceId;
   sourceName: string;
@@ -1127,8 +1270,61 @@ export const createProto11Namespace = ({
   };
 };
 
-/** The finished sample index: five sources, two completed automations, no rejections. */
-export const createSampleNamespace = (): Namespace => {
+/** Three indices, one completed Index overview automation, five KIs. Modelled on a real session. */
+const createHigherEdSample = (): Namespace => {
+  const name = HIGHER_ED_SAMPLE_NAME;
+  const indexName = backingIndexName(name);
+  const sourceIds = HIGHER_ED_SOURCES.map((source) => source.id);
+  const indicators = HIGHER_ED_KIS.map((ki) => toIndicator(ki, 'overview'));
+  const automations = [
+    {
+      ...buildAutomation({
+        namespaceName: name,
+        indexName,
+        template: 'overview',
+        sourceIds,
+        derivation: 'Chosen for the sample because all three sources are indices.',
+        runStatus: 'enabled' as const,
+      }),
+      hasRun: true,
+      producesCount: indicators.length,
+    },
+  ];
+  const meta: Proto11Meta = {
+    ...freshMeta('indices', sourceIds, ['overview']),
+    sample: true,
+    scenario: 'higher-ed',
+    phase: 'complete',
+  };
+  return {
+    name,
+    displayName: name,
+    intent:
+      'Sample higher education data: cohort outcomes, tuition and fees, and published figures for peer universities.',
+    owner: 'you',
+    updated: 'just now',
+    indexName,
+    storageType: 'index',
+    userCreated: true,
+    sources: sourceIds.map((id) => toNamespaceSource(sourceById(id))),
+    traces: [],
+    automations,
+    indicators,
+    knowledge: statsFromIndicators(indicators),
+    tryQuestions: [],
+    proto11: meta,
+  };
+};
+
+export const sampleNameFor = (scenario: Proto11SampleScenario) =>
+  scenario === 'higher-ed' ? HIGHER_ED_SAMPLE_NAME : SAMPLE_INDEX_NAME;
+
+export const sampleScenarioOf = (namespace: Namespace): Proto11SampleScenario | undefined =>
+  namespace.proto11?.sample ? namespace.proto11.scenario ?? 'web-ops' : undefined;
+
+/** The finished sample index for a scenario. Web-ops: five sources, two completed automations. */
+export const createSampleNamespace = (scenario: Proto11SampleScenario = 'web-ops'): Namespace => {
+  if (scenario === 'higher-ed') return createHigherEdSample();
   const name = SAMPLE_INDEX_NAME;
   const indexName = backingIndexName(name);
   const sourceIds = WEB_OPS_SOURCES.map((source) => source.id);
@@ -1152,6 +1348,7 @@ export const createSampleNamespace = (): Namespace => {
   const meta: Proto11Meta = {
     ...freshMeta('indices', sourceIds, ['overview', 'digest']),
     sample: true,
+    scenario: 'web-ops',
     phase: 'complete',
   };
   return {
@@ -1511,6 +1708,201 @@ export const sampleIndicator = (
 ): { indicator: KnowledgeIndicator; sourceName: string } | undefined => {
   const ki = PORTED_KIS.find((item) => item.id === id);
   return ki ? { indicator: toIndicator(ki), sourceName: sourceDisplayName(ki.source) } : undefined;
+};
+
+// ---------- connected agents and test a question ----------
+
+/** Mock Agent Builder agents that can be connected to an AI index. */
+export const AGENT_BUILDER_AGENTS = [...ELASTIC_AGENT_OPTIONS, 'institutional-research-agent'];
+
+interface TestFigures {
+  tokens: number;
+  seconds: number;
+}
+
+interface TestScenario {
+  question: string;
+  kiIds: string[];
+  withContext: TestFigures;
+  withoutContext: TestFigures & { steps: string[] };
+}
+
+export interface TestQuestionResult {
+  indicators: KnowledgeIndicator[];
+  withContext: TestFigures;
+  withoutContext: TestFigures & { steps: string[] };
+}
+
+const SIX_STEPS = [
+  'List indices',
+  'Read the mapping of 3 indices',
+  'Sample documents',
+  'Write a query',
+  'Retry after a field error',
+  'Answer',
+];
+
+/** Latency for higher-ed is the one observed in the real session. Tokens are estimates. */
+const HIGHER_ED_FIGURES = {
+  withContext: { tokens: 2100, seconds: 15 },
+  withoutContext: { steps: SIX_STEPS, tokens: 7800, seconds: 44 },
+};
+
+const TEST_SCENARIOS: Record<Proto11SampleScenario, TestScenario[]> = {
+  'web-ops': [
+    {
+      question: 'Which hosts are saturated?',
+      kiIds: ['ki-overview-cpu-2', 'ki-010', 'ki-060'],
+      withContext: { tokens: 3800, seconds: 9 },
+      withoutContext: { steps: SIX_STEPS, tokens: 9400, seconds: 31 },
+    },
+    {
+      question: 'What does event.duration mean in nginx logs?',
+      kiIds: ['ki-overview-nginx-access-2', 'ki-001', 'ki-overview-nginx-access-3'],
+      withContext: { tokens: 2100, seconds: 7 },
+      withoutContext: {
+        steps: ['List indices', 'Read the mapping of 2 indices', 'Sample documents', 'Answer'],
+        tokens: 6700,
+        seconds: 22,
+      },
+    },
+    {
+      question: 'Who owns the payments runbook?',
+      kiIds: ['ki-digest-runbooks-4', 'ki-020', 'ki-040'],
+      withContext: { tokens: 2600, seconds: 8 },
+      withoutContext: {
+        steps: [
+          'List indices and connectors',
+          'Search SRE Runbooks',
+          'Read 3 pages',
+          'Check the on-call policy',
+          'Answer',
+        ],
+        tokens: 8200,
+        seconds: 27,
+      },
+    },
+  ],
+  'higher-ed': [
+    {
+      question: 'What is the four-year graduation rate?',
+      kiIds: ['he-001', 'he-004'],
+      ...HIGHER_ED_FIGURES,
+    },
+    {
+      question: 'How does tuition compare with peer universities?',
+      kiIds: ['he-004', 'he-002', 'he-003'],
+      ...HIGHER_ED_FIGURES,
+    },
+    {
+      question: 'Which fees changed this year?',
+      kiIds: ['he-005', 'he-002'],
+      ...HIGHER_ED_FIGURES,
+    },
+  ],
+};
+
+const testScenariosFor = (namespace: Namespace) =>
+  TEST_SCENARIOS[sampleScenarioOf(namespace) ?? 'web-ops'];
+
+const normalizeQuestion = (text: string) =>
+  text
+    .trim()
+    .toLowerCase()
+    .replace(/[?.!\s]+$/, '');
+
+const STOP_WORDS = new Set([
+  'what',
+  'which',
+  'does',
+  'with',
+  'this',
+  'that',
+  'from',
+  'have',
+  'there',
+  'their',
+  'about',
+  'when',
+  'where',
+  'into',
+  'year',
+  'mean',
+  'show',
+  'tell',
+  'many',
+  'much',
+  'your',
+]);
+
+const keywordMatches = (indicators: KnowledgeIndicator[], question: string) => {
+  const stems = (question.toLowerCase().match(/[a-z0-9_.-]+/g) ?? [])
+    .map((word) => word.replace(/[.-]+$/, ''))
+    .filter((word) => word.length >= 4 && !STOP_WORDS.has(word))
+    .map((word) => word.slice(0, Math.max(4, word.length - 3)));
+  if (stems.length === 0) return [];
+  return indicators
+    .map((indicator, index) => {
+      const text = `${indicator.title} ${indicator.description} ${indicator.content}`.toLowerCase();
+      return { indicator, index, score: stems.filter((stem) => text.includes(stem)).length };
+    })
+    .filter((match) => match.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, 3)
+    .map((match) => match.indicator);
+};
+
+const roundTo = (value: number, step: number) => Math.round(value / step) * step;
+
+const estimatedFigures = (namespace: Namespace, hits: number) => {
+  const indices = Math.max(
+    1,
+    namespace.sources.filter((source) => source.typeLabel === 'Index').length
+  );
+  const retrieved = Math.max(1, hits);
+  return {
+    withContext: { tokens: roundTo(1200 + 800 * retrieved, 100), seconds: 4 + 3 * retrieved },
+    withoutContext: {
+      steps: [
+        'List indices',
+        `Read the mapping of ${indices === 1 ? '1 index' : `${indices} indices`}`,
+        'Sample documents',
+        'Write a query',
+        'Answer',
+      ],
+      tokens: roundTo(2400 + 1700 * indices, 100),
+      seconds: 12 + 7 * indices,
+    },
+  };
+};
+
+/** Example questions for an AI index, from its sample scenario. */
+export const testQuestionExamples = (namespace: Namespace): string[] =>
+  testScenariosFor(namespace).map((scenario) => scenario.question);
+
+/** Scripted dry run: which KIs answer the question, and what the agent would do without them. */
+export const runTestQuestion = (namespace: Namespace, question: string): TestQuestionResult => {
+  const scripted = testScenariosFor(namespace).find(
+    (scenario) => normalizeQuestion(scenario.question) === normalizeQuestion(question)
+  );
+  if (scripted) {
+    const found = scripted.kiIds.flatMap((id) => {
+      const indicator = namespace.indicators.find((item) => item.id === id);
+      return indicator ? [indicator] : [];
+    });
+    if (found.length === scripted.kiIds.length) {
+      return {
+        indicators: found,
+        withContext: scripted.withContext,
+        withoutContext: scripted.withoutContext,
+      };
+    }
+    if (found.length > 0) {
+      return { indicators: found, ...estimatedFigures(namespace, found.length) };
+    }
+  }
+  const indicators = keywordMatches(namespace.indicators, question);
+  return { indicators, ...estimatedFigures(namespace, indicators.length) };
 };
 
 // ---------- automation card copy ----------
