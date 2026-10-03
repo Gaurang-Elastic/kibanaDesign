@@ -24,7 +24,8 @@ import {
   type CatalogDemoState,
 } from './demo_flags';
 
-const CATALOG_STATES: Array<{ id: CatalogDemoState; label: string }> = [
+const CATALOG_STATES: Array<{ id: CatalogDemoState; label: string; proto11Only?: boolean }> = [
+  { id: 'empty', label: 'Empty', proto11Only: true },
   { id: 'learning', label: 'Learning' },
   { id: 'working', label: 'Working' },
 ];
@@ -45,6 +46,9 @@ export const DemoControlsMenuSection = ({
       flagsSub.unsubscribe();
     };
   }, []);
+
+  const catalogState =
+    !flags.proto11Setup && flags.catalogState === 'empty' ? 'learning' : flags.catalogState;
 
   return (
     <div data-test-subj="contextEngineDemoControls">
@@ -72,10 +76,16 @@ export const DemoControlsMenuSection = ({
       >
         Non-admin
       </EuiContextMenuItem>
-      {CATALOG_STATES.map((state) => (
+      {CATALOG_STATES.filter((state) => flags.proto11Setup || !state.proto11Only).map((state) => (
         <EuiContextMenuItem
           key={state.id}
-          icon={flags.catalogState === state.id ? <EuiIcon type="check" size="m" /> : 'empty'}
+          icon={
+            catalogState === state.id ? (
+              <EuiIcon type="check" size="m" aria-hidden={true} />
+            ) : (
+              'empty'
+            )
+          }
           onClick={() => {
             setDemoCatalogState(state.id);
             closePopover?.();

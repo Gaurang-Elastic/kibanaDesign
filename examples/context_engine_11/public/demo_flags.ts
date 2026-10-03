@@ -9,7 +9,8 @@
 
 import { BehaviorSubject } from 'rxjs';
 
-export type CatalogDemoState = 'learning' | 'working';
+/** Empty is Proto 11 only: no AI indices besides the managed one. Off treats it as Learning. */
+export type CatalogDemoState = 'empty' | 'learning' | 'working';
 
 /**
  * Forward-looking feedback loop (Signals + Improvements).

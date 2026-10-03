@@ -750,6 +750,7 @@ function ContextEngineApp({
   const visibleNamespaces = namespaces.filter((item) => {
     if (item.managed) return true;
     if (item.proto11 && !proto11On) return false;
+    if (flags.catalogState === 'empty') return false;
     // Learning is the empty catalog: get-started plus the managed index only.
     // Created indexes stay persisted and come back in Working.
     if (flags.catalogState === 'learning') return Boolean(item.proto11);
@@ -1280,7 +1281,11 @@ function ContextEngineApp({
     );
   };
 
-  const renderCatalogItem = (namespace: Namespace, layout: 'card' | 'row') => {
+  const renderCatalogItem = (
+    namespace: Namespace,
+    layout: 'card' | 'row',
+    proto11Managed = false
+  ) => {
     const open = () => openDetail(namespace);
     const pills = namespace.managed ? null : (
       <EuiFlexGroup gutterSize="xs" wrap responsive={false}>
@@ -1390,12 +1395,12 @@ function ContextEngineApp({
             <div className="contextEnginePrototype__cardHeading">
               <div className="contextEnginePrototype__cardName">
                 <EuiTitle size="xs">
-                  <h2>{namespace.displayName}</h2>
+                  <h2>{proto11Managed ? namespace.name : namespace.displayName}</h2>
                 </EuiTitle>
               </div>
               <CatalogStateBadges namespace={namespace} />
             </div>
-            {renderCatalogActions(namespace)}
+            {proto11Managed ? null : renderCatalogActions(namespace)}
           </div>
           <EuiSpacer size="s" />
           <EuiText size="xs" color="subdued" className="contextEnginePrototype__cardDesc">
@@ -1413,9 +1418,23 @@ function ContextEngineApp({
           <div className="contextEnginePrototype__cardFooter">
             <EuiHorizontalRule margin="none" />
             <EuiSpacer size="s" />
-            <EuiText size="xs" color="subdued" className="contextEnginePrototype__cardUpdated">
-              <p>Updated {namespace.updated}</p>
-            </EuiText>
+            {proto11Managed ? (
+              <EuiText size="s">
+                <EuiLink
+                  onClick={(event: React.MouseEvent) => {
+                    event.stopPropagation();
+                    open();
+                  }}
+                  data-test-subj="proto11ExploreManaged"
+                >
+                  Explore index
+                </EuiLink>
+              </EuiText>
+            ) : (
+              <EuiText size="xs" color="subdued" className="contextEnginePrototype__cardUpdated">
+                <p>Updated {namespace.updated}</p>
+              </EuiText>
+            )}
           </div>
         </EuiPanel>
       </EuiFlexItem>
@@ -1464,8 +1483,8 @@ function ContextEngineApp({
       </div>
     ) : null;
 
-    if (proto11On && flags.catalogState === 'learning') {
-      const own = filteredNamespaces.filter((item) => !item.managed);
+    if (proto11On) {
+      const own = visibleNamespaces.filter((item) => !item.managed);
       return (
         <>
           <PageHeader
@@ -1476,35 +1495,15 @@ function ContextEngineApp({
           />
           <PageBody>
             <Proto11Landing
-              managedInset={
-                managedInset ? (
-                  <EuiPanel
-                    hasBorder
-                    paddingSize="none"
-                    className="contextEnginePrototype__proto11Managed"
-                  >
-                    {managedInset}
-                  </EuiPanel>
-                ) : null
-              }
-              catalog={
-                own.length > 0 ? (
-                  <>
-                    <EuiTitle size="xs">
-                      <h2>Your AI indices</h2>
-                    </EuiTitle>
-                    {own.length === 1 ? (
-                      renderCatalogItem(own[0], 'row')
-                    ) : (
-                      <EuiFlexGrid columns={3} gutterSize="l">
-                        {own.map((namespace) => renderCatalogItem(namespace, 'card'))}
-                      </EuiFlexGrid>
-                    )}
-                  </>
-                ) : null
+              key={own.length === 0 ? 'hero' : 'compact'}
+              variant={own.length === 0 ? 'hero' : 'compact'}
+              indexGrid={
+                <EuiFlexGrid columns={3} gutterSize="l" data-test-subj="proto11IndexGrid">
+                  {managed ? renderCatalogItem(managed, 'card', true) : null}
+                  {own.map((namespace) => renderCatalogItem(namespace, 'card'))}
+                </EuiFlexGrid>
               }
               takenNames={namespaces.map((item) => item.name)}
-              docsHref={DOCS_HREF}
               onCreateFromGoal={createFromGoal}
               onCreateEmpty={openCreate}
               onExploreSample={trySample}
@@ -3088,10 +3087,11 @@ function ContextEngineApp({
           <EuiSelect
             compressed
             options={[
+              ...(proto11On ? [{ value: 'empty', text: 'Empty' }] : []),
               { value: 'learning', text: 'Learning' },
               { value: 'working', text: 'Working' },
             ]}
-            value={flags.catalogState}
+            value={!proto11On && flags.catalogState === 'empty' ? 'learning' : flags.catalogState}
             onChange={(event) => setDemoCatalogState(event.target.value as CatalogDemoState)}
             aria-label="Demo state"
           />

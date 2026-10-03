@@ -1653,6 +1653,69 @@ export const proposeFromQuestion = (text: string, takenNames: string[]): Proto11
   };
 };
 
+export interface ComposerInput {
+  text: string;
+  agent?: { name: string; traceType: IndexTrace['type'] };
+  sourceIds: Proto11SourceId[];
+  takenNames: string[];
+}
+
+const attachedLine = (ids: Proto11SourceId[]) =>
+  `you attached ${joinList(ids.map(sourceDisplayName))}`;
+
+/** One composer, three paths: text routes to the question path, else agent, else data. */
+export const proposeFromComposer = ({
+  text,
+  agent,
+  sourceIds,
+  takenNames,
+}: ComposerInput): Proto11Proposal => {
+  const trace = agent ? { trace: { value: agent.name, type: agent.traceType } } : {};
+
+  if (text.trim()) {
+    const base = proposeFromQuestion(text, takenNames);
+    if (sourceIds.length === 0) return { ...base, ...trace };
+    if (base.foundIds.length === 0) {
+      const fromData = proposeFromData(sourceIds, takenNames);
+      return {
+        ...base,
+        goal: fromData.goal,
+        automationBecause: fromData.automationBecause,
+        sourceIds,
+        sourcesBecause: `because the question does not name a source, and ${attachedLine(
+          sourceIds
+        )}`,
+        ...trace,
+      };
+    }
+    const extra = sourceIds.filter((id) => !base.sourceIds.includes(id));
+    const merged = uniqueIds([...base.sourceIds, ...sourceIds]);
+    return {
+      ...base,
+      goal: merged.some((id) => sourceById(id).kind === 'Index') ? 'indices' : 'docs',
+      sourceIds: merged,
+      sourcesBecause:
+        extra.length > 0
+          ? `${base.sourcesBecause}, and ${attachedLine(extra)}`
+          : base.sourcesBecause,
+      ...trace,
+    };
+  }
+
+  if (agent) {
+    const base = proposeFromAgent(agent.name, agent.traceType, takenNames);
+    const extra = sourceIds.filter((id) => !base.sourceIds.includes(id));
+    if (extra.length === 0) return base;
+    return {
+      ...base,
+      sourceIds: [...base.sourceIds, ...extra],
+      sourcesBecause: `${base.sourcesBecause}, and ${attachedLine(extra)}`,
+    };
+  }
+
+  return proposeFromData(sourceIds, takenNames);
+};
+
 export const namespaceSourceFor = (id: Proto11SourceId): NamespaceSource =>
   toNamespaceSource(sourceById(id));
 
