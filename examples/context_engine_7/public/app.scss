@@ -1,0 +1,2586 @@
+.contextEnginePrototype {
+  // Do not use min-height: 100% here; it resolves against the viewport/body
+  // and overflows #app-main-scroll (chrome already consumes part of the height).
+  min-height: 0;
+  width: 100%;
+
+  .euiPageTemplate__content {
+    margin-inline: 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  .euiPageHeader {
+    padding-inline: 24px;
+  }
+
+  .euiPageTemplate__section {
+    margin-inline: auto;
+    max-width: 1200px;
+    width: 100%;
+  }
+
+  // Full-width chrome: header (and its bottom border) span the page.
+  // Body sections keep the 1200px centered max-width above.
+  .contextEnginePrototype__headerSection {
+    margin-inline: 0;
+    max-width: none;
+    width: 100%;
+    padding: 0 24px !important;
+
+    > div {
+      max-width: none !important;
+      width: 100%;
+      padding: 0 !important;
+    }
+
+    // `{ bleed: 'l' }` pulls the header up by 24px to cancel a padded
+    // section. This section has no top padding, so that pull overlaps
+    // Kibana chrome. Keep the side bleed for full width; drop the top.
+    [data-test-subj="appHeader"] {
+      margin-top: 0 !important;
+    }
+  }
+}
+
+/* Reserve a gutter so tab switches do not shift the content column. */
+#app-main-scroll,
+.kbnAppWrapper,
+.euiPageTemplate {
+  scrollbar-gutter: stable;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+/* Selectable lists (connectors, strategies): bordered cards.
+   Read-only lists (Knowledge Indicators): borderless rows with dividers. */
+.contextEnginePrototype__sourceRow,
+.contextEnginePrototype__radioCard {
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+
+  &:hover {
+    border-color: var(--euiColorPrimary);
+  }
+
+  &:focus-within {
+    outline: 2px solid var(--euiColorPrimary);
+    outline-offset: 2px;
+  }
+}
+
+.contextEnginePrototype__landingCatalog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.contextEnginePrototype__landingHero {
+  padding: 28px 32px !important;
+  width: 100%;
+}
+
+.contextEnginePrototype__namespaceRow {
+  padding: 20px 24px !important;
+  width: 100%;
+}
+
+.contextEnginePrototype__landingHeroInner {
+  align-items: center;
+  display: flex;
+  gap: 40px;
+  width: 100%;
+}
+
+.contextEnginePrototype__landingHeroCopy {
+  display: flex;
+  flex: 1 1 560px;
+  flex-direction: column;
+  gap: 16px;
+  max-width: calc(100% - 220px - 40px);
+  min-width: 0;
+}
+
+.contextEnginePrototype__landingHeroArt {
+  background: transparent;
+  flex: 0 0 220px;
+  height: 180px;
+  margin-left: auto;
+  width: 220px;
+
+  .euiImage,
+  .euiImageWrapper,
+  .euiImage__img,
+  figure {
+    background: transparent !important;
+    box-shadow: none;
+    height: 180px !important;
+    max-height: 180px;
+    max-width: 220px;
+    object-fit: contain;
+    width: 220px !important;
+  }
+}
+
+.contextEnginePrototype__landingBody {
+  font-size: 16px;
+  line-height: 24px;
+  margin: 0;
+
+  strong {
+    color: inherit;
+    font-weight: 600;
+  }
+}
+
+@media (max-width: 768px) {
+  .contextEnginePrototype__landingHeroInner {
+    flex-wrap: wrap;
+  }
+
+  .contextEnginePrototype__landingHeroCopy {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+}
+
+.contextEnginePrototype__landingHint {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.contextEnginePrototype__indexSectionHeader {
+  margin: 12px 0 0;
+}
+
+.contextEnginePrototype__indexSectionIntro {
+  margin-top: 4px;
+
+  p {
+    margin: 0;
+  }
+}
+
+.contextEnginePrototype__indexCount {
+  color: var(--euiTextSubduedColor, #69707d);
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.contextEnginePrototype__controlWithAction {
+  gap: 8px;
+}
+
+.contextEnginePrototype__selectCheckbox {
+  .euiCheckbox {
+    align-items: flex-start;
+    min-height: 0 !important;
+  }
+
+  .euiCheckbox__label {
+    min-height: 0;
+    padding: 0;
+  }
+
+  .euiCheckbox__square {
+    margin-top: 3px;
+  }
+}
+
+.contextEnginePrototype__agentBuilderRow--highlighted {
+  background: rgba(0, 119, 204, 0.08);
+  border-color: var(--euiColorPrimary) !important;
+  box-shadow: inset 3px 0 0 var(--euiColorPrimary);
+}
+
+.contextEnginePrototype__setupCard {
+  max-width: none;
+}
+
+.contextEnginePrototype__setupCard .contextEnginePrototype__automationTweak {
+  box-sizing: border-box;
+  display: block;
+  margin: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+.contextEnginePrototype__readyStrip {
+  background: rgba(0, 191, 179, 0.1);
+  border-color: rgba(0, 191, 179, 0.35);
+}
+
+.contextEnginePrototype__kiFromLine {
+  margin-top: 4px;
+}
+
+.contextEnginePrototype__kiTabRow {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.contextEnginePrototype__kiTypeFilterLink--active {
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.contextEnginePrototype__setupSourceList {
+  border: 1px solid var(--euiBorderColor);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.contextEnginePrototype__setupSourceRow {
+  border-bottom: 1px solid var(--euiBorderColor);
+  padding: 12px 16px;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  .euiSwitch__icon {
+    display: none;
+  }
+}
+
+.contextEnginePrototype__setupSourceRow--on {
+  background: rgba(0, 119, 204, 0.04);
+}
+
+.contextEnginePrototype__setupChecklist {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.contextEnginePrototype__setupChecklistRow {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.contextEnginePrototype__setupChecklistBody {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.contextEnginePrototype__setupStepMarker {
+  align-items: center;
+  background: var(--euiColorLightestShade);
+  border: 1px solid var(--euiBorderColor);
+  border-radius: 50%;
+  color: var(--euiTextSubduedColor);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 600;
+  height: 24px;
+  justify-content: center;
+  margin-top: 2px;
+  width: 24px;
+}
+
+.contextEnginePrototype__setupChecklistRow--done .contextEnginePrototype__setupStepMarker {
+  background: rgba(0, 191, 179, 0.12);
+  border-color: transparent;
+  color: var(--euiColorSuccess);
+}
+
+.contextEnginePrototype__setupChecklistRow--current .contextEnginePrototype__setupStepMarker {
+  background: var(--euiColorPrimary);
+  border-color: transparent;
+  color: #fff;
+}
+
+.contextEnginePrototype__setupChecklistRow--upcoming {
+  opacity: 0.7;
+}
+
+.contextEnginePrototype__setupScaleCard {
+  cursor: pointer;
+  height: 100%;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+
+  &:hover {
+    border-color: var(--euiColorPrimary);
+  }
+}
+
+.contextEnginePrototype__setupScaleCard--selected {
+  background: rgba(0, 119, 204, 0.06);
+  border-color: var(--euiColorPrimary);
+}
+
+.contextEnginePrototype__setupSampleGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.contextEnginePrototype__setupSampleCard {
+  min-height: 100%;
+}
+
+.contextEnginePrototype__setupSampleCard--hit {
+  border-color: var(--euiColorSuccess);
+  box-shadow: inset 0 0 0 1px var(--euiColorSuccess);
+}
+
+.contextEnginePrototype__reviewTryBar {
+  margin: 0;
+}
+
+.contextEnginePrototype__reviewTryRow {
+  margin: 0 !important;
+}
+
+.contextEnginePrototype__sourceEmptyState {
+  text-align: left;
+}
+
+.contextEnginePrototype__sourceEmptyIcons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 20px;
+}
+
+.contextEnginePrototype__sourceEmptyIcon {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 56px;
+}
+
+.contextEnginePrototype__sourcesAdvanced {
+  border-top: 1px solid var(--euiBorderColor);
+  padding-top: 8px;
+
+  // Keep accordion body flush with the title (no indent from paddingSize).
+  .euiAccordion__childWrapper {
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+
+  .euiAccordion__buttonContent .euiText {
+    margin: 0;
+  }
+
+  .euiAccordion__triggerWrapper button,
+  .euiAccordion__button,
+  .euiAccordion__buttonContent,
+  .euiAccordion__iconButton {
+    color: var(--euiColorPrimaryText, var(--euiColorPrimary, #0b64dd)) !important;
+
+    &:hover,
+    &:focus {
+      text-decoration: underline;
+    }
+  }
+}
+
+.contextEnginePrototype__sourcesAdvancedLink {
+  color: var(--euiColorPrimaryText, var(--euiColorPrimary, #0b64dd)) !important;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.contextEnginePrototype__kiRollupCard {
+  margin: 0;
+}
+
+.contextEnginePrototype__agentContextBlock {
+  margin: 0;
+  max-width: 520px;
+}
+
+.contextEnginePrototype__kiTypePills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.contextEnginePrototype__kiTypePill {
+  background: var(--euiColorLightestShade, #f7f8fc);
+  border: 1px solid var(--euiBorderColor);
+  border-radius: 999px;
+  color: var(--euiTextColor, #1a1c21);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 6px 12px;
+
+  &:hover {
+    border-color: var(--euiColorPrimary);
+    color: var(--euiColorPrimary);
+  }
+}
+
+.contextEnginePrototype__kiTypePill--active {
+  background: rgba(0, 119, 204, 0.08);
+  border-color: var(--euiColorPrimary);
+  color: var(--euiColorPrimary);
+  font-weight: 600;
+}
+
+.contextEnginePrototype__kiTabList {
+  border-top: 1px solid var(--euiBorderColor);
+  display: flex;
+  flex-direction: column;
+}
+
+.contextEnginePrototype__kiTabListRow {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--euiBorderColor);
+  cursor: pointer;
+  padding: 12px 4px;
+  text-align: left;
+  width: 100%;
+
+  &:hover {
+    background: var(--euiColorLightestShade);
+  }
+}
+
+.contextEnginePrototype__automationTweakEscalate {
+  margin-top: 4px;
+}
+
+/* Mock agent turn portaled into the real chrome AI Agent sidebar (no custom shell). */
+.contextEnginePrototype__agentMockMount {
+  background: var(--euiPageBackgroundColor, #fff);
+  bottom: 240px;
+  left: 0;
+  overflow: auto;
+  padding: 16px;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 72px;
+  z-index: 2;
+}
+
+.contextEnginePrototype__agentMock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.contextEnginePrototype__agentMockMsg--user {
+  align-self: flex-end;
+  background: rgba(0, 119, 204, 0.08);
+  border-radius: 10px;
+  max-width: 92%;
+  padding: 10px 12px;
+}
+
+.contextEnginePrototype__agentMockMsg--agent {
+  align-self: stretch;
+  max-width: 100%;
+}
+
+.contextEnginePrototype__agentMockProposal {
+  background: var(--euiColorLightestShade);
+  border: 1px solid var(--euiBorderColor);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.contextEnginePrototype__setupSampleOverlineRow {
+  margin: 0;
+}
+
+.contextEnginePrototype__setupSampleViewAll {
+  font-size: 12px;
+}
+
+.contextEnginePrototype__setupTypeExampleGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.contextEnginePrototype__setupTypeExampleGrid--single {
+  grid-template-columns: 1fr;
+}
+
+.euiPanel.contextEnginePrototype__setupTypeExampleCard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+}
+
+.contextEnginePrototype__setupTypeExampleBody {
+  flex: 1 1 auto;
+}
+
+.contextEnginePrototype__setupTypeExampleFooter {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.contextEnginePrototype__setupTypeExampleMoreSpacer {
+  display: block;
+  min-height: 18px;
+}
+
+.contextEnginePrototype__setupTypeExampleCard--pulse {
+  animation: contextEngineSourcePulse 1.1s ease;
+}
+
+.contextEnginePrototype__setupProposalList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.contextEnginePrototype__setupProposalCard {
+  margin: 0;
+}
+
+.contextEnginePrototype__setupProposalCard .contextEnginePrototype__automationTweakHint {
+  margin-top: 6px;
+}
+
+.contextEnginePrototype__setupProposalApproved {
+  white-space: nowrap;
+}
+
+.contextEnginePrototype__setupProposalChip {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.contextEnginePrototype__automationTweak {
+  width: 100%;
+}
+
+.contextEnginePrototype__automationTweakRow {
+  background: var(--euiColorEmptyShade, #fff);
+  border: 1px solid var(--euiBorderColor);
+  border-radius: 6px;
+  box-sizing: border-box;
+  margin: 0;
+  max-width: 100%;
+  padding: 8px;
+  width: 100%;
+}
+
+.contextEnginePrototype__automationTweakRowInner {
+  margin: 0 !important;
+  width: 100%;
+}
+
+.contextEnginePrototype__automationTweakAction {
+  align-items: flex-start;
+  display: flex;
+}
+
+.contextEnginePrototype__automationTweakHint {
+  margin-top: 6px;
+}
+
+.contextEnginePrototype__automationTweakApplying {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.contextEnginePrototype__proposalConfirm {
+  margin-top: 6px;
+}
+
+.contextEnginePrototype__setupSampleSkeleton {
+  background: linear-gradient(
+    90deg,
+    var(--euiColorLightestShade, #f7f8fc) 0%,
+    rgba(255, 255, 255, 0.85) 50%,
+    var(--euiColorLightestShade, #f7f8fc) 100%
+  );
+  background-size: 200% 100%;
+  animation: contextEngineSetupShimmer 1.4s ease-in-out infinite;
+  border: 1px solid var(--euiBorderColor);
+  border-radius: 6px;
+  min-height: 112px;
+}
+
+@keyframes contextEngineSetupShimmer {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.contextEnginePrototype__setupFirstRun--locked {
+  opacity: 0.55;
+
+  .contextEnginePrototype__setupScaleCard {
+    cursor: not-allowed;
+    pointer-events: none;
+
+    &:hover {
+      border-color: var(--euiBorderColor);
+    }
+  }
+}
+
+.contextEnginePrototype__setupRunProgress {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.contextEnginePrototype__setupRunProgressRow {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.contextEnginePrototype__setupRunProgressDot {
+  background: var(--euiBorderColor);
+  border-radius: 50%;
+  flex: 0 0 auto;
+  height: 8px;
+  margin: 4px;
+  width: 8px;
+}
+
+.contextEnginePrototype__setupRunProgressRow--done .euiText {
+  color: var(--euiTextColor, #1a1c21);
+}
+
+@media (max-width: 900px) {
+  .contextEnginePrototype__setupSampleGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.contextEnginePrototype__lifecycleBadge--settingUp {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.contextEnginePrototype__getStartedCard {
+  // Border comes from EuiPanel hasBorder (EUI container stroke / border.color).
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 320px;
+  text-align: left;
+}
+
+.contextEnginePrototype__getStartedCardBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.contextEnginePrototype__getStartedCardActions {
+  margin-top: 24px;
+}
+
+.contextEnginePrototype__getStartedIcon {
+  align-items: center;
+  background-color: var(--euiColorLightShade, #e3e8f2);
+  border-radius: 4px;
+  color: var(--euiTextSubduedColor);
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.contextEnginePrototype__getStartedIcon--muted {
+  background-color: var(--euiColorLightShade, #e3e8f2);
+  color: var(--euiTextSubduedColor);
+}
+
+.contextEnginePrototype__namespaceRow {
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+
+  &:hover {
+    border-color: var(--euiColorPrimary);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+  }
+
+  &:focus {
+    outline: 2px solid var(--euiColorPrimary);
+    outline-offset: 2px;
+  }
+}
+
+.contextEnginePrototype__namespaceRowInner {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  width: 100%;
+}
+
+.contextEnginePrototype__namespaceRowMain {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.contextEnginePrototype__namespaceRowTitle {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.contextEnginePrototype__namespaceRowName {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.contextEnginePrototype__namespaceRowMeta {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 24px;
+}
+
+.contextEnginePrototype__namespaceRowMetaCol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 132px;
+}
+
+.contextEnginePrototype__namespaceRowMetaLabel {
+  color: var(--euiTextSubduedColor, #69707d);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.contextEnginePrototype__namespaceRowMetaValue {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.contextEnginePrototype__namespaceRowChevron {
+  flex: 0 0 auto;
+}
+
+.contextEnginePrototype__namespaceCard {
+  border-radius: 4px !important;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 240px;
+  text-align: left;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+
+  &:hover {
+    border-color: var(--euiColorPrimary);
+    box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
+    transform: translateY(-1px);
+  }
+
+  &:focus {
+    outline: 2px solid var(--euiColorPrimary);
+    outline-offset: 2px;
+  }
+}
+
+.contextEnginePrototype__namespaceCard--managed {
+  background: var(--euiColorLightestShade);
+
+  &:hover {
+    border-color: var(--euiColorMediumShade);
+  }
+}
+
+.contextEnginePrototype__demoControlsHeader {
+  padding: 8px 12px 4px;
+}
+
+.contextEnginePrototype__namespaceCardBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.contextEnginePrototype__managedMeta {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.contextEnginePrototype__namespaceSources {
+  min-height: 20px;
+}
+
+.contextEnginePrototype__lifecycleBadge--needsSetup {
+  background-color: rgba(189, 139, 22, 0.12);
+  color: #8a6a0f;
+}
+
+.contextEnginePrototype__lifecycleBadge--settingUp {
+  align-items: center;
+  animation: contextEnginePrototype-settingUpPulse 1.6s ease-in-out infinite;
+  display: inline-flex;
+  gap: 6px;
+
+  .euiLoadingSpinner {
+    flex: 0 0 auto;
+  }
+}
+
+@keyframes contextEnginePrototype-settingUpPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+.contextEnginePrototype__namespaceCardFooter {
+  margin-top: auto;
+}
+
+.contextEnginePrototype__healthLink {
+  cursor: pointer;
+}
+
+.contextEnginePrototype__indexToolbar {
+  .euiFormRow {
+    margin-bottom: 0;
+  }
+}
+
+.contextEnginePrototype__indexSearch {
+  min-width: min(100%, 280px);
+}
+
+.contextEnginePrototype__indexFilter {
+  min-width: 160px;
+}
+
+.contextEnginePrototype__sourceIcon {
+  align-items: center;
+  background: var(--euiColorLightestShade);
+  border-radius: 6px;
+  color: var(--euiColorPrimary);
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.contextEnginePrototype__mono {
+  font-family: var(--euiCodeFontFamily);
+}
+
+.contextEnginePrototype__esqlQuery.euiTextArea {
+  background-color: color-mix(
+    in srgb,
+    var(--euiColorPrimary) 8%,
+    var(--euiColorEmptyShade, #fff)
+  ) !important;
+}
+
+.contextEnginePrototype__typeBadge {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.contextEnginePrototype__pageTitleRow {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  vertical-align: middle;
+}
+
+.contextEnginePrototype__wizardHeader {
+  display: block;
+  width: 100%;
+}
+
+.contextEnginePrototype__createLayout {
+  align-items: flex-start;
+}
+
+.contextEnginePrototype__createMapColumn {
+  flex: 0 0 300px;
+  max-width: 300px;
+  position: sticky;
+  top: 16px;
+  width: 300px;
+}
+
+.contextEnginePrototype__createMap {
+  overflow: hidden;
+  width: 100%;
+}
+
+.contextEnginePrototype__createMap--flushFooter {
+  padding-bottom: 0 !important;
+}
+
+.contextEnginePrototype__createStepper {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-bottom: 2px;
+  position: relative;
+}
+
+.contextEnginePrototype__createStep {
+  align-items: flex-start;
+  background: transparent;
+  border: 0 !important;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  padding: 4px 6px 4px 0;
+  position: relative;
+  text-align: left;
+  transition: background-color 150ms ease;
+  width: 100%;
+  z-index: 1;
+
+  &:hover {
+    background: rgba(11, 100, 221, 0.06);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--euiColorPrimary, #0b64dd);
+    outline-offset: 2px;
+  }
+
+  // Connector: marker-center of this step → marker-center of the next (gap = 28px).
+  &:not(:last-child)::before {
+    background-color: var(--euiColorLightShade, #d3dae6);
+    content: '';
+    height: calc(100% + 28px);
+    left: 9px; // center of the 20px marker column
+    position: absolute;
+    top: 13px; // vertical center of the 18px marker (4px pad + 2px col pad + 9px)
+    width: 2px;
+    z-index: 0;
+  }
+}
+
+.contextEnginePrototype__createStepMarkerCol {
+  align-items: flex-start;
+  display: flex;
+  flex: 0 0 20px;
+  justify-content: center;
+  padding-top: 2px;
+  position: relative;
+  width: 20px;
+  z-index: 2;
+}
+
+.contextEnginePrototype__createStepMarker {
+  align-items: center;
+  background-color: var(--euiColorEmptyShade, #fff);
+  border-radius: 50%;
+  box-sizing: border-box;
+  display: flex !important;
+  flex: 0 0 18px;
+  flex-shrink: 0;
+  height: 18px !important;
+  justify-content: center;
+  min-height: 18px;
+  min-width: 18px;
+  position: relative;
+  width: 18px !important;
+  // White ring so the connector never cuts through the marker.
+  box-shadow: 0 0 0 3px var(--euiColorEmptyShade, #fff);
+  z-index: 2;
+}
+
+.contextEnginePrototype__createStepMarker--active {
+  background-color: var(--euiColorEmptyShade, #fff) !important;
+  border: 2px solid var(--euiColorPrimary, #0b64dd) !important;
+}
+
+.contextEnginePrototype__createStepMarkerDot {
+  background-color: var(--euiColorPrimary, #0b64dd);
+  border-radius: 50%;
+  display: block;
+  flex: 0 0 8px;
+  height: 8px;
+  width: 8px;
+}
+
+.contextEnginePrototype__createStepMarker--complete {
+  background-color: var(--euiColorSuccess, #00bfb3) !important;
+  border: 2px solid var(--euiColorSuccess, #00bfb3) !important;
+  color: #fff;
+
+  .euiIcon {
+    fill: #fff;
+    height: 10px !important;
+    width: 10px !important;
+  }
+}
+
+.contextEnginePrototype__createStepMarker--incomplete {
+  background-color: var(--euiColorEmptyShade, #fff) !important;
+  border: 2px solid var(--euiColorMediumShade, #98a2b3) !important;
+}
+
+.contextEnginePrototype__createStepBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.contextEnginePrototype__createStepTitle {
+  color: var(--euiTextColor, #1d2a3e);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.contextEnginePrototype__createStep--incomplete .contextEnginePrototype__createStepTitle,
+.contextEnginePrototype__createStep--preview .contextEnginePrototype__createStepTitle {
+  color: var(--euiTextSubduedColor, #69707d);
+}
+
+.contextEnginePrototype__createStep--preview {
+  cursor: default;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.contextEnginePrototype__createStepMarker--preview {
+  background-color: var(--euiColorEmptyShade, #fff) !important;
+  border: 2px solid var(--euiColorMediumShade, #98a2b3) !important;
+}
+
+.contextEnginePrototype__createStepDesc {
+  color: var(--euiTextSubduedColor, #69707d);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contextEnginePrototype__createAgentEducation {
+  align-items: flex-start;
+  background-color: var(--euiColorLightestShade, #f7f8fc);
+  border-top: 1px solid var(--euiBorderColor);
+  color: var(--euiTextSubduedColor);
+  display: flex;
+  gap: 8px;
+  margin: 12px -16px 0;
+  padding: 12px 16px;
+  pointer-events: none;
+
+  .euiIcon {
+    color: var(--euiTextSubduedColor);
+    flex: 0 0 auto;
+    margin-top: 1px;
+  }
+
+  .euiText {
+    font-size: 11.5px;
+    line-height: 1.35;
+  }
+}
+
+.contextEnginePrototype__createPanelColumn {
+  max-width: none;
+  min-width: 0;
+}
+
+.contextEnginePrototype__createPanel {
+  max-width: none;
+}
+
+.contextEnginePrototype__intentCardTitle {
+  white-space: nowrap;
+}
+
+.contextEnginePrototype__intentCard {
+  cursor: pointer;
+  height: 100%;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+
+  &:hover {
+    border-color: var(--euiColorPrimary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--euiColorPrimary);
+    outline-offset: 2px;
+  }
+}
+
+.contextEnginePrototype__intentCard--selected {
+  background: rgba(0, 119, 204, 0.06);
+  border-color: var(--euiColorPrimary);
+}
+
+.contextEnginePrototype__intentCard--disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
+
+  &:hover {
+    border-color: var(--euiBorderColor);
+  }
+}
+
+.contextEnginePrototype__intentMicroLabel {
+  color: var(--euiTextSubduedColor);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.contextEnginePrototype__intentUploadDropzone {
+  width: 100%;
+}
+
+.contextEnginePrototype__intentUploadChip {
+  background: var(--euiColorLightestShade, #f7f8fc);
+  border: 1px solid var(--euiBorderColor);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.contextEnginePrototype__intentInferred {
+  .contextEnginePrototype__intentMicroLabel {
+    color: inherit;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 12px;
+    font-weight: 600;
+  }
+}
+
+.contextEnginePrototype__sourceCheck {
+  align-items: center;
+  border: 1.5px solid var(--euiBorderColor);
+  border-radius: 50%;
+  color: #fff;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 20px;
+  justify-content: center;
+  width: 20px;
+}
+
+.contextEnginePrototype__sourceCheck--selected {
+  background: var(--euiColorPrimary);
+  border-color: var(--euiColorPrimary);
+}
+
+.contextEnginePrototype__sourceRow--selected {
+  background: rgba(0, 119, 204, 0.06);
+}
+
+.contextEnginePrototype__sourceRow--pulse {
+  animation: contextEngineSourcePulse 1.1s ease;
+}
+
+@keyframes contextEngineSourcePulse {
+  0%,
+  100% {
+    border-color: var(--euiBorderColor);
+    box-shadow: none;
+  }
+
+  35%,
+  65% {
+    border-color: var(--euiColorPrimary);
+    box-shadow: 0 0 0 2px rgba(0, 119, 204, 0.28);
+  }
+}
+
+.contextEnginePrototype__sourceSuggestBadge {
+  font-size: 11px;
+}
+
+.contextEnginePrototype__sourceSuggestWhy {
+  color: var(--euiColorPrimary);
+  margin-top: 4px;
+}
+
+.contextEnginePrototype__intentSuggestStrip {
+  align-items: center;
+  background: rgba(0, 119, 204, 0.08);
+  border-radius: 6px;
+  display: flex;
+  min-height: 40px;
+  padding: 10px 14px;
+  width: 100%;
+}
+
+.contextEnginePrototype__intentSuggestEllipsis::after {
+  animation: contextEngineSuggestDots 1.2s steps(4, end) infinite;
+  content: '...';
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  width: 0;
+}
+
+@keyframes contextEngineSuggestDots {
+  0% {
+    width: 0;
+  }
+
+  100% {
+    width: 1.15em;
+  }
+}
+
+.contextEnginePrototype__intentSuggestChip {
+  background: #fff;
+  border: 1px solid var(--euiBorderColor);
+  border-radius: 999px;
+  font-weight: 600;
+  padding: 0 10px;
+}
+
+.contextEnginePrototype__createFooter {
+  padding-bottom: 8px;
+}
+
+@media (max-width: 900px) {
+  .contextEnginePrototype__createMapColumn {
+    flex: 1 1 auto;
+    max-width: none;
+    position: static;
+    width: 100%;
+  }
+}
+
+.contextEnginePrototype__backstackHeader {
+  padding-bottom: 8px;
+}
+
+.contextEnginePrototype__backstackLink {
+  font-weight: 400;
+  padding-inline: 0;
+}
+
+.contextEnginePrototype__dashedAction {
+  border-color: var(--euiBorderColor);
+  border-style: dashed;
+  border-width: 1px;
+}
+
+.contextEnginePrototype__detailStack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.contextEnginePrototype__viewSwitch {
+  display: inline-flex;
+
+  .euiNotificationBadge {
+    margin-left: 4px;
+    vertical-align: middle;
+  }
+}
+
+.contextEnginePrototype__detailSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.contextEnginePrototype__sectionHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  width: 100%;
+
+  > div:first-child {
+    min-width: 0;
+  }
+}
+
+.contextEnginePrototype__sectionTitle {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  line-height: 24px !important;
+}
+
+.contextEnginePrototype__sectionActions {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.contextEnginePrototype__addAutomationButtonLabel {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.contextEnginePrototype__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.contextEnginePrototype__listRow {
+  border-top: 1px solid var(--euiBorderColor);
+  padding: 12px 0;
+
+  &:first-child {
+    border-top: 0;
+    padding-top: 4px;
+  }
+
+  &--button {
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-inline: -8px;
+    padding-inline: 8px;
+    text-align: left;
+    transition: background-color 150ms ease;
+    width: calc(100% + 16px);
+
+    &:hover {
+      background: var(--euiColorLightestShade);
+    }
+  }
+}
+
+.contextEnginePrototype__suggestionBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  .euiText {
+    margin: 0;
+  }
+
+  .contextEnginePrototype__listRow:first-child {
+    border-top: none;
+    padding-top: 4px;
+  }
+}
+
+.contextEnginePrototype__activeAutomations {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.contextEnginePrototype__automationCardList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.contextEnginePrototype__automationCard {
+  margin: 0;
+}
+
+.contextEnginePrototype__automationCard--disabled {
+  opacity: 0.55;
+}
+
+.contextEnginePrototype__automationConfirm {
+  margin: 0;
+}
+
+.contextEnginePrototype__workflowSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.contextEnginePrototype__workflowStep {
+  border-top: 1px solid var(--euiBorderColor);
+  padding: 14px 0;
+
+  &:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  &:last-child {
+    padding-bottom: 0;
+  }
+}
+
+.contextEnginePrototype__kiBrowser {
+  min-height: 560px;
+  overflow: hidden;
+}
+
+.contextEnginePrototype__kiBrowserBody {
+  min-height: 560px;
+}
+
+.contextEnginePrototype__kiSidebar {
+  border-right: 1px solid var(--euiBorderColor);
+  max-width: 320px;
+  min-width: 280px;
+  width: 30%;
+}
+
+.contextEnginePrototype__kiSidebarHeader {
+  border-bottom: 1px solid var(--euiBorderColor);
+  padding: 12px 16px;
+}
+
+.contextEnginePrototype__kiSidebarList {
+  max-height: calc(100vh - 320px);
+  overflow: auto;
+}
+
+.contextEnginePrototype__kiEmptyList {
+  padding: 16px;
+}
+
+.contextEnginePrototype__kiListItem {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--euiBorderColor);
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  display: block;
+  padding: 12px 16px;
+  text-align: left;
+  width: 100%;
+
+  &:hover {
+    background: var(--euiColorLightestShade);
+  }
+
+  &--selected {
+    background: rgba(0, 119, 204, 0.08);
+    border-left-color: var(--euiColorPrimary);
+
+    strong {
+      color: var(--euiColorPrimary);
+    }
+  }
+}
+
+.contextEnginePrototype__kiDetail {
+  min-width: 0;
+  padding: 16px 20px;
+}
+
+.contextEnginePrototype__kiDetailStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.contextEnginePrototype__kiDetailBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contextEnginePrototype__kiTypeBadge {
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+}
+
+.contextEnginePrototype__kiMetaChips {
+  margin-top: 2px;
+}
+
+.contextEnginePrototype__kiMetaChip {
+  color: var(--euiTextSubduedColor);
+  font-size: 11px;
+  font-weight: 400;
+  padding: 2px 6px;
+}
+
+.contextEnginePrototype__kiDescription {
+  border-radius: 6px;
+  padding-inline: 0;
+}
+
+.contextEnginePrototype__kiValue {
+  border-radius: 6px;
+}
+
+.contextEnginePrototype__kiValueList {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+
+  li + li {
+    margin-top: 6px;
+  }
+}
+
+.contextEnginePrototype__kiProvenance {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.contextEnginePrototype__kiVersionRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.contextEnginePrototype__kiVersionHint {
+  line-height: 1.35;
+}
+
+.contextEnginePrototype__kiVersionTabs {
+  min-height: 24px;
+}
+
+.contextEnginePrototype__kiVersionTab {
+  border-radius: 0;
+  height: auto;
+  min-height: 0;
+  padding-block: 2px;
+  padding-inline: 2px;
+
+  &--active {
+    border-bottom: 2px solid var(--euiColorPrimary);
+    font-weight: 600;
+  }
+}
+
+.contextEnginePrototype__kiHistory {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.contextEnginePrototype__kiHistoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.contextEnginePrototype__kiHistoryItem {
+  align-items: center;
+  background: var(--euiColorEmptyShade);
+  border: 1px solid var(--euiBorderColor);
+  border-radius: 6px;
+  cursor: pointer;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  padding: 10px 12px;
+  text-align: left;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+  width: 100%;
+
+  &:hover {
+    background: var(--euiColorLightestShade);
+    border-color: var(--euiColorPrimary);
+  }
+
+  &--current {
+    background: rgba(0, 119, 204, 0.06);
+    border-color: var(--euiColorPrimary);
+  }
+}
+
+.contextEnginePrototype__kiHistoryVersion {
+  color: var(--euiTextSubduedColor);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.contextEnginePrototype__kiHistoryMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  strong {
+    font-size: 13px;
+  }
+
+  span {
+    color: var(--euiTextSubduedColor);
+    font-size: 12px;
+  }
+}
+
+.contextEnginePrototype__kiHistoryAction {
+  color: var(--euiColorPrimary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.contextEnginePrototype__issueRow {
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+
+  &:hover {
+    border-color: var(--euiColorPrimary);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+  }
+}
+
+.contextEnginePrototype__fixBox {
+  border-radius: 6px;
+}
+
+/* Lock the Kibana app scroller while the workflow editor is open. */
+body:has(.contextEnginePrototype--workflow) #app-main-scroll {
+  overflow: hidden !important;
+}
+
+.contextEnginePrototype--workflow {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+
+  .euiPageTemplate__content,
+  .euiPageTemplate__inner,
+  main {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+  }
+}
+
+.contextEnginePrototype__workflowSection {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 !important;
+
+  > .euiPageSection__content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 !important;
+    max-width: none !important;
+    width: 100%;
+  }
+}
+
+/* Match Workflows create page surfaces:
+   header/footer = plain white
+   editor band   = subdued light grey (Monaco must be transparentBackground) */
+.contextEnginePrototype__workflowShell {
+  --workflow-surface-plain: #fff;
+  --workflow-surface-subdued: #f5f7fa;
+
+  background: var(--workflow-surface-plain);
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.contextEnginePrototype__workflowTopBar {
+  background: var(--workflow-surface-plain);
+  border-bottom: 1px solid var(--euiBorderColor);
+  flex: 0 0 auto;
+  overflow: hidden;
+  padding: 12px 16px 16px;
+}
+
+.contextEnginePrototype__workflowToolbar {
+  background: var(--workflow-surface-plain);
+  border-bottom: 1px solid var(--euiBorderColor);
+  flex: 0 0 auto;
+  padding: 8px 16px;
+}
+
+.contextEnginePrototype__workflowHeaderLeft {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  overflow: hidden;
+
+  .euiButtonEmpty {
+    width: auto;
+    max-width: 100%;
+  }
+
+  .euiButtonEmpty__content {
+    justify-content: flex-start;
+  }
+}
+
+.contextEnginePrototype__workflowTitleRow {
+  margin-top: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.contextEnginePrototype__workflowTitleItem {
+  min-width: 0;
+  overflow: hidden;
+
+  h1 {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.contextEnginePrototype__workflowUnsavedBadge {
+  background: #fff3cd;
+  color: var(--euiTextColor);
+}
+
+.contextEnginePrototype__workflowNotice {
+  background: var(--workflow-surface-plain);
+  flex: 0 0 auto;
+  padding: 8px 16px 0;
+}
+
+.contextEnginePrototype__workflowBody {
+  background: var(--workflow-surface-subdued) !important;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.contextEnginePrototype__workflowEditorChrome {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 16px 0 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 10;
+}
+
+.contextEnginePrototype__workflowSchemaLink {
+  color: var(--euiTextSubduedColor);
+
+  &:hover {
+    color: var(--euiColorPrimary);
+  }
+}
+
+.contextEnginePrototype__workflowEditor {
+  background: var(--workflow-surface-subdued) !important;
+  display: flex;
+  flex: 1 1 auto;
+  height: var(--context-workflow-editor-height, 480px);
+  max-height: 100%;
+  min-height: 280px;
+  overflow: hidden;
+  padding-top: 4px;
+
+  .kibanaCodeEditor,
+  .monaco-editor,
+  .overflowingContentWidgets {
+    max-height: 100%;
+  }
+
+  .kibanaCodeEditor {
+    background: transparent !important;
+    flex: 1 1 auto;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .monaco-editor,
+  .monaco-editor .monaco-editor-background,
+  .monaco-editor .margin,
+  .monaco-editor .margin-view-overlays,
+  .monaco-editor .inputarea.ime-input {
+    background-color: transparent !important;
+  }
+}
+
+.contextEnginePrototype__workflowFooter {
+  background: var(--workflow-surface-plain);
+  border-top: 1px solid var(--euiBorderColor);
+  flex: 0 0 auto;
+  padding: 6px 12px;
+}
+
+.contextEnginePrototype__workflowActionsLabel {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.contextEnginePrototype__workflowKbd {
+  color: var(--euiTextSubduedColor);
+  display: inline-flex;
+  gap: 2px;
+
+  kbd {
+    background: var(--euiColorLightestShade);
+    border: 1px solid var(--euiBorderColor);
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 11px;
+    line-height: 1;
+    padding: 2px 4px;
+  }
+}
+
+.contextEnginePrototype__radioCard .euiText {
+  margin-left: 24px;
+  margin-top: 4px;
+}
+
+.contextEnginePrototype__efficiencyPanel {
+  margin-top: 4px;
+}
+
+.contextEnginePrototype__efficiencyStats {
+  .euiStat__title {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  .euiStat__description {
+    color: var(--euiTextSubduedColor);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}
+
+.contextEnginePrototype__overviewStats {
+  align-items: stretch;
+  display: flex;
+  width: 100%;
+}
+
+.contextEnginePrototype__overviewStatCell {
+  box-sizing: border-box;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 4px 16px;
+
+  &:first-child {
+    padding-left: 4px;
+  }
+
+  .euiStat__title {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  .euiStat__description {
+    color: var(--euiTextSubduedColor, #69707d);
+    font-size: 12px;
+    line-height: 1.3;
+    white-space: normal;
+  }
+}
+
+.contextEnginePrototype__overviewStatCell + .contextEnginePrototype__overviewStatCell {
+  border-left: 1px solid var(--euiBorderColor, #d3dae6);
+}
+
+.contextEnginePrototype__tabCount {
+  min-width: 20px;
+}
+
+.contextEnginePrototype__indeterminateBar {
+  background: var(--euiColorLightShade, #e9edf3);
+  border-radius: 2px;
+  height: 4px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.contextEnginePrototype__indeterminateBarStripe {
+  animation: contextEngineIndeterminate 1.2s ease-in-out infinite;
+  background: var(--euiColorPrimary, #07c);
+  display: block;
+  height: 100%;
+  left: 0;
+  position: absolute;
+  transform: translateX(-100%);
+  width: 32%;
+}
+
+@keyframes contextEngineIndeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+.contextEnginePrototype__improvementsOpenBadge {
+  background: rgba(189, 27, 142, 0.12);
+  color: #bd1b8e;
+}
+
+.contextEnginePrototype__signalStrip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.contextEnginePrototype__signalStripItem {
+  border: 1px solid var(--euiBorderColor, #d3dae6);
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: var(--euiColorLightestShade, #f7f8fc);
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.contextEnginePrototype__signalStripItem:hover {
+  border-color: var(--euiColorPrimary, #0077cc);
+}
+
+.contextEnginePrototype__signalStripItem--selected {
+  border-color: var(--euiColorPrimary, #0077cc);
+  background: rgba(0, 119, 204, 0.08);
+}
+
+.contextEnginePrototype__improvementChanges {
+  margin-top: 2px;
+}
+
+.contextEnginePrototype__improvementChangeChip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(0, 119, 204, 0.28);
+  background: rgba(0, 119, 204, 0.06);
+  color: var(--euiTextColor, #1a1c21);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.contextEnginePrototype__improvementChangeChip--destructive {
+  border-color: rgba(189, 39, 30, 0.35);
+  background: rgba(189, 39, 30, 0.08);
+  color: #bd271e;
+}
+
+.contextEnginePrototype__signalInternal {
+  font-family: var(--euiCodeFontFamily, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  color: var(--euiTextSubduedColor, #69707d);
+  font-size: 11px;
+}
+
+.contextEnginePrototype__signalTableRow {
+  cursor: pointer;
+}
+
+.contextEnginePrototype__signalEvidenceList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contextEnginePrototype__signalEvidenceRow {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--euiBorderColor, #d3dae6);
+  border-radius: 6px;
+  background: transparent;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.contextEnginePrototype__signalEvidenceRow:hover {
+  background: var(--euiColorLightestShade, #f7f8fc);
+}
+
+.contextEnginePrototype__reviewAllRow {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--euiBorderColor, #d3dae6);
+}
+
+.contextEnginePrototype__configurePermGroup {
+  padding: 10px 0;
+}
+
+.contextEnginePrototype__improvementsGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.contextEnginePrototype__improvementsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.contextEnginePrototype__improvementGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.contextEnginePrototype__improvementGroupToggle,
+.contextEnginePrototype__improvementGroupLabel {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--euiTextColor, #1a1c21);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+  padding: 0;
+}
+
+.contextEnginePrototype__improvementGroupToggle {
+  cursor: pointer;
+}
+
+.contextEnginePrototype__improvementGroupNote {
+  margin-top: 4px;
+}
+
+.contextEnginePrototype__improvementsViewAll {
+  display: inline-flex;
+  justify-content: flex-start;
+  width: auto;
+
+  .euiButtonEmpty__content {
+    justify-content: flex-start;
+  }
+}
+
+.contextEnginePrototype__improvementCard {
+  margin: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.contextEnginePrototype__improvementCard--applied {
+  background: rgba(0, 191, 179, 0.08);
+  border-color: rgba(0, 191, 179, 0.35);
+}
+
+.contextEnginePrototype__improvementCard--measuring {
+  background: rgba(152, 162, 179, 0.08);
+}
+
+.contextEnginePrototype__improvementCard--unchanged {
+  background: rgba(254, 197, 20, 0.1);
+  border-color: rgba(190, 144, 0, 0.35);
+}
+
+.contextEnginePrototype__improvementCard--dismissed {
+  opacity: 0.65;
+}
+
+.contextEnginePrototype__improvementCard--departing {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px);
+}
+
+.contextEnginePrototype__improvementOutcome--unchanged {
+  color: #7a5b00;
+}
+
+.contextEnginePrototype__improvementMeta {
+  white-space: nowrap;
+}
+
+.contextEnginePrototype__improvementFix {
+  background: rgba(0, 119, 204, 0.06);
+  border: 1px solid rgba(0, 119, 204, 0.22);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.contextEnginePrototype__improvementActions {
+  margin-top: 2px;
+}
+
+.contextEnginePrototype__improvementSectLabel {
+  color: var(--euiTextColor, #1a1c21);
+  letter-spacing: 0.04em;
+}
+
+.contextEnginePrototype__improvementCaseList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contextEnginePrototype__improvementCaseRow {
+  align-items: center;
+  border: 1px solid var(--euiBorderColor);
+  border-radius: 6px;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 10px;
+}
+
+.contextEnginePrototype__overviewStatButton {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  display: block;
+  margin: -4px;
+  padding: 4px;
+  text-align: left;
+  width: 100%;
+
+  &:hover {
+    background: rgba(241, 164, 0, 0.08);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--euiColorWarning, #f1a400);
+    outline-offset: 2px;
+  }
+}
+
+.contextEnginePrototype__howItWorks {
+  background-color: var(--euiColorLightestShade, #f7f8fc);
+  border-radius: 8px;
+}
+
+.contextEnginePrototype__howItWorksFlow {
+  align-items: stretch;
+  display: flex;
+  gap: 0;
+  width: 100%;
+}
+
+.contextEnginePrototype__howItWorksBox {
+  background: var(--euiColorEmptyShade, #fff);
+  border: 1px solid var(--euiBorderColor, #d3dae6);
+  border-radius: 6px;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+  min-width: 0;
+  padding: 14px 16px;
+
+  strong {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  span {
+    color: var(--euiTextSubduedColor, #69707d);
+    font-size: 12px;
+    line-height: 1.3;
+  }
+}
+
+.contextEnginePrototype__howItWorksBox--source {
+  border-top: 3px solid var(--euiColorMediumShade, #98a2b3);
+}
+
+.contextEnginePrototype__howItWorksBox--automation {
+  border-top: 3px solid var(--euiColorAccent, #f04e98);
+}
+
+.contextEnginePrototype__howItWorksBox--ki {
+  border-top: 3px solid var(--euiColorSuccess, #00bfb3);
+}
+
+.contextEnginePrototype__howItWorksArrow {
+  align-items: center;
+  color: var(--euiTextSubduedColor, #69707d);
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  font-size: 11px;
+  gap: 2px;
+  justify-content: center;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.contextEnginePrototype__howItWorksCopy {
+  white-space: nowrap;
+}
+
+.contextEnginePrototype__tabIntro {
+  line-height: 1.5;
+  margin: 0;
+}
+
+.contextEnginePrototype__tabChrome {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  min-height: 32px;
+}
+
+.contextEnginePrototype__tabChromeActionSlot {
+  display: inline-block;
+  height: 32px;
+  width: 0;
+}
+
+.contextEnginePrototype__tabChromeAction {
+  margin-left: auto;
+}
+
+.contextEnginePrototype__relationshipLine {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.contextEnginePrototype__relationshipLabel {
+  color: var(--euiTextSubduedColor, #69707d);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.contextEnginePrototype__relationshipDot {
+  color: var(--euiTextSubduedColor, #69707d);
+  font-size: 12px;
+}
+
+.contextEnginePrototype__relationshipChip {
+  max-width: 100%;
+}
+
+.contextEnginePrototype__relationshipChip--accent {
+  cursor: pointer;
+}
+
+/* Magenta/pink fill is reserved for tab count badges, not chips. */
+
+.contextEnginePrototype__relationshipChipButton {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: inline-flex;
+  padding: 0;
+
+  &:focus-visible {
+    outline: 2px solid var(--euiColorPrimary, #0b64dd);
+    outline-offset: 2px;
+  }
+}
+
+.contextEnginePrototype__kiFilterBar {
+  border-radius: 6px;
+}
+
+.contextEnginePrototype__agentLayout {
+  width: 100%;
+}
+
+.contextEnginePrototype__agentPackage {
+  min-width: 0;
+}
+
+.contextEnginePrototype__agentSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.contextEnginePrototype__agentStep {
+  min-width: 0;
+}
+
+.contextEnginePrototype__agentCredentials {
+  position: sticky;
+  top: 16px;
+}
+
+.contextEnginePrototype__agentCredentialValue {
+  min-width: 0;
+
+  .euiCode {
+    display: block;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
+
+.contextEnginePrototype__strategyList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contextEnginePrototype__strategyRow {
+  cursor: pointer;
+}
+
+.contextEnginePrototype__strategyRow--selected {
+  border-color: var(--euiColorPrimary, #0b64dd) !important;
+}
+
+.contextEnginePrototype__setupErrorBlock {
+  cursor: context-menu;
+}
+
+@media (max-width: 768px) {
+  .contextEnginePrototype__backstackHeader {
+    padding-bottom: 0;
+  }
+
+  .contextEnginePrototype__agentCredentials {
+    position: static;
+  }
+}
+
+/* Agent monitoring (Context area tab; independent of AI indices). */
+.contextEnginePrototype__amBarList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.contextEnginePrototype__amBarRow {
+  display: grid;
+  gap: 4px;
+}
+
+.contextEnginePrototype__amBarTrack {
+  background: var(--euiColorLightShade, #e9edf3);
+  border-radius: 2px;
+  height: 6px;
+  overflow: hidden;
+}
+
+.contextEnginePrototype__amBarFill {
+  background: var(--euiColorPrimary, #0077cc);
+  height: 100%;
+}
+
+.contextEnginePrototype__amStreamRow {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--euiBorderColor, #d3dae6);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  text-align: left;
+  width: 100%;
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  &:hover {
+    color: var(--euiColorPrimary, #0077cc);
+  }
+}
+
+.contextEnginePrototype__amDashCard {
+  cursor: pointer;
+  height: 100%;
+  text-align: left;
+}
+
+.contextEnginePrototype__amSignal + .contextEnginePrototype__amSignal {
+  margin-top: 8px;
+}
+
+.contextEnginePrototype__amTraceTable {
+  border: 1px solid var(--euiBorderColor, #d3dae6);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.contextEnginePrototype__amTraceHead,
+.contextEnginePrototype__amTraceRow {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 2fr) 1.2fr 0.8fr 0.6fr 1fr;
+  padding: 10px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.contextEnginePrototype__amTraceHead {
+  background: var(--euiColorLightestShade, #f7f8fa);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.contextEnginePrototype__amTraceRow {
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--euiBorderColor, #d3dae6);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--euiColorLightestShade, #f7f8fa);
+  }
+}
+
+.contextEnginePrototype__amSpan {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 1.4fr) 1fr 64px;
+  margin-bottom: 10px;
+}
+
+.contextEnginePrototype__amSpanTrack {
+  background: var(--euiColorLightShade, #e9edf3);
+  border-radius: 3px;
+  height: 10px;
+  position: relative;
+}
+
+.contextEnginePrototype__amSpanBar {
+  border-radius: 3px;
+  height: 100%;
+  position: absolute;
+  top: 0;
+}
+
+.contextEnginePrototype__amSpanBar--agent {
+  background: #0077cc;
+}
+
+.contextEnginePrototype__amSpanBar--llm {
+  background: #7c3aed;
+}
+
+.contextEnginePrototype__amSpanBar--tool {
+  background: #0d9d8a;
+}
+
+.contextEnginePrototype__amSpanBar--retrieval {
+  background: #16a34a;
+}
+
+.contextEnginePrototype__amSpanBar--error {
+  background: #bd271e;
+}
+
+.contextEnginePrototype__amSpanDur {
+  text-align: right;
+}
+
+.contextEnginePrototype__amSpark {
+  color: var(--euiColorPrimary, #0077cc);
+  display: block;
+  height: 88px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.contextEnginePrototype__amJudgeList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 240px;
+}
+
+.contextEnginePrototype__amJudgeCard {
+  cursor: pointer;
+}
+
+.contextEnginePrototype__amEmptyCallout {
+  text-align: left;
+  // Neutral surface: a primary tint would compete with Simulate incoming
+  // traces, the only accent fill allowed on this view.
+  background-color: var(--euiColorEmptyShade, #fff) !important;
+
+  .euiCallOutHeader {
+    justify-content: flex-start;
+  }
+
+  .euiCallOutHeader__title,
+  .euiTitle {
+    color: var(--euiTextColor, #343741) !important;
+    font-weight: 400 !important;
+    text-align: left;
+  }
+}

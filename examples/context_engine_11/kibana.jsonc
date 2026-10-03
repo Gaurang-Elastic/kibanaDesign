@@ -1,0 +1,14 @@
+{
+  "type": "plugin",
+  "id": "@kbn/context-engine-11-example-plugin",
+  "owner": "@elastic/kibana-core",
+  "description": "Context Engine UI prototype (proto 11). October 8 baseline structure, plus state badges, sample run, Try a question, and Intent.",
+  "group": "platform",
+  "visibility": "private",
+  "plugin": {
+    "id": "contextEngineExampleEleven",
+    "server": false,
+    "browser": true,
+    "optionalPlugins": ["agentBuilder", "triggersActionsUi"]
+  }
+}

@@ -1,0 +1,1486 @@
+.contextEnginePrototype {
+  min-height: 0;
+  width: 100%;
+
+  .euiPageTemplate__content {
+    margin-inline: 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  .euiPageHeader {
+    padding-inline: 0;
+  }
+
+  .contextEnginePrototype__headerSection {
+    margin-inline: 0;
+    max-width: none;
+    width: 100%;
+    padding: 0 !important;
+
+    > div {
+      max-width: none !important;
+      width: 100%;
+    }
+
+    [data-test-subj="appHeader"] {
+      margin-top: 0 !important;
+      margin-inline: 0 !important;
+    }
+
+    &:not(.contextEnginePrototype__headerSection--quietCreate)
+      [data-test-subj="contextEngineCreateAiIndex"] {
+      background-color: var(--euiColorPrimary, #0b64dd) !important;
+      border-color: transparent !important;
+      color: #fff !important;
+
+      .euiButtonDisplay__text,
+      .euiButtonEmpty__text,
+      .euiButton__text,
+      .euiIcon {
+        color: #fff !important;
+      }
+
+      &:hover,
+      &:focus,
+      &:focus-visible {
+        background-color: var(--euiColorPrimary, #0b64dd) !important;
+        filter: brightness(0.92);
+      }
+    }
+  }
+
+  .contextEnginePrototype__bodySection {
+    margin-inline: auto;
+    max-width: 1200px;
+    width: 100%;
+    padding-top: 16px;
+    padding-bottom: 32px;
+  }
+
+  .contextEnginePrototype__bodySection--center {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    padding-bottom: 0;
+    padding-top: 0;
+  }
+}
+
+#app-main-scroll,
+.kbnAppWrapper,
+.euiPageTemplate {
+  scrollbar-gutter: stable;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+.contextEnginePrototype__landing {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.contextEnginePrototype__create {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.contextEnginePrototype__descriptionField {
+  .euiFormRow {
+    margin-bottom: 0;
+  }
+}
+
+.contextEnginePrototype__descriptionHelper {
+  margin-top: 8px;
+
+  p {
+    margin: 0;
+  }
+}
+
+.contextEnginePrototype__landing--center {
+  align-items: center;
+  justify-content: center;
+  margin-inline: auto;
+  max-width: 920px;
+  width: 100%;
+}
+
+.contextEnginePrototype__getStarted {
+  background: #fff;
+  border: 1px solid var(--euiBorderColor, #d3dae6);
+  border-radius: 8px;
+  transform: translateY(-200px);
+  box-shadow: var(
+    --euiShadowMedium,
+    0 0.9px 4px -1px rgba(0, 0, 0, 0.08),
+    0 2.6px 8px -1px rgba(0, 0, 0, 0.06),
+    0 5.6px 16px -1px rgba(0, 0, 0, 0.05),
+    0 12px 32px -2px rgba(0, 0, 0, 0.04)
+  );
+  box-sizing: border-box;
+  max-width: 920px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.contextEnginePrototype__getStartedContent {
+  align-items: center;
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+}
+
+.contextEnginePrototype__getStartedCopy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.contextEnginePrototype__getStartedTitle {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 28px;
+  margin: 0;
+}
+
+.contextEnginePrototype__getStartedBody {
+  font-size: 14px;
+  line-height: 20px;
+  margin: 8px 0 0;
+  max-width: 480px;
+}
+
+.contextEnginePrototype__getStartedNoun {
+  font-weight: 500;
+}
+
+.contextEnginePrototype__getStartedActions {
+  margin-top: 16px;
+}
+
+.contextEnginePrototype__getStartedArt {
+  align-self: center;
+  flex: 0 0 340px;
+  margin-left: auto;
+  width: 340px;
+
+  img {
+    display: block;
+    height: auto;
+    width: 340px;
+  }
+}
+
+.contextEnginePrototype__getStartedInset {
+  align-items: center;
+  background: var(--euiColorLightestShade, #f5f7fa);
+  border-radius: 6px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin: 0 24px 24px;
+  padding: 12px 16px;
+}
+
+.contextEnginePrototype__getStartedInsetMain {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.contextEnginePrototype__getStartedInsetTitle {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.contextEnginePrototype__getStartedInsetName {
+  color: var(--euiTextColor, #1d2a3e);
+  font-weight: 500;
+}
+
+.contextEnginePrototype__getStartedInsetSub {
+  font-size: 12px;
+  margin: 0;
+}
+
+.contextEnginePrototype__getStartedFooter {
+  background: var(--euiColorLightestShade, #f5f7fa);
+  border-top: 1px solid var(--euiBorderColor, #d3dae6);
+  padding: 12px 24px;
+}
+
+.contextEnginePrototype__getStartedHelp {
+  font-weight: 500;
+}
+
+.contextEnginePrototype__landing .euiFlexGrid > .euiFlexItem {
+  min-width: 0;
+}
+
+.euiPanel.contextEnginePrototype__card {
+  align-items: stretch;
+  cursor: pointer;
+  display: flex !important;
+  flex-direction: column;
+  height: 100%;
+  justify-content: flex-start !important;
+  min-width: 0;
+  overflow: hidden;
+  transition: border-color 150ms ease;
+
+  &:hover {
+    border-color: var(--euiColorPrimary, #07c);
+  }
+
+  &:focus-within {
+    outline: 2px solid var(--euiColorPrimary, #07c);
+    outline-offset: 2px;
+  }
+}
+
+.contextEnginePrototype__cardTop {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.contextEnginePrototype__catalogActions {
+  flex-shrink: 0;
+  margin: 0 -4px 0 0;
+}
+
+.contextEnginePrototype__cardHeading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+
+  .contextEnginePrototype__cardBadges {
+    min-height: 28px;
+  }
+}
+
+.contextEnginePrototype__cardName {
+  max-width: 100%;
+  min-width: 0;
+
+  .euiTitle,
+  h2 {
+    line-height: 24px;
+    margin: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.contextEnginePrototype__cardBadge {
+  align-items: center;
+  display: inline-flex !important;
+  line-height: 1 !important;
+  padding-bottom: 4px !important;
+  padding-top: 4px !important;
+}
+
+.contextEnginePrototype__cardDesc {
+  p {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+}
+
+.contextEnginePrototype__countBadge {
+  align-items: center;
+  display: inline-flex !important;
+  justify-content: center;
+  line-height: 1 !important;
+  padding-bottom: 4px !important;
+  padding-top: 4px !important;
+
+  .euiBadge__content {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+    line-height: 1;
+  }
+}
+
+.contextEnginePrototype__countPill {
+  align-items: center;
+  color: inherit;
+  display: inline-flex;
+  gap: 4px;
+  justify-content: center;
+  line-height: 1;
+
+  .euiIcon {
+    color: inherit;
+    display: block;
+    flex-shrink: 0;
+    height: 16px;
+    width: 16px;
+  }
+}
+
+.contextEnginePrototype__cardFooter {
+  margin-top: auto;
+}
+
+.contextEnginePrototype__cardUpdated {
+  text-align: right;
+
+  p {
+    margin: 0;
+  }
+}
+
+.contextEnginePrototype__storageBadge {
+  color: var(--euiTextSubduedColor);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.contextEnginePrototype__namespaceRow {
+  cursor: pointer;
+  padding: 16px 20px !important;
+  text-align: left;
+  transition: border-color 150ms ease;
+
+  &:hover {
+    border-color: var(--euiColorPrimary, #07c);
+  }
+
+  &:focus-within {
+    outline: 2px solid var(--euiColorPrimary, #07c);
+    outline-offset: 2px;
+  }
+}
+
+.contextEnginePrototype__namespaceRowInner {
+  align-items: center;
+  display: flex;
+  gap: 24px;
+  width: 100%;
+}
+
+.contextEnginePrototype__namespaceRowMain {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.contextEnginePrototype__namespaceRowTitle {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.contextEnginePrototype__namespaceRowName {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.contextEnginePrototype__namespaceSources {
+  margin: 0;
+}
+
+.contextEnginePrototype__namespaceRowMeta {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 24px;
+}
+
+.contextEnginePrototype__namespaceRowMetaCol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 132px;
+}
+
+.contextEnginePrototype__namespaceRowMetaLabel {
+  color: var(--euiTextSubduedColor, #69707d);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.contextEnginePrototype__namespaceRowMetaValue {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.contextEnginePrototype__namespaceRowChevron {
+  flex: 0 0 auto;
+}
+
+.contextEnginePrototype__radioCard {
+  cursor: pointer;
+  height: 100%;
+  transition: border-color 150ms ease;
+
+  &:hover {
+    border-color: var(--euiColorPrimary, #07c);
+  }
+}
+
+.contextEnginePrototype__radioCard--selected {
+  border-color: var(--euiColorPrimary, #07c) !important;
+}
+
+.contextEnginePrototype__sourceRow {
+  cursor: pointer;
+}
+
+.contextEnginePrototype__createFooter,
+.contextEnginePrototype__disabledReason {
+  align-items: center;
+}
+
+.contextEnginePrototype__sourcesInner {
+  padding: 0;
+}
+
+.contextEnginePrototype__tracesTitleRow {
+  margin: 0;
+}
+
+.contextEnginePrototype__tracesUsedLine {
+  margin-top: 8px;
+
+  p {
+    margin: 0;
+  }
+}
+
+.contextEnginePrototype__selectedSources {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contextEnginePrototype__selectedSource {
+  align-items: center;
+  border-bottom: 1px solid var(--euiBorderColor, #d3dae6);
+  display: flex;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 0;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.contextEnginePrototype__selectedSource--enter {
+  animation: contextEnginePulse 600ms ease-out;
+}
+
+@keyframes contextEnginePulse {
+  0% {
+    background-color: transparent;
+  }
+  35% {
+    background-color: rgba(0, 119, 204, 0.16);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.contextEnginePrototype__selectedSourceMain {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.contextEnginePrototype__selectedSourceName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contextEnginePrototype__indexObject {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.contextEnginePrototype__nextStep {
+  position: relative;
+  padding-right: 48px !important;
+}
+
+.contextEnginePrototype__nextStepDismiss {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+
+.contextEnginePrototype__nextStepArt {
+  flex: 0 0 120px;
+  width: 120px;
+
+  img,
+  svg {
+    display: block;
+    height: auto;
+    width: 120px;
+  }
+}
+
+.contextEnginePrototype__nextStepActions {
+  margin-top: 12px;
+}
+
+@media (max-width: 767px) {
+  .contextEnginePrototype__nextStepArt {
+    display: none;
+  }
+}
+
+.contextEnginePrototype__kiEmpty {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px 8px 8px;
+  text-align: center;
+
+  p {
+    margin: 0;
+  }
+}
+
+.contextEnginePrototype__sourceTab {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.contextEnginePrototype__connectorList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contextEnginePrototype__connectorRow {
+  padding: 4px 0;
+}
+
+.contextEnginePrototype__connectorLabel {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.contextEnginePrototype__automationsLocked {
+  color: var(--euiTextSubduedColor, #69707d);
+
+  .contextEnginePrototype__panelDesc p {
+    margin-bottom: 0;
+  }
+}
+
+.contextEnginePrototype__automationsLockedTitle {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-height: 24px;
+
+  .euiIcon {
+    flex-shrink: 0;
+  }
+
+  .euiTitle {
+    line-height: 24px;
+    margin: 0;
+  }
+}
+
+.contextEnginePrototype__agentUserTurn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.contextEnginePrototype__agentAttachChip {
+  align-items: center;
+  background: var(--euiColorLightestShade, #f5f7fa);
+  border: 1px solid var(--euiBorderColor, #d3dae6);
+  border-radius: 16px;
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px 10px;
+  width: fit-content;
+}
+
+.contextEnginePrototype__agentConfirmCard {
+  margin-top: 16px;
+}
+
+.contextEnginePrototype__kiSharedNote {
+  margin: 0 0 12px;
+
+  p {
+    margin: 0;
+  }
+}
+
+.contextEnginePrototype__panels {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.contextEnginePrototype__panel {
+  /* paddingSize="l" from EUI */
+}
+
+.contextEnginePrototype__panelHeader {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.contextEnginePrototype__panelHeaderText {
+  min-width: 0;
+}
+
+.contextEnginePrototype__panelTitle {
+  margin: 0;
+}
+
+.contextEnginePrototype__automationsHeading {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.contextEnginePrototype__automationCard {
+  border: 1px solid var(--euiBorderColor, #d3dae6);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+
+  + .contextEnginePrototype__automationCard {
+    margin-top: 12px;
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+.contextEnginePrototype__automationCardTop {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.contextEnginePrototype__automationCardTitle {
+  margin: 0;
+  min-width: 0;
+}
+
+.contextEnginePrototype__automationCardMeta {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.contextEnginePrototype__automationIo {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.contextEnginePrototype__automationIoLabel {
+  color: var(--euiTextSubduedColor);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.contextEnginePrototype__menuDivider {
+  border-top: 1px solid var(--euiBorderColor, #d3dae6);
+  margin: 4px 0;
+}
+
+.contextEnginePrototype__memorySwitch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.contextEnginePrototype__panelDesc {
+  margin: 4px 0 0;
+
+  p + p {
+    margin-top: 4px;
+  }
+}
+
+.contextEnginePrototype__panelBody {
+  margin-top: 0;
+}
+
+.contextEnginePrototype__panelActions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.contextEnginePrototype__overviewStats {
+  align-items: stretch;
+  display: flex;
+  width: 100%;
+}
+
+.contextEnginePrototype__overviewStatCell {
+  box-sizing: border-box;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 16px;
+
+  &:first-child {
+    padding-left: 0;
+  }
+
+  &:last-child {
+    padding-right: 0;
+  }
+}
+
+.contextEnginePrototype__overviewStatCell + .contextEnginePrototype__overviewStatCell {
+  border-left: 1px solid var(--euiBorderColor, #d3dae6);
+}
+
+.contextEnginePrototype__overviewStatLabel {
+  color: var(--euiTextSubduedColor, #69707d);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.contextEnginePrototype__overviewStatValue {
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin-top: 4px;
+}
+
+.contextEnginePrototype__overviewStatCell--success .contextEnginePrototype__overviewStatValue {
+  color: var(--euiColorSuccessText, #007871);
+}
+
+.contextEnginePrototype__overviewStatCell--danger .contextEnginePrototype__overviewStatValue {
+  color: var(--euiColorDangerText, #bd271e);
+}
+
+.contextEnginePrototype__overviewStatCell--muted .contextEnginePrototype__overviewStatValue {
+  color: var(--euiTextSubduedColor, #69707d);
+}
+
+.contextEnginePrototype__overviewStatsNote {
+  margin: 12px 0 0;
+}
+
+.contextEnginePrototype__row {
+  align-items: center;
+  border-bottom: 1px solid var(--euiBorderColor, #d3dae6);
+  display: flex;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 0;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.contextEnginePrototype__row--clickable {
+  cursor: pointer;
+
+  &:hover,
+  &:focus {
+    background-color: var(--euiColorLightestShade, #f5f7fa);
+  }
+
+  &:focus {
+    outline: none;
+  }
+}
+
+.contextEnginePrototype__whatItDoes {
+  margin-bottom: 0;
+
+  ul {
+    margin-top: 8px;
+    margin-bottom: 0;
+  }
+}
+
+.contextEnginePrototype__definition {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+
+  .euiCodeBlock {
+    max-width: 100%;
+  }
+}
+
+.contextEnginePrototype__rowMain {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.contextEnginePrototype__rowActions {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.contextEnginePrototype__kiSubtitleWrap {
+  padding-bottom: 16px;
+}
+
+.contextEnginePrototype__kiSubtitle {
+  margin: 0;
+}
+
+.contextEnginePrototype__kiCountLine {
+  margin: 0;
+}
+
+.contextEnginePrototype__kiLockup {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.contextEnginePrototype__kiAccordion {
+  border-bottom: 1px solid var(--euiBorderColor, #d3dae6);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  .euiAccordion__button {
+    min-height: 56px;
+  }
+
+  .euiCodeBlock {
+    background-color: var(--euiColorLightestShade, #f5f7fa);
+  }
+}
+
+.contextEnginePrototype__sourceChip {
+  align-items: center;
+  border: 1px solid var(--euiBorderColor, #d3dae6);
+  border-radius: 6px;
+  display: flex;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 10px;
+}
+
+.contextEnginePrototype__sourceChipName {
+  flex: 1 1 auto;
+  font-family: var(--euiCodeFontFamily, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contextEnginePrototype__mono {
+  font-family: var(--euiCodeFontFamily, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+}
+
+.contextEnginePrototype__kiTypePills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.contextEnginePrototype__kiTypePill {
+  background: var(--euiColorEmptyShade, #fff);
+  border: 1px solid var(--euiBorderColor, #d3dae6);
+  border-radius: 999px;
+  color: var(--euiTextColor, #1a1c21);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 6px 12px;
+
+  &:hover {
+    background: var(--euiColorLightestShade, #f5f7fa);
+  }
+}
+
+.contextEnginePrototype__kiTypePill--active {
+  background: var(--euiColorLightShade, #e9edf3);
+  border-color: var(--euiBorderColor, #d3dae6);
+  color: var(--euiTextColor, #1a1c21);
+  font-weight: 600;
+}
+
+.contextEnginePrototype__kiTabList {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+}
+
+.contextEnginePrototype__kiTabListRow {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--euiBorderColor, #d3dae6);
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  height: 56px;
+  min-height: 56px;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: var(--euiColorLightestShade, #f5f7fa);
+  }
+}
+
+.contextEnginePrototype__kiTabListMain {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.contextEnginePrototype__kiTabListTitle {
+  color: var(--euiTextColor, #1a1c21);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+}
+
+.contextEnginePrototype__kiTabListSub {
+  color: var(--euiTextSubduedColor, #69707d);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.contextEnginePrototype__kiValueList {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+
+  li + li {
+    margin-top: 6px;
+  }
+}
+
+.contextEnginePrototype__kiProvenance {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.contextEnginePrototype__kiVersionRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.contextEnginePrototype__kiHistoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.contextEnginePrototype__kiHistoryItem {
+  align-items: center;
+  background: var(--euiColorEmptyShade, #fff);
+  border: 1px solid var(--euiBorderColor, #d3dae6);
+  border-radius: 6px;
+  cursor: pointer;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 10px 12px;
+  text-align: left;
+  width: 100%;
+
+  &:hover {
+    background: var(--euiColorLightestShade, #f5f7fa);
+  }
+}
+
+.contextEnginePrototype__kiHistoryItem--current {
+  background: var(--euiColorLightestShade, #f5f7fa);
+}
+
+.contextEnginePrototype__kiHistoryMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  strong {
+    font-size: 13px;
+  }
+
+  span {
+    color: var(--euiTextSubduedColor, #69707d);
+    font-size: 12px;
+  }
+}
+
+.contextEnginePrototype__kiHistoryAction {
+  color: var(--euiColorPrimary, #07c);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.contextEnginePrototype__agentChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--euiBorderColor, #d3dae6);
+  border-radius: 16px;
+  background: var(--euiColorLightestShade, #f5f7fa);
+}
+
+.contextEnginePrototype__toolCall {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.contextEnginePrototype__agentChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.contextEnginePrototype__demoControlsHeader {
+  padding: 8px 12px 4px;
+}
+
+.contextEnginePrototype__demoState {
+  background: var(--euiColorEmptyShade, #fff);
+  border: 1px dashed var(--euiColorMediumShade, #98a2b3);
+  border-radius: 4px;
+  bottom: 16px;
+  box-shadow: none;
+  opacity: 0.88;
+  padding: 8px 10px;
+  position: fixed;
+  right: 16px;
+  width: 160px;
+  z-index: 20;
+}
+
+.contextEnginePrototype__demoStateLabel {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.contextEnginePrototype__tryResult {
+  margin-top: 8px;
+}
+
+.contextEnginePrototype__improvementsOpenBadge {
+  background: rgba(189, 27, 142, 0.12);
+  color: #bd1b8e;
+}
+
+.contextEnginePrototype__signalStrip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.contextEnginePrototype__signalStripItem {
+  border: 1px solid var(--euiBorderColor, #d3dae6);
+  border-radius: 6px;
+  padding: 12px 14px;
+  background: var(--euiColorLightestShade, #f7f8fc);
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.contextEnginePrototype__signalStripItem:hover {
+  border-color: var(--euiColorMediumShade, #98a2b3);
+}
+
+.contextEnginePrototype__signalStripItem--selected {
+  border-color: var(--euiColorDarkShade, #6a717d);
+  background: var(--euiColorLightShade, #eef2f7);
+  box-shadow: inset 0 0 0 1px var(--euiColorDarkShade, #6a717d);
+}
+
+.contextEnginePrototype__signalStripItem--selected:hover {
+  border-color: var(--euiColorDarkShade, #6a717d);
+}
+
+.contextEnginePrototype__improvementChanges {
+  margin-top: 2px;
+}
+
+.contextEnginePrototype__improvementChangeChip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(0, 119, 204, 0.28);
+  background: rgba(0, 119, 204, 0.06);
+  color: var(--euiTextColor, #1a1c21);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.contextEnginePrototype__improvementChangeChip--destructive {
+  border-color: rgba(189, 39, 30, 0.35);
+  background: rgba(189, 39, 30, 0.08);
+  color: #bd271e;
+}
+
+.contextEnginePrototype__signalInternal {
+  font-family: var(--euiCodeFontFamily, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  color: var(--euiTextSubduedColor, #69707d);
+  font-size: 11px;
+}
+
+.contextEnginePrototype__signalTableRow {
+  cursor: pointer;
+}
+
+.contextEnginePrototype__signalTableRow--highlight,
+.contextEnginePrototype__signalTableRow--highlight > td {
+  background: #fff6d6 !important;
+}
+
+.contextEnginePrototype__signalRowChevron {
+  display: block;
+  margin-left: auto;
+}
+
+.contextEnginePrototype__signalEvidenceList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contextEnginePrototype__signalEvidenceRow {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--euiBorderColor, #d3dae6);
+  border-radius: 6px;
+  background: transparent;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.contextEnginePrototype__signalEvidenceRow:hover {
+  background: var(--euiColorLightestShade, #f7f8fc);
+}
+
+.contextEnginePrototype__reviewAllRow {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--euiBorderColor, #d3dae6);
+}
+
+.contextEnginePrototype__configurePermGroup {
+  padding: 10px 0;
+}
+
+.contextEnginePrototype__improvementsGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.contextEnginePrototype__improvementsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.contextEnginePrototype__improvementGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.contextEnginePrototype__improvementGroupToggle,
+.contextEnginePrototype__improvementGroupLabel {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--euiTextColor, #1a1c21);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+  padding: 0;
+}
+
+.contextEnginePrototype__improvementGroupToggle {
+  cursor: pointer;
+}
+
+.contextEnginePrototype__improvementRow {
+  border-bottom: 1px solid var(--euiBorderColor, #d3dae6);
+  margin: 0;
+  padding-bottom: 4px;
+  transition: opacity 0.3s ease, transform 0.3s ease, box-shadow 0.2s ease;
+
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+}
+
+.contextEnginePrototype__improvementRow--highlight {
+  box-shadow: inset 0 0 0 2px #f5c342;
+}
+
+.contextEnginePrototype__improvementSourceLink {
+  display: block;
+}
+
+.contextEnginePrototype__improvementRow--applied {
+  background: rgba(0, 191, 179, 0.08);
+}
+
+.contextEnginePrototype__improvementRow--measuring {
+  background: rgba(152, 162, 179, 0.08);
+}
+
+.contextEnginePrototype__improvementRow--unchanged {
+  background: rgba(254, 197, 20, 0.1);
+}
+
+.contextEnginePrototype__improvementRow--dismissed {
+  opacity: 0.65;
+}
+
+.contextEnginePrototype__improvementRow--departing {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px);
+}
+
+.contextEnginePrototype__improvementRowHeader {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  height: 56px;
+  min-height: 56px;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.contextEnginePrototype__improvementRowMain {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.contextEnginePrototype__improvementRowTitle {
+  color: var(--euiTextColor, #1a1c21);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.contextEnginePrototype__improvementRowSub {
+  color: var(--euiTextSubduedColor, #69707d);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.contextEnginePrototype__improvementOutcome--unchanged {
+  color: #7a5b00;
+}
+
+.contextEnginePrototype__improvementMeta {
+  color: var(--euiTextSubduedColor, #69707d);
+  flex-shrink: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.contextEnginePrototype__improvementFix {
+  background: rgba(0, 119, 204, 0.06);
+  border: 1px solid rgba(0, 119, 204, 0.22);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.contextEnginePrototype__improvementActions {
+  margin-top: 0;
+  padding: 0 0 8px 24px;
+}
+
+.contextEnginePrototype__improvementDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 8px 24px;
+}
+
+.contextEnginePrototype__signalsHeader {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.contextEnginePrototype__signalsToggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.contextEnginePrototype__signalsToggleCopy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.contextEnginePrototype__signalsToggleTitle {
+  color: var(--euiTextColor, #1a1c21);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.contextEnginePrototype__signalsToggleSummary {
+  color: var(--euiTextSubduedColor, #69707d);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.contextEnginePrototype__amSpan {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 1.4fr) 1fr 64px;
+  margin-bottom: 10px;
+}
+
+.contextEnginePrototype__amSpanMeta {
+  min-width: 0;
+}
+
+.contextEnginePrototype__amSpanTrack {
+  background: var(--euiColorLightShade, #e9edf3);
+  border-radius: 3px;
+  height: 10px;
+  position: relative;
+}
+
+.contextEnginePrototype__amSpanBar {
+  border-radius: 3px;
+  height: 100%;
+  position: absolute;
+  top: 0;
+}
+
+.contextEnginePrototype__amSpanBar--agent {
+  background: #0077cc;
+}
+
+.contextEnginePrototype__amSpanBar--llm {
+  background: #7c3aed;
+}
+
+.contextEnginePrototype__amSpanBar--tool {
+  background: #0d9d8a;
+}
+
+.contextEnginePrototype__amSpanBar--retrieval {
+  background: #16a34a;
+}
+
+.contextEnginePrototype__amSpanBar--error {
+  background: #bd271e;
+}
+
+.contextEnginePrototype__amSpanDur {
+  text-align: right;
+}
+
+.contextEnginePrototype__retrievalAnnotation {
+  margin: 0 0 14px;
+}

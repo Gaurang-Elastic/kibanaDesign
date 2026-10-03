@@ -1,0 +1,14 @@
+{
+  "type": "plugin",
+  "id": "@kbn/context-engine-8-example-plugin",
+  "owner": "@elastic/kibana-core",
+  "description": "Alternate Context Engine UI prototype (v8), forked from proto 7.2. Isolated from context_engine / ContextengineUI and context_engine_2 through context_engine_7.",
+  "group": "platform",
+  "visibility": "private",
+  "plugin": {
+    "id": "contextEngineExampleEight",
+    "server": false,
+    "browser": true,
+    "optionalPlugins": ["agentBuilder"]
+  }
+}
