@@ -7,13 +7,14 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   EuiAccordion,
   EuiBadge,
   EuiButton,
   EuiButtonEmpty,
   EuiButtonGroup,
+  EuiCard,
   EuiCodeBlock,
   EuiFlexGroup,
   EuiFlexItem,
@@ -32,6 +33,7 @@ import {
 import {
   hydrateIndicator,
   KNOWLEDGE_TYPE_ORDER,
+  slugify,
   toIndicatorDocument,
   typeBadgeColor,
   typeFilterLabel,
@@ -40,6 +42,73 @@ import {
   type KnowledgeType,
 } from './knowledge_indicators';
 import { backingIndexName, type Automation, type Namespace } from './namespace_data';
+import { indicatorSourceGroup } from './proto11_data';
+
+const CHECK_TARGET = 3;
+
+export interface Proto11KnowledgeProps {
+  sample: boolean;
+  /** Check a few applies to indices Proto 11 created. */
+  checkEnabled: boolean;
+  lookedAt: string[];
+  checkHidden: boolean;
+  onLookedAt: (id: string) => void;
+  onHideCheck: () => void;
+}
+
+interface SourceGroup {
+  name: string;
+  kind: string;
+  icon: string;
+  items: HydratedKnowledgeIndicator[];
+}
+
+const groupIcon = (kind: string, sourceIcon?: string) => {
+  if (sourceIcon) return sourceIcon;
+  if (kind === 'Agent traces') return 'apmTrace';
+  if (kind === 'Connector') return 'documents';
+  return 'database';
+};
+
+const groupBySource = (
+  indicators: HydratedKnowledgeIndicator[],
+  namespace: Namespace
+): SourceGroup[] => {
+  const groups = new Map<string, SourceGroup>();
+  indicators.forEach((indicator) => {
+    const { name, kind } = indicatorSourceGroup(
+      indicator,
+      namespace.sources,
+      namespace.proto11?.agent
+    );
+    const existing = groups.get(name);
+    if (existing) {
+      existing.items.push(indicator);
+      return;
+    }
+    const source = namespace.sources.find((item) => item.name === name);
+    groups.set(name, { name, kind, icon: groupIcon(kind, source?.icon), items: [indicator] });
+  });
+  const order = namespace.sources.map((source) => source.name);
+  const rank = (name: string) => {
+    const index = order.indexOf(name);
+    return index === -1 ? order.length : index;
+  };
+  return Array.from(groups.values()).sort((a, b) => rank(a.name) - rank(b.name));
+};
+
+/** One KI from each source, topped up to three when there are fewer sources. */
+const checkPicks = (groups: SourceGroup[]): HydratedKnowledgeIndicator[] => {
+  const picks = groups.slice(0, CHECK_TARGET).map((group) => group.items[0]);
+  for (let depth = 1; picks.length < CHECK_TARGET; depth += 1) {
+    const before = picks.length;
+    groups.forEach((group) => {
+      if (picks.length < CHECK_TARGET && group.items[depth]) picks.push(group.items[depth]);
+    });
+    if (picks.length === before) break;
+  }
+  return picks;
+};
 
 /** Future KI detail flyout ticket. Off so this tab matches the build. */
 const KI_DETAIL_FLYOUT = false;
@@ -241,6 +310,8 @@ export const KnowledgeTab = ({
   onViewAutomation: _onViewAutomation,
   onReplaceIndicator,
   sharedDestinationNote = false,
+  groupedBySource = false,
+  proto11,
 }: {
   namespace: Namespace;
   discoverHref: string;
@@ -251,15 +322,20 @@ export const KnowledgeTab = ({
   onViewAutomation: () => void;
   onReplaceIndicator: (indicator: HydratedKnowledgeIndicator) => void;
   sharedDestinationNote?: boolean;
+  groupedBySource?: boolean;
+  proto11?: Proto11KnowledgeProps;
 }) => {
   const [typeFilter, setTypeFilter] = useState<KnowledgeType | 'all'>('all');
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewedVersion, setViewedVersion] = useState<number | null>(null);
+  const [openRows, setOpenRows] = useState<string[]>([]);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setTypeFilter('all');
     setOpenId(null);
     setViewedVersion(null);
+    setOpenRows([]);
   }, [namespace.name]);
 
   const hydrated = useMemo(
@@ -311,19 +387,188 @@ export const KnowledgeTab = ({
   const count = hydrated.length;
   const countNoun = count === 1 ? 'Knowledge Indicator' : 'Knowledge Indicators';
 
+  const allGroups = groupedBySource || proto11 ? groupBySource(hydrated, namespace) : [];
+  const picks = proto11?.checkEnabled ? checkPicks(allGroups) : [];
+  const lookedAtCount = picks.filter((pick) => proto11?.lookedAt.includes(pick.id)).length;
+  const showCheck =
+    Boolean(proto11?.checkEnabled) &&
+    !proto11?.checkHidden &&
+    picks.length > 0 &&
+    lookedAtCount < Math.min(CHECK_TARGET, picks.length);
+
+  const setRowOpen = (id: string, isOpen: boolean) => {
+    setOpenRows((current) =>
+      isOpen
+        ? [...current.filter((item) => item !== id), id]
+        : current.filter((item) => item !== id)
+    );
+    if (isOpen && proto11 && !proto11.lookedAt.includes(id)) proto11.onLookedAt(id);
+  };
+
+  const openFromCheck = (id: string) => {
+    setTypeFilter('all');
+    setRowOpen(id, true);
+    window.setTimeout(() => {
+      listRef.current
+        ?.querySelector(`[data-ki-row="${id}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  };
+
+  const renderRow = (indicator: HydratedKnowledgeIndicator) => (
+    <EuiAccordion
+      key={indicator.id}
+      id={`ki-json-${indicator.id}`}
+      className="contextEnginePrototype__kiAccordion"
+      arrowDisplay="left"
+      {...(proto11
+        ? {
+            'data-ki-row': indicator.id,
+            forceState: openRows.includes(indicator.id) ? ('open' as const) : ('closed' as const),
+            onToggle: (isOpen: boolean) => setRowOpen(indicator.id, isOpen),
+          }
+        : {})}
+      buttonContent={
+        <span className="contextEnginePrototype__kiTabListMain">
+          <span className="contextEnginePrototype__kiTabListTitle">{indicator.title}</span>
+          <span className="contextEnginePrototype__kiTabListSub">{typeLabel(indicator.type)}</span>
+        </span>
+      }
+      paddingSize="m"
+    >
+      <EuiCodeBlock language="json" fontSize="s" paddingSize="m" isCopyable overflowHeight={320}>
+        {JSON.stringify(toIndicatorDocument(indicator), null, 2)}
+      </EuiCodeBlock>
+    </EuiAccordion>
+  );
+
+  const filteredGroups = allGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((indicator) => filtered.includes(indicator)),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  const renderList = () => {
+    if (filtered.length === 0) {
+      return (
+        <EuiText size="s" color="subdued">
+          <p>No Knowledge Indicators match this filter.</p>
+        </EuiText>
+      );
+    }
+    if (!groupedBySource) return filtered.map(renderRow);
+    return filteredGroups.map((group) => (
+      <EuiAccordion
+        key={group.name}
+        id={`ki-group-${slugify(group.name)}`}
+        initialIsOpen
+        className="contextEnginePrototype__kiGroup"
+        buttonContent={
+          <span className="contextEnginePrototype__kiGroupHead">
+            <EuiIcon type={group.icon} size="m" aria-hidden={true} />
+            <strong>{group.name}</strong>
+            <EuiBadge color="default">{group.kind}</EuiBadge>
+            <EuiBadge color="hollow">{group.items.length}</EuiBadge>
+          </span>
+        }
+        paddingSize="none"
+      >
+        <div className="contextEnginePrototype__kiGroupBody">{group.items.map(renderRow)}</div>
+      </EuiAccordion>
+    ));
+  };
+
   return (
     <>
       <EuiText size="s" color="subdued" className="contextEnginePrototype__kiSubtitleWrap">
         <p className="contextEnginePrototype__kiSubtitle">The knowledge your agents retrieve.</p>
       </EuiText>
+      {showCheck && proto11 ? (
+        <EuiPanel
+          hasBorder
+          paddingSize="l"
+          className="contextEnginePrototype__panel"
+          data-test-subj="proto11CheckAFew"
+        >
+          <div className="contextEnginePrototype__panelHeader">
+            <div className="contextEnginePrototype__panelHeaderText">
+              <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                <EuiFlexItem grow={false}>
+                  <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
+                    <h2>Check a few</h2>
+                  </EuiTitle>
+                </EuiFlexItem>
+                <EuiFlexItem grow={false}>
+                  <EuiBadge color="hollow">
+                    {lookedAtCount} of {Math.min(CHECK_TARGET, picks.length)} looked at
+                  </EuiBadge>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+              <EuiText size="xs" color="subdued" className="contextEnginePrototype__panelDesc">
+                <p>One from each source. You do not need to review everything.</p>
+              </EuiText>
+            </div>
+            <div className="contextEnginePrototype__panelActions">
+              <EuiButtonEmpty size="s" onClick={proto11.onHideCheck}>
+                Hide
+              </EuiButtonEmpty>
+            </div>
+          </div>
+          <EuiSpacer size="m" />
+          <EuiFlexGroup gutterSize="m" responsive={false}>
+            {picks.map((pick) => {
+              const group = indicatorSourceGroup(pick, namespace.sources, namespace.proto11?.agent);
+              const looked = proto11.lookedAt.includes(pick.id);
+              return (
+                <EuiFlexItem key={pick.id}>
+                  <EuiCard
+                    textAlign="left"
+                    paddingSize="m"
+                    hasBorder
+                    titleElement="h3"
+                    titleSize="xs"
+                    title={pick.title}
+                    description={group.name}
+                    onClick={() => openFromCheck(pick.id)}
+                    footer={
+                      <EuiFlexGroup gutterSize="xs" responsive={false} wrap>
+                        <EuiFlexItem grow={false}>
+                          <EuiBadge color={typeBadgeColor(pick.type)}>
+                            {typeLabel(pick.type)}
+                          </EuiBadge>
+                        </EuiFlexItem>
+                        {looked ? (
+                          <EuiFlexItem grow={false}>
+                            <EuiBadge color="hollow" iconType="eye">
+                              Looked at
+                            </EuiBadge>
+                          </EuiFlexItem>
+                        ) : null}
+                      </EuiFlexGroup>
+                    }
+                  />
+                </EuiFlexItem>
+              );
+            })}
+          </EuiFlexGroup>
+        </EuiPanel>
+      ) : null}
       <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__panel">
         <div className="contextEnginePrototype__kiLockup">
           <EuiText size="s">
             <p className="contextEnginePrototype__kiCountLine">
-              {count} <strong>{countNoun}</strong> in{' '}
+              {count} {proto11?.sample ? 'sample ' : null}
+              <strong>{countNoun}</strong> in{' '}
               <EuiLink href={discoverHref} target="_blank">
                 {backingIndexName(namespace.name)}
               </EuiLink>
+              {proto11?.sample ? (
+                <>
+                  {' '}
+                  <EuiBadge color="hollow">Sample</EuiBadge>
+                </>
+              ) : null}
             </p>
           </EuiText>
           <EuiButtonEmpty iconType="popout" iconSide="right" href={discoverHref} target="_blank">
@@ -358,42 +603,8 @@ export const KnowledgeTab = ({
               idSelected={typeFilter}
               onChange={(id) => setTypeFilter(id as KnowledgeType | 'all')}
             />
-            <div className="contextEnginePrototype__kiTabList">
-              {filtered.length === 0 ? (
-                <EuiText size="s" color="subdued">
-                  <p>No Knowledge Indicators match this filter.</p>
-                </EuiText>
-              ) : (
-                filtered.map((indicator) => (
-                  <EuiAccordion
-                    key={indicator.id}
-                    id={`ki-json-${indicator.id}`}
-                    className="contextEnginePrototype__kiAccordion"
-                    arrowDisplay="left"
-                    buttonContent={
-                      <span className="contextEnginePrototype__kiTabListMain">
-                        <span className="contextEnginePrototype__kiTabListTitle">
-                          {indicator.title}
-                        </span>
-                        <span className="contextEnginePrototype__kiTabListSub">
-                          {typeLabel(indicator.type)}
-                        </span>
-                      </span>
-                    }
-                    paddingSize="m"
-                  >
-                    <EuiCodeBlock
-                      language="json"
-                      fontSize="s"
-                      paddingSize="m"
-                      isCopyable
-                      overflowHeight={320}
-                    >
-                      {JSON.stringify(toIndicatorDocument(indicator), null, 2)}
-                    </EuiCodeBlock>
-                  </EuiAccordion>
-                ))
-              )}
+            <div className="contextEnginePrototype__kiTabList" ref={listRef}>
+              {renderList()}
             </div>
           </div>
         )}

@@ -74,8 +74,31 @@ import {
   TRY_QUESTION_ENABLED,
   demoFlags$,
   setDemoCatalogState,
+  setDemoProto11Setup,
   type CatalogDemoState,
 } from './demo_flags';
+import {
+  PROTO11_TICK_MS,
+  SAMPLE_INDEX_NAME,
+  advanceProto11,
+  createProto11Namespace,
+  createSampleNamespace,
+  indicatorSourceGroup,
+  proto11AddedLine,
+  proto11StatusPill,
+  sourceHasOutstandingRejections,
+  startFullRun,
+  startRerun,
+  type CreateFromGoalOptions,
+} from './proto11_data';
+import { Proto11Landing } from './proto11_landing';
+import {
+  Proto11FixFlyout,
+  Proto11RejectedNotice,
+  Proto11RunCallout,
+  Proto11SampleCallout,
+} from './proto11_overview';
+import type { Proto11Meta } from './proto11_types';
 import { ImprovementsTab } from './improvements_tab';
 import { initialOpenImprovementCount } from './improvements_data';
 import type { OverviewImprovement } from './improvements_data';
@@ -399,11 +422,19 @@ const OverviewStatCell = ({
 );
 
 const CatalogStateBadges = ({ namespace }: { namespace: Namespace }) => {
-  const needsSetup = indexState(namespace) !== 'ready';
+  const needsSetup = indexState(namespace) !== 'ready' && !namespace.proto11;
+  const sample = Boolean(namespace.proto11?.sample);
   return (
     <div className="contextEnginePrototype__cardBadges">
-      {!needsSetup && !namespace.managed ? null : (
+      {!needsSetup && !namespace.managed && !sample ? null : (
         <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false} wrap>
+          {sample ? (
+            <EuiFlexItem grow={false}>
+              <EuiBadge color="hollow" className="contextEnginePrototype__cardBadge">
+                Sample
+              </EuiBadge>
+            </EuiFlexItem>
+          ) : null}
           {namespace.managed ? (
             <EuiFlexItem grow={false}>
               <EuiBadge color="hollow" iconType="lock" className="contextEnginePrototype__cardBadge">
@@ -543,6 +574,7 @@ function ContextEngineApp({
   const [intentDraft, setIntentDraft] = useState('');
   const [memoryDraft, setMemoryDraft] = useState(true);
   const [openImprovementCount, setOpenImprovementCount] = useState(0);
+  const [fixFlyoutFor, setFixFlyoutFor] = useState<string | null>(null);
   const isDarkMode = useIsDarkMode();
   const { colorMode } = useEuiTheme();
   const funnelSrc = colorMode === 'DARK' ? funnelDark : funnelLight;
@@ -575,6 +607,32 @@ function ContextEngineApp({
   useEffect(() => {
     coreStart.chrome.setBreadcrumbs([]);
   }, [coreStart.chrome]);
+
+  const hasActiveProto11Run = namespaces.some(
+    (item) =>
+      item.proto11 &&
+      !item.proto11.sample &&
+      (item.proto11.phase === 'firstPass' ||
+        item.proto11.phase === 'fullRun' ||
+        item.proto11.fix === 'rerunning' ||
+        item.proto11.fix === 'fixed')
+  );
+
+  useEffect(() => {
+    if (!hasActiveProto11Run) return;
+    const timer = window.setInterval(() => {
+      setNamespaces((current) => {
+        let changed = false;
+        const next = current.map((item) => {
+          const advanced = advanceProto11(item);
+          if (advanced !== item) changed = true;
+          return advanced;
+        });
+        return changed ? next : current;
+      });
+    }, PROTO11_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, [hasActiveProto11Run]);
 
   const replaceNamespace = (next: Namespace) => {
     setNamespaces((current) =>
@@ -682,13 +740,18 @@ function ContextEngineApp({
     flags.feedbackLoopColdStart,
     flags.feedbackLoopHealthy,
   ]);
+  const proto11On = flags.proto11Setup;
   const visibleNamespaces = namespaces.filter((item) => {
     if (item.managed) return true;
+    if (item.proto11 && !proto11On) return false;
     // Learning is the empty catalog: get-started plus the managed index only.
     // Created indexes stay persisted and come back in Working.
-    if (flags.catalogState === 'learning') return false;
+    if (flags.catalogState === 'learning') return Boolean(item.proto11);
     return true;
   });
+  const proto11HeaderBadges: AppHeaderBadge[] | undefined = proto11On
+    ? [{ label: 'Proto 11', color: 'hollow' }]
+    : undefined;
 
   const filteredNamespaces = useMemo(() => {
     const query = namespaceQuery.trim().toLowerCase();
@@ -752,7 +815,55 @@ function ContextEngineApp({
     ) {
       goLanding();
     }
-  }, [flags.catalogState]);
+  }, [flags.catalogState, flags.proto11Setup]);
+
+  const updateProto11Meta = (namespaceName: string, patch: Partial<Proto11Meta>) => {
+    setNamespaces((current) =>
+      current.map((item) =>
+        item.name === namespaceName && item.proto11
+          ? { ...item, proto11: { ...item.proto11, ...patch } }
+          : item
+      )
+    );
+  };
+
+  const updateProto11Namespace = (
+    namespaceName: string,
+    update: (namespace: Namespace) => Namespace
+  ) => {
+    setNamespaces((current) =>
+      current.map((item) => (item.name === namespaceName ? update(item) : item))
+    );
+  };
+
+  const createFromGoal = (options: Omit<CreateFromGoalOptions, 'takenNames'>) => {
+    const created = createProto11Namespace({
+      ...options,
+      takenNames: namespaces.map((item) => item.name),
+    });
+    setNamespaces((current) => [created, ...current]);
+    openDetail(created);
+  };
+
+  const trySample = () => {
+    const existing = namespaces.find((item) => item.proto11?.sample);
+    if (existing) {
+      openDetail(existing);
+      return;
+    }
+    const created = createSampleNamespace();
+    setNamespaces((current) => [
+      created,
+      ...current.filter((item) => item.name !== SAMPLE_INDEX_NAME),
+    ]);
+    openDetail(created);
+  };
+
+  const removeSample = (namespaceName: string) => {
+    setNamespaces((current) => current.filter((item) => item.name !== namespaceName));
+    goLanding();
+    coreStart.notifications.toasts.addSuccess('Sample data removed');
+  };
 
   const openCreate = () => {
     setCreateName('');
@@ -1315,11 +1426,90 @@ function ContextEngineApp({
           {filteredNamespaces.map((namespace) => renderCatalogItem(namespace, 'card'))}
         </EuiFlexGrid>
       );
+    const managedInset = managed ? (
+      <div className="contextEnginePrototype__getStartedInset" aria-label="Elastic AI index">
+        <div className="contextEnginePrototype__getStartedInsetMain">
+          <div className="contextEnginePrototype__getStartedInsetTitle">
+            <span className="contextEnginePrototype__getStartedInsetName">
+              Elastic AI index is already running for you
+            </span>
+            <EuiBadge color="hollow" iconType="lock">
+              Managed
+            </EuiBadge>
+            <EuiBadge color="success">Ready</EuiBadge>
+          </div>
+          <EuiText size="xs" color="subdued">
+            <p className="contextEnginePrototype__getStartedInsetSub">
+              Dashboards, Visualizations, Alerts and SLOs enabled
+            </p>
+          </EuiText>
+        </div>
+        <EuiButtonEmpty
+          size="s"
+          flush="both"
+          iconType="arrowRight"
+          iconSide="right"
+          onClick={() => openDetail(managed)}
+        >
+          Explore Index
+        </EuiButtonEmpty>
+      </div>
+    ) : null;
+
+    if (proto11On && flags.catalogState === 'learning') {
+      const own = filteredNamespaces.filter((item) => !item.managed);
+      return (
+        <>
+          <PageHeader
+            title="Context"
+            menu={createIndexMenu}
+            badges={proto11HeaderBadges}
+            sectionClassName="contextEnginePrototype__headerSection--quietCreate"
+          />
+          <PageBody>
+            <Proto11Landing
+              managedInset={
+                managedInset ? (
+                  <EuiPanel
+                    hasBorder
+                    paddingSize="none"
+                    className="contextEnginePrototype__proto11Managed"
+                  >
+                    {managedInset}
+                  </EuiPanel>
+                ) : null
+              }
+              catalog={
+                own.length > 0 ? (
+                  <>
+                    <EuiTitle size="xs">
+                      <h2>Your AI indices</h2>
+                    </EuiTitle>
+                    {own.length === 1 ? (
+                      renderCatalogItem(own[0], 'row')
+                    ) : (
+                      <EuiFlexGrid columns={3} gutterSize="l">
+                        {own.map((namespace) => renderCatalogItem(namespace, 'card'))}
+                      </EuiFlexGrid>
+                    )}
+                  </>
+                ) : null
+              }
+              onCreateFromGoal={createFromGoal}
+              onCreateEmpty={openCreate}
+              onTrySample={trySample}
+            />
+          </PageBody>
+        </>
+      );
+    }
+
     return (
       <>
         <PageHeader
           title="Context"
           menu={createIndexMenu}
+          badges={proto11HeaderBadges}
           sectionClassName={
             showGetStarted ? 'contextEnginePrototype__headerSection--quietCreate' : undefined
           }
@@ -1394,36 +1584,7 @@ function ContextEngineApp({
                     )}
                   </div>
                 </div>
-                <div
-                  className="contextEnginePrototype__getStartedInset"
-                  aria-label="Elastic AI index"
-                >
-                  <div className="contextEnginePrototype__getStartedInsetMain">
-                    <div className="contextEnginePrototype__getStartedInsetTitle">
-                      <span className="contextEnginePrototype__getStartedInsetName">
-                        Elastic AI index is already running for you
-                      </span>
-                      <EuiBadge color="hollow" iconType="lock">
-                        Managed
-                      </EuiBadge>
-                      <EuiBadge color="success">Ready</EuiBadge>
-                    </div>
-                    <EuiText size="xs" color="subdued">
-                      <p className="contextEnginePrototype__getStartedInsetSub">
-                        Dashboards, Visualizations, Alerts and SLOs enabled
-                      </p>
-                    </EuiText>
-                  </div>
-                  <EuiButtonEmpty
-                    size="s"
-                    flush="both"
-                    iconType="arrowRight"
-                    iconSide="right"
-                    onClick={() => openDetail(managed)}
-                  >
-                    Explore Index
-                  </EuiButtonEmpty>
-                </div>
+                {managedInset}
                 <div className="contextEnginePrototype__getStartedFooter">
                   <span className="contextEnginePrototype__getStartedHelp">Need help?</span>{' '}
                   <EuiLink href={DOCS_HREF} target="_blank" external>
@@ -1467,6 +1628,7 @@ function ContextEngineApp({
           title="Create AI index"
           back={headerBack(CONTEXT_APP_HREF, 'Context', goLanding)}
           metadata={headerMeta(CREATE_DESCRIPTION)}
+          badges={proto11HeaderBadges}
         />
         <PageBody>
           <div className="contextEnginePrototype__create">
@@ -1556,7 +1718,8 @@ function ContextEngineApp({
 
   const renderDetail = (namespace: Namespace) => {
     const state = indexState(namespace);
-    const badges: AppHeaderBadge[] = [
+    const meta = namespace.proto11;
+    const stateBadge: AppHeaderBadge =
       state === 'ready'
         ? {
             label: 'Ready',
@@ -1568,12 +1731,25 @@ function ContextEngineApp({
             tooltip: 'No automations yet. Create one to start producing Knowledge Indicators.',
             onClick: goToAutomations,
             onClickAriaLabel: 'Scroll to Automations',
-          },
+          };
+    const badges: AppHeaderBadge[] = [
+      ...(meta?.sample ? [{ label: 'Sample', color: 'hollow' } satisfies AppHeaderBadge] : []),
+      ...(meta && state !== 'ready' ? [] : [stateBadge]),
     ];
     if (namespace.managed) {
       badges.push({ label: 'Managed', color: 'hollow' });
     }
-    const effectiveTab = detailTab;
+    if (proto11HeaderBadges) badges.push(...proto11HeaderBadges);
+    const hideKnowledgeTab = Boolean(meta) && namespace.indicators.length === 0;
+    const sourcesWithIndicators = new Set(
+      meta
+        ? namespace.indicators.map(
+            (indicator) => indicatorSourceGroup(indicator, namespace.sources, meta.agent).name
+          )
+        : []
+    );
+    const effectiveTab: DetailTab =
+      hideKnowledgeTab && detailTab === 'knowledge' ? 'overview' : detailTab;
     const tabs: AppHeaderTab[] = [
       {
         id: 'overview',
@@ -1581,13 +1757,17 @@ function ContextEngineApp({
         isSelected: effectiveTab === 'overview',
         onClick: () => setDetailTab('overview'),
       },
-      {
-        id: 'knowledge',
-        label: 'Knowledge Indicators',
-        isSelected: effectiveTab === 'knowledge',
-        onClick: () => setDetailTab('knowledge'),
-        ...(namespace.indicators.length > 0 ? { badge: namespace.indicators.length } : {}),
-      } satisfies AppHeaderTab,
+      ...(hideKnowledgeTab
+        ? []
+        : [
+            {
+              id: 'knowledge',
+              label: 'Knowledge Indicators',
+              isSelected: effectiveTab === 'knowledge',
+              onClick: () => setDetailTab('knowledge'),
+              ...(namespace.indicators.length > 0 ? { badge: namespace.indicators.length } : {}),
+            } satisfies AppHeaderTab,
+          ]),
       ...(showImprovementsTab
         ? [
             {
@@ -1866,6 +2046,21 @@ function ContextEngineApp({
           {effectiveTab === 'overview' ? (
             <div className="contextEnginePrototype__panels">
               {OVERVIEW_STATS_ENABLED ? overviewStatsRow : null}
+              {meta?.sample ? (
+                <Proto11SampleCallout
+                  namespace={namespace}
+                  onRemove={() => removeSample(namespace.name)}
+                />
+              ) : null}
+              {meta ? (
+                <Proto11RunCallout
+                  namespace={namespace}
+                  meta={meta}
+                  runFilled={!anyEditing && fixFlyoutFor === null}
+                  onRunAll={() => updateProto11Namespace(namespace.name, startFullRun)}
+                  onAdjust={goToAutomations}
+                />
+              ) : null}
               {namespace.sources.length === 0 && !readyCalloutDismissed[namespace.name] ? (
                 <ReadyCallout
                   onDismiss={() =>
@@ -2073,9 +2268,17 @@ function ContextEngineApp({
                 improvementsEnabled={FEEDBACK_LOOP_ENABLED && flags.feedbackLoopEnabled}
                 accordionId="context-engine-11-detail-traces-esql"
                 variant={tracesEditing ? 'editor' : 'view'}
-                description={tracesEditing ? undefined : hasTraces ? null : TRACES_EMPTY}
+                description={
+                  meta?.sample
+                    ? 'Not available on sample data.'
+                    : tracesEditing
+                    ? undefined
+                    : hasTraces
+                    ? null
+                    : TRACES_EMPTY
+                }
                 actions={
-                  !canEditPanels
+                  !canEditPanels || meta?.sample
                     ? undefined
                     : tracesEditing
                       ? headerEditButtons(tracesDirty, saveTraces)
@@ -2140,6 +2343,18 @@ function ContextEngineApp({
                                 : source.name}
                             </strong>
                           </EuiText>
+                          {meta && !sourcesWithIndicators.has(source.name) ? (
+                            <EuiText
+                              size="xs"
+                              color={
+                                sourceHasOutstandingRejections(meta, source.name)
+                                  ? 'warning'
+                                  : 'subdued'
+                              }
+                            >
+                              <p>No Knowledge Indicators yet</p>
+                            </EuiText>
+                          ) : null}
                         </div>
                         <EuiBadge color="hollow">{sourceTypeLabel(source)}</EuiBadge>
                       </div>
@@ -2207,12 +2422,28 @@ function ContextEngineApp({
                       <div key={automation.id} className="contextEnginePrototype__automationCard">
                         <div className="contextEnginePrototype__automationCardTop">
                           <EuiTitle size="xs" className="contextEnginePrototype__automationCardTitle">
-                            <h3>{automation.title}</h3>
+                            <h3>
+                              {meta && automation.templateId ? (
+                                <EuiIcon
+                                  type="bolt"
+                                  size="m"
+                                  aria-hidden={true}
+                                  className="contextEnginePrototype__automationTitleIcon"
+                                />
+                              ) : null}
+                              {automation.title}
+                            </h3>
                           </EuiTitle>
                           <div className="contextEnginePrototype__automationCardMeta">
-                            <EuiBadge color={automation.enabled ? 'success' : 'hollow'}>
-                              {automation.enabled ? 'Enabled' : 'Disabled'}
-                            </EuiBadge>
+                            {meta && automation.templateId ? (
+                              <EuiBadge color={proto11StatusPill(automation, namespace).color}>
+                                {proto11StatusPill(automation, namespace).label}
+                              </EuiBadge>
+                            ) : (
+                              <EuiBadge color={automation.enabled ? 'success' : 'hollow'}>
+                                {automation.enabled ? 'Enabled' : 'Disabled'}
+                              </EuiBadge>
+                            )}
                             <EuiPopover
                               button={
                                 <EuiButtonEmpty
@@ -2324,11 +2555,26 @@ function ContextEngineApp({
                           </div>
                         </div>
                         <EuiText size="xs" color="subdued">
-                          <p>{automationAddedLine(automation)}</p>
+                          <p>
+                            {meta && automation.templateId
+                              ? proto11AddedLine(automation, namespace)
+                              : automationAddedLine(automation)}
+                          </p>
                         </EuiText>
+                        {meta && automation.templateId === meta.runTemplates[0] ? (
+                          <Proto11RejectedNotice
+                            meta={meta}
+                            onFix={() => setFixFlyoutFor(namespace.name)}
+                          />
+                        ) : null}
                         <EuiText size="s">
                           <p>{automation.description}</p>
                         </EuiText>
+                        {meta && automation.derivation ? (
+                          <EuiText size="xs" color="subdued">
+                            <p>{automation.derivation}</p>
+                          </EuiText>
+                        ) : null}
                         <div className="contextEnginePrototype__automationIo">
                           <span className="contextEnginePrototype__automationIoLabel">Reads</span>
                           {automation.reads.length > 0 ? (
@@ -2342,12 +2588,16 @@ function ContextEngineApp({
                           )}
                           <EuiIcon type="arrowRight" size="s" color="subdued" />
                           <span className="contextEnginePrototype__automationIoLabel">Produces</span>
-                          <EuiBadge color="hollow">
-                            {automation.producesCount}{' '}
-                            {automation.producesCount === 1
-                              ? 'Knowledge Indicator'
-                              : 'Knowledge Indicators'}
-                          </EuiBadge>
+                          {meta && automation.producesCount === 0 && !automation.hasRun ? (
+                            <EuiBadge color="hollow">No Knowledge Indicators yet</EuiBadge>
+                          ) : (
+                            <EuiBadge color="hollow">
+                              {automation.producesCount}{' '}
+                              {automation.producesCount === 1
+                                ? 'Knowledge Indicator'
+                                : 'Knowledge Indicators'}
+                            </EuiBadge>
+                          )}
                         </div>
                       </div>
                     ))
@@ -2372,9 +2622,36 @@ function ContextEngineApp({
               }}
               onReplaceIndicator={(next) => replaceKnowledgeIndicator(namespace.name, next)}
               sharedDestinationNote={flags.sharedDestinationKis}
+              groupedBySource={proto11On}
+              proto11={
+                meta
+                  ? {
+                      sample: Boolean(meta.sample),
+                      checkEnabled: true,
+                      lookedAt: meta.lookedAt,
+                      checkHidden: meta.checkHidden,
+                      onLookedAt: (id) =>
+                        updateProto11Meta(namespace.name, {
+                          lookedAt: [...meta.lookedAt.filter((item) => item !== id), id],
+                        }),
+                      onHideCheck: () => updateProto11Meta(namespace.name, { checkHidden: true }),
+                    }
+                  : undefined
+              }
             />
           ) : null}
         </PageBody>
+        {meta && fixFlyoutFor === namespace.name ? (
+          <Proto11FixFlyout
+            namespace={namespace}
+            meta={meta}
+            onClose={() => setFixFlyoutFor(null)}
+            onRerun={() => {
+              setFixFlyoutFor(null);
+              updateProto11Namespace(namespace.name, startRerun);
+            }}
+          />
+        ) : null}
         {pendingPanelSwitch && activeEditPanel ? (
           <EuiConfirmModal
             title={`Discard changes to ${EDITABLE_PANEL_LABEL[activeEditPanel]}?`}
@@ -2757,6 +3034,22 @@ function ContextEngineApp({
             value={flags.catalogState}
             onChange={(event) => setDemoCatalogState(event.target.value as CatalogDemoState)}
             aria-label="Demo state"
+          />
+        </div>
+        <div className="contextEnginePrototype__demoState contextEnginePrototype__demoState--proto11">
+          <EuiText size="xs" color="subdued" className="contextEnginePrototype__demoStateLabel">
+            Proto 11
+          </EuiText>
+          <EuiSelect
+            compressed
+            options={[
+              { value: 'off', text: 'Off' },
+              { value: 'on', text: 'On' },
+            ]}
+            value={flags.proto11Setup ? 'on' : 'off'}
+            onChange={(event) => setDemoProto11Setup(event.target.value === 'on')}
+            aria-label="Proto 11"
+            data-test-subj="proto11Switcher"
           />
         </div>
         {liveNamespace ? renderAgentFlyout(liveNamespace) : null}

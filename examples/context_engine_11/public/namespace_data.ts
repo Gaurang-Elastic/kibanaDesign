@@ -15,6 +15,8 @@ import {
   type KnowledgeStats,
 } from './knowledge_indicators';
 
+import type { Proto11Meta, Proto11RunStatus, Proto11TemplateId } from './proto11_types';
+
 export type { KnowledgeIndicator, KnowledgeStats } from './knowledge_indicators';
 export { statsFromIndicators } from './knowledge_indicators';
 
@@ -61,6 +63,12 @@ export interface Automation {
   steps: AutomationStep[];
   properties: string[];
   yaml: string;
+  /** Proto 11 only. Which goal template created it. */
+  templateId?: Proto11TemplateId;
+  /** Proto 11 only. Drives the status pill and the added line. */
+  runStatus?: Proto11RunStatus;
+  /** Proto 11 only. One sentence explaining why it was chosen. */
+  derivation?: string;
 }
 
 export const automationMetaLine = (automation: Automation) => {
@@ -118,6 +126,8 @@ export interface Namespace {
     tracesAnalyzed: number;
     openImprovements: number;
   };
+  /** Proto 11 only. Present on indices created by the opinionated setup. */
+  proto11?: Proto11Meta;
 }
 
 /** Always an index in the UI. Search-team #16065. */

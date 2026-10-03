@@ -1484,3 +1484,53 @@ html {
 .contextEnginePrototype__retrievalAnnotation {
   margin: 0 0 14px;
 }
+
+/* Proto 11 setup */
+
+.contextEnginePrototype__demoState--proto11 {
+  right: 184px;
+}
+
+.contextEnginePrototype__proto11Landing {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-inline: auto;
+  max-width: 1040px;
+  width: 100%;
+}
+
+.contextEnginePrototype__proto11Managed {
+  padding-top: 24px;
+}
+
+.contextEnginePrototype__automationTitleIcon {
+  margin-right: 8px;
+  vertical-align: text-bottom;
+}
+
+.contextEnginePrototype__rejectedDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.contextEnginePrototype__kiGroup {
+  border-bottom: 1px solid var(--euiBorderColor, #d3dae6);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.contextEnginePrototype__kiGroupHead {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-height: 48px;
+}
+
+.contextEnginePrototype__kiGroupBody {
+  padding-left: 24px;
+}

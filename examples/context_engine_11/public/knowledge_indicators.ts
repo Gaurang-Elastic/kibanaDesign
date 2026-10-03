@@ -14,7 +14,10 @@ export type KnowledgeType =
   | 'policy'
   | 'faq'
   | 'glossary'
-  | 'fact';
+  | 'fact'
+  | 'document'
+  | 'unit_profile'
+  | 'query_guide';
 
 export const KNOWLEDGE_TYPE_ORDER: KnowledgeType[] = [
   'workflow',
@@ -24,6 +27,9 @@ export const KNOWLEDGE_TYPE_ORDER: KnowledgeType[] = [
   'faq',
   'glossary',
   'fact',
+  'document',
+  'unit_profile',
+  'query_guide',
 ];
 
 export interface KnowledgeVersion {
@@ -55,6 +61,7 @@ export interface KnowledgeIndicator {
   title: string;
   description?: string;
   content: string;
+  attributes?: Record<string, unknown>;
   updated_at: string;
   references: KnowledgeReference[];
   governance: KnowledgeGovernance;
@@ -141,6 +148,7 @@ export const toIndicatorDocument = (indicator: KnowledgeIndicator) => {
   };
   if (indicator.description) document.description = indicator.description;
   document.content = indicator.content;
+  if (indicator.attributes) document.attributes = indicator.attributes;
   document.updated_at = indicator.updated_at;
   document.references = indicator.references;
   document.governance = indicator.governance;
@@ -274,7 +282,7 @@ export const typeBadgeColor = (
 export const typeLabel = (type: KnowledgeType) => {
   if (type === 'faq') return 'FAQ';
   if (type === 'index_metadata') return 'Index metadata';
-  return type.charAt(0).toUpperCase() + type.slice(1);
+  return (type.charAt(0).toUpperCase() + type.slice(1)).replace(/_/g, ' ');
 };
 
 /** Filter chips mirror the raw type, lowercase, underscores as spaces. */

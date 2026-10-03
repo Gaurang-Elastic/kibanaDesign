@@ -38,8 +38,22 @@ export const WIZARD_ENABLED = false;
 /** Setup step rail. Default off; the build's next step is the self-closing callout. */
 export const STEP_RAIL_ENABLED = false;
 
+/** Storage key for the Proto 11 switcher. Off when nothing is stored. */
+export const PROTO11_SETUP = 'contextEngineExample11.PROTO11_SETUP';
+
+const loadProto11Setup = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(PROTO11_SETUP) === 'on';
+  } catch {
+    return false;
+  }
+};
+
 export interface DemoFlags {
   catalogState: CatalogDemoState;
+  /** Proto 11 opinionated setup. Off renders v2.4 unchanged. */
+  proto11Setup: boolean;
   skillUnavailable: boolean;
   nextRunEmpty: boolean;
   sharedDestinationKis: boolean;
@@ -50,6 +64,7 @@ export interface DemoFlags {
 
 export const demoFlags$ = new BehaviorSubject<DemoFlags>({
   catalogState: 'working',
+  proto11Setup: loadProto11Setup(),
   skillUnavailable: false,
   nextRunEmpty: false,
   sharedDestinationKis: false,
@@ -63,6 +78,14 @@ const patch = (partial: Partial<DemoFlags>) => {
 };
 
 export const setDemoCatalogState = (catalogState: CatalogDemoState) => patch({ catalogState });
+export const setDemoProto11Setup = (proto11Setup: boolean) => {
+  try {
+    window.localStorage.setItem(PROTO11_SETUP, proto11Setup ? 'on' : 'off');
+  } catch {
+    // Private mode. The switcher still works for this mount.
+  }
+  patch({ proto11Setup });
+};
 export const setDemoSkillUnavailable = (skillUnavailable: boolean) => patch({ skillUnavailable });
 export const setDemoNextRunEmpty = (nextRunEmpty: boolean) => patch({ nextRunEmpty });
 export const setDemoSharedDestinationKis = (sharedDestinationKis: boolean) =>

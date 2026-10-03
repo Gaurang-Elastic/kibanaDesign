@@ -50,6 +50,8 @@ export interface SourcesDraft {
   esqlSources: NamespaceSource[];
   esqlDraft: string;
   editingEsqlId?: string;
+  /** Attached connectors that are not in the catalog list. Kept so saving does not drop them. */
+  otherConnectors?: NamespaceSource[];
 }
 
 const ESQL_PLACEHOLDER =
@@ -115,6 +117,7 @@ export const draftFromSources = (sources: NamespaceSource[]): SourcesDraft => {
   const connectorIds: string[] = [];
   const indexSources: NamespaceSource[] = [];
   const esqlSources: NamespaceSource[] = [];
+  const otherConnectors: NamespaceSource[] = [];
   const connectorIdSet = new Set(CONNECTORS.map((item) => item.id));
   sources.forEach((source) => {
     if (source.typeLabel === 'ES|QL') {
@@ -123,6 +126,7 @@ export const draftFromSources = (sources: NamespaceSource[]): SourcesDraft => {
     }
     if (connectorIdSet.has(source.id) || source.typeLabel === 'Connector') {
       connectorIds.push(source.id);
+      if (!connectorIdSet.has(source.id)) otherConnectors.push(source);
       return;
     }
     indexSources.push(source);
@@ -133,6 +137,7 @@ export const draftFromSources = (sources: NamespaceSource[]): SourcesDraft => {
     indexSources,
     esqlSources,
     esqlDraft: '',
+    ...(otherConnectors.length > 0 ? { otherConnectors } : {}),
   };
 };
 
@@ -140,6 +145,7 @@ export const allDraftSources = (draft: SourcesDraft): NamespaceSource[] => [
   ...draft.indexSources,
   ...draft.esqlSources,
   ...CONNECTORS.filter((source) => draft.connectorIds.includes(source.id)).map(sourceFromConnector),
+  ...(draft.otherConnectors ?? []).filter((source) => draft.connectorIds.includes(source.id)),
 ];
 
 export const sourcesSignature = (sources: NamespaceSource[]) =>
@@ -152,6 +158,7 @@ const selectedBadge = (source: NamespaceSource) => {
   if (source.typeLabel === 'ES|QL') return 'ES|QL';
   if (source.typeLabel === 'Connector') return 'Connector';
   if (source.typeLabel === 'Managed') return 'Managed';
+  if (source.typeLabel === 'Index') return 'Index';
   return 'ES|QL';
 };
 
@@ -254,7 +261,16 @@ export const SourcesPicker = ({
   };
 
   const query = connectorQuery.trim().toLowerCase();
-  const visibleConnectors = CONNECTORS.filter((source) => {
+  const catalogConnectors: CatalogConnector[] = [
+    ...(draft.otherConnectors ?? []).map(({ id, name, subtitle, icon }) => ({
+      id,
+      name,
+      subtitle,
+      icon,
+    })),
+    ...CONNECTORS,
+  ];
+  const visibleConnectors = catalogConnectors.filter((source) => {
     if (!query) return true;
     return (
       source.name.toLowerCase().includes(query) || source.subtitle.toLowerCase().includes(query)
