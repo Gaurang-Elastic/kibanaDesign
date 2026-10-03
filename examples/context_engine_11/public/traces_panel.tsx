@@ -72,7 +72,7 @@ const DisabledReason = ({ children }: { children: React.ReactNode }) => (
   </EuiText>
 );
 
-const TraceRow = ({ trace }: { trace: IndexTrace }) => (
+export const TraceRow = ({ trace }: { trace: IndexTrace }) => (
   <div className="contextEnginePrototype__row">
     <EuiIcon type={traceTypeIcon(trace.type)} size="m" />
     <div className="contextEnginePrototype__rowMain">

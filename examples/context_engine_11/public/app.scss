@@ -1494,14 +1494,42 @@ html {
 .contextEnginePrototype__proto11Landing {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 24px;
   margin-inline: auto;
-  max-width: 1040px;
+  max-width: 1280px;
   width: 100%;
 }
 
 .contextEnginePrototype__proto11Managed {
   padding-top: 24px;
+}
+
+.contextEnginePrototype__proto11DemoRun {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contextEnginePrototype__proto11Enter {
+  animation: contextEngineProto11Enter 320ms ease-out both;
+}
+
+@keyframes contextEngineProto11Enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contextEnginePrototype__proto11Enter {
+    animation: none;
+  }
 }
 
 .contextEnginePrototype__automationTitleIcon {

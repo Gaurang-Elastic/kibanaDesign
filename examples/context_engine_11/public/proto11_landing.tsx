@@ -7,44 +7,48 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   EuiBadge,
   EuiButton,
-  EuiButtonEmpty,
   EuiButtonGroup,
-  EuiCard,
+  EuiButtonIcon,
+  EuiCheckbox,
+  EuiComboBox,
   EuiDescriptionList,
-  EuiFlexGrid,
+  EuiFieldText,
   EuiFlexGroup,
   EuiFlexItem,
+  EuiFormRow,
   EuiIcon,
   EuiLink,
   EuiPanel,
   EuiSelect,
   EuiSpacer,
   EuiText,
-  EuiTextArea,
   EuiTitle,
+  EuiToolTip,
 } from '@elastic/eui';
 
 import {
   ELASTIC_AGENT_OPTIONS,
-  EXAMPLE_DESCRIPTION,
+  EXAMPLE_QUESTIONS,
   GENAI_TRACE_OPTIONS,
-  GOALS,
   TEMPLATES,
-  becauseMentions,
+  WEB_OPS_SOURCES,
   goalById,
-  proposeFromDescription,
-  sourceName,
+  namespaceSourceFor,
+  proposeFromAgent,
+  proposeFromData,
+  proposeFromQuestion,
+  traceQuestionsFor,
   type CreateFromGoalOptions,
-  type GoalDef,
+  type Proto11Path,
   type Proto11Proposal,
 } from './proto11_data';
-import type { Proto11GoalId } from './proto11_types';
-
-const DESCRIBE_MIN_LENGTH = 10;
+import { Proto11SamplePanel } from './proto11_sample_panel';
+import type { Proto11SourceId } from './proto11_types';
+import { TRACES_DOCS_HREF, TraceRow } from './traces_panel';
 
 type TraceSelector = 'elastic_agents' | 'genai_libraries';
 
@@ -53,186 +57,412 @@ const TRACE_SELECTOR_OPTIONS = [
   { id: 'genai_libraries' as const, label: 'GenAI libraries' },
 ];
 
+const STACK_QUERY = '(max-width: 1099px)';
+
+const useStackedColumns = () => {
+  const [stacked, setStacked] = useState(() => window.matchMedia(STACK_QUERY).matches);
+  useEffect(() => {
+    const query = window.matchMedia(STACK_QUERY);
+    const update = () => setStacked(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  return stacked;
+};
+
+const INDEX_SOURCES = WEB_OPS_SOURCES.filter((source) => source.kind === 'Index');
+const CONNECTOR_SOURCES = WEB_OPS_SOURCES.filter((source) => source.kind === 'Connector');
+
+const Tile = ({
+  icon,
+  title,
+  line,
+  action,
+  testSubj,
+  children,
+}: {
+  icon: string;
+  title: string;
+  line: string;
+  action: React.ReactNode;
+  testSubj: string;
+  children: React.ReactNode;
+}) => (
+  <EuiPanel hasBorder paddingSize="l" data-test-subj={testSubj}>
+    <EuiFlexGroup gutterSize="m" alignItems="flexStart" responsive={false}>
+      <EuiFlexItem grow={false}>
+        <EuiIcon type={icon} size="l" aria-hidden={true} />
+      </EuiFlexItem>
+      <EuiFlexItem>
+        <EuiTitle size="xs">
+          <h4>{title}</h4>
+        </EuiTitle>
+        <EuiSpacer size="xs" />
+        <EuiText size="s" color="subdued">
+          <p>{line}</p>
+        </EuiText>
+        <EuiSpacer size="m" />
+        {children}
+        <EuiSpacer size="m" />
+        <EuiFlexGroup justifyContent="flexEnd" responsive={false}>
+          <EuiFlexItem grow={false}>{action}</EuiFlexItem>
+        </EuiFlexGroup>
+      </EuiFlexItem>
+    </EuiFlexGroup>
+  </EuiPanel>
+);
+
+const SourceChip = ({
+  id,
+  found,
+  onRemove,
+}: {
+  id: Proto11SourceId;
+  found?: boolean;
+  onRemove?: () => void;
+}) => {
+  const source = namespaceSourceFor(id);
+  return (
+    <div className="contextEnginePrototype__sourceChip">
+      <EuiIcon type={source.icon} size="m" aria-hidden={true} />
+      <div className="contextEnginePrototype__selectedSourceMain">
+        <EuiText size="s" className="contextEnginePrototype__selectedSourceName">
+          {source.name}
+        </EuiText>
+      </div>
+      <EuiBadge color="hollow">{source.typeLabel}</EuiBadge>
+      {found ? <EuiBadge color="hollow">found</EuiBadge> : null}
+      {onRemove ? (
+        <EuiToolTip content={`Remove ${source.name}`} disableScreenReaderOutput>
+          <EuiButtonIcon iconType="cross" aria-label={`Remove ${source.name}`} onClick={onRemove} />
+        </EuiToolTip>
+      ) : null}
+    </div>
+  );
+};
+
+const BecauseLine = ({ children }: { children: React.ReactNode }) => (
+  <EuiText size="s" color="subdued">
+    <p>
+      <em>{children}</em>
+    </p>
+  </EuiText>
+);
+
+/** Proto 11 On, no user indices yet: three ways in on the left, the sample run on the right. */
 export const Proto11Landing = ({
   managedInset,
   catalog,
+  takenNames,
+  docsHref,
   onCreateFromGoal,
   onCreateEmpty,
-  onTrySample,
+  onExploreSample,
 }: {
   managedInset: React.ReactNode;
   catalog: React.ReactNode;
+  takenNames: string[];
+  docsHref: string;
   onCreateFromGoal: (options: Omit<CreateFromGoalOptions, 'takenNames'>) => void;
   onCreateEmpty: () => void;
-  onTrySample: () => void;
+  onExploreSample: () => void;
 }) => {
-  const [describeText, setDescribeText] = useState('');
-  const [proposal, setProposal] = useState<Proto11Proposal | null>(null);
-  const [highlighted, setHighlighted] = useState<Proto11GoalId | null>(null);
-  const [gapsOpen, setGapsOpen] = useState(false);
+  const stacked = useStackedColumns();
+
   const [traceSelector, setTraceSelector] = useState<TraceSelector>('elastic_agents');
-  const [traceValue, setTraceValue] = useState(ELASTIC_AGENT_OPTIONS[0]);
+  const [agent, setAgent] = useState(ELASTIC_AGENT_OPTIONS[0]);
+  const [agentTouched, setAgentTouched] = useState(false);
+  const [pickedIds, setPickedIds] = useState<Proto11SourceId[]>([]);
+  const [connectorsOpen, setConnectorsOpen] = useState(false);
+  const [question, setQuestion] = useState('');
+  const [editOrder, setEditOrder] = useState<Proto11Path[]>([]);
+  const [proposal, setProposal] = useState<Proto11Proposal | null>(null);
+  const [proposalName, setProposalName] = useState('');
 
-  const describeLength = describeText.trim().length;
+  const markEdited = (path: Proto11Path) =>
+    setEditOrder((order) => [...order.filter((item) => item !== path), path]);
 
-  const createGaps = () => {
-    onCreateFromGoal({
-      goalId: 'gaps',
-      trace: {
-        value: traceValue,
-        type: traceSelector === 'elastic_agents' ? 'elastic_agent' : 'index',
-      },
-    });
+  const traceQuestions = traceQuestionsFor(agent);
+  const hasInput: Record<Proto11Path, boolean> = {
+    agent: agentTouched && traceQuestions.length > 0,
+    data: pickedIds.length > 0,
+    question: question.trim().length > 0,
+  };
+  const filledPath = [...editOrder].reverse().find((path) => hasInput[path]);
+
+  const openProposal = (next: Proto11Proposal) => {
+    setProposal(next);
+    setProposalName(next.name);
   };
 
-  const renderGoalCard = (goal: GoalDef) => {
-    const footerLine = (
-      <EuiText size="xs" color="subdued">
-        <p>{goal.footer}</p>
-      </EuiText>
+  const togglePicked = (id: Proto11SourceId, checked: boolean) => {
+    setPickedIds((current) =>
+      checked
+        ? [...current.filter((item) => item !== id), id]
+        : current.filter((item) => item !== id)
     );
-    const common = {
-      textAlign: 'left' as const,
-      paddingSize: 'm' as const,
-      titleElement: 'h4' as const,
-      titleSize: 'xs' as const,
-      icon: <EuiIcon type={goal.icon} size="l" aria-hidden={true} />,
-      title: goal.title,
-      description: goal.description,
-      ...(highlighted === goal.id ? { display: 'primary' as const } : { hasBorder: true }),
-    };
+    markEdited('data');
+  };
 
-    if (goal.id === 'gaps' && gapsOpen) {
-      const options =
-        traceSelector === 'elastic_agents' ? ELASTIC_AGENT_OPTIONS : GENAI_TRACE_OPTIONS;
-      return (
-        <EuiCard
-          {...common}
-          data-test-subj="proto11GoalCard-gaps"
-          footer={
-            <>
-              {footerLine}
-              <EuiSpacer size="s" />
-              <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-                <EuiFlexItem grow={false}>
-                  <EuiButton size="s" onClick={createGaps} data-test-subj="proto11GapsCreate">
-                    Create
-                  </EuiButton>
-                </EuiFlexItem>
-                <EuiFlexItem grow={false}>
-                  <EuiButtonEmpty size="s" onClick={() => setGapsOpen(false)}>
-                    Cancel
-                  </EuiButtonEmpty>
-                </EuiFlexItem>
-              </EuiFlexGroup>
-            </>
+  const agentOptions =
+    traceSelector === 'elastic_agents' ? ELASTIC_AGENT_OPTIONS : GENAI_TRACE_OPTIONS;
+
+  const agentTile = (
+    <Tile
+      icon="timeline"
+      title="Start from your agent"
+      line="Context reads what your agent has been asked and where it failed, then proposes what to build."
+      testSubj="proto11AgentTile"
+      action={
+        <EuiButton
+          size="s"
+          fill={filledPath === 'agent'}
+          onClick={() =>
+            openProposal(
+              proposeFromAgent(
+                agent,
+                traceSelector === 'elastic_agents' ? 'elastic_agent' : 'index',
+                takenNames
+              )
+            )
           }
+          data-test-subj="proto11ProposeFromTraces"
         >
-          <EuiSpacer size="s" />
-          <EuiButtonGroup
-            legend="Agent traces source"
-            type="single"
-            buttonSize="compressed"
-            options={TRACE_SELECTOR_OPTIONS}
-            idSelected={traceSelector}
-            onChange={(id) => {
-              const next = id as TraceSelector;
-              setTraceSelector(next);
-              setTraceValue(
-                next === 'elastic_agents' ? ELASTIC_AGENT_OPTIONS[0] : GENAI_TRACE_OPTIONS[0]
-              );
-            }}
-          />
-          <EuiSpacer size="s" />
-          <EuiSelect
-            compressed
-            fullWidth
-            options={options.map((value) => ({ value, text: value }))}
-            value={traceValue}
-            onChange={(event) => setTraceValue(event.target.value)}
-            aria-label={traceSelector === 'elastic_agents' ? 'Agent' : 'Trace index or data stream'}
-          />
-        </EuiCard>
-      );
-    }
-
-    return (
-      <EuiCard
-        {...common}
-        data-test-subj={`proto11GoalCard-${goal.id}`}
-        footer={footerLine}
-        onClick={() => {
-          if (goal.id === 'gaps') {
-            setGapsOpen(true);
-            return;
-          }
-          onCreateFromGoal({ goalId: goal.id });
-        }}
-      />
-    );
-  };
-
-  const describeTile = (
-    <EuiCard
-      textAlign="left"
-      paddingSize="m"
-      titleElement="h4"
-      titleSize="xs"
-      hasBorder
-      icon={<EuiIcon type="pencil" size="l" aria-hidden={true} />}
-      title="Describe what your agent does"
-      data-test-subj="proto11DescribeTile"
-      footer={
-        <EuiFlexGroup gutterSize="m" alignItems="center" responsive={false} wrap>
-          <EuiFlexItem grow={false}>
-            <EuiButton
-              size="s"
-              fill={describeLength > 0}
-              isDisabled={describeLength < DESCRIBE_MIN_LENGTH}
-              onClick={() => setProposal(proposeFromDescription(describeText))}
-              data-test-subj="proto11CreateFromDescription"
-            >
-              Create from description
-            </EuiButton>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiLink onClick={() => setDescribeText(EXAMPLE_DESCRIPTION)}>Use an example</EuiLink>
-          </EuiFlexItem>
-        </EuiFlexGroup>
+          Propose from traces
+        </EuiButton>
       }
     >
+      <EuiButtonGroup
+        legend="Agent traces source"
+        type="single"
+        buttonSize="compressed"
+        options={TRACE_SELECTOR_OPTIONS}
+        idSelected={traceSelector}
+        onChange={(id) => {
+          const next = id as TraceSelector;
+          setTraceSelector(next);
+          setAgent(next === 'elastic_agents' ? ELASTIC_AGENT_OPTIONS[0] : GENAI_TRACE_OPTIONS[0]);
+          setAgentTouched(true);
+          markEdited('agent');
+        }}
+      />
       <EuiSpacer size="s" />
-      <EuiTextArea
+      <EuiSelect
+        compressed
+        fullWidth
+        options={agentOptions.map((value) => ({ value, text: value }))}
+        value={agent}
+        onChange={(event) => {
+          setAgent(event.target.value);
+          setAgentTouched(true);
+          markEdited('agent');
+        }}
+        aria-label={traceSelector === 'elastic_agents' ? 'Agent' : 'Trace index or data stream'}
+      />
+      <EuiSpacer size="m" />
+      {traceQuestions.length > 0 ? (
+        <EuiFlexGroup direction="column" gutterSize="s" data-test-subj="proto11TracePreview">
+          {traceQuestions.map((item) => (
+            <EuiFlexItem key={item.question}>
+              <EuiFlexGroup
+                gutterSize="s"
+                alignItems="center"
+                justifyContent="spaceBetween"
+                responsive={false}
+              >
+                <EuiFlexItem>
+                  <EuiText size="s">{item.question}</EuiText>
+                </EuiFlexItem>
+                <EuiFlexItem grow={false}>
+                  <EuiBadge color="hollow">{item.badge}</EuiBadge>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+            </EuiFlexItem>
+          ))}
+        </EuiFlexGroup>
+      ) : (
+        <EuiText size="s" color="subdued">
+          <p>
+            No agent traces yet. Connect tracing to use this.{' '}
+            <EuiLink href={TRACES_DOCS_HREF} target="_blank" external>
+              Read the docs
+            </EuiLink>
+          </p>
+        </EuiText>
+      )}
+    </Tile>
+  );
+
+  const dataTile = (
+    <Tile
+      icon="database"
+      title="Start from your data"
+      line="Pick the indices or connectors your agent should know. Context inspects them and proposes what to build."
+      testSubj="proto11DataTile"
+      action={
+        <EuiButton
+          size="s"
+          fill={filledPath === 'data'}
+          isDisabled={pickedIds.length === 0}
+          onClick={() => openProposal(proposeFromData(pickedIds, takenNames))}
+          data-test-subj="proto11ProposeFromData"
+        >
+          Propose from data
+        </EuiButton>
+      }
+    >
+      <EuiFormRow label="Index, data stream or alias" fullWidth>
+        <EuiComboBox
+          fullWidth
+          compressed
+          placeholder="e.g. logs-nginx"
+          options={INDEX_SOURCES.filter((source) => !pickedIds.includes(source.id)).map(
+            (source) => ({ label: source.name, value: source.id })
+          )}
+          selectedOptions={[]}
+          singleSelection={{ asPlainText: true }}
+          onChange={(options) => {
+            const picked = options[0]?.value;
+            if (picked) togglePicked(picked, true);
+          }}
+          isClearable={false}
+          data-test-subj="proto11DataCombo"
+        />
+      </EuiFormRow>
+      <EuiSpacer size="s" />
+      <EuiLink
+        onClick={() => setConnectorsOpen((open) => !open)}
+        data-test-subj="proto11Connectors"
+      >
+        {connectorsOpen ? 'Hide connectors' : 'Connectors'}
+      </EuiLink>
+      {connectorsOpen ? (
+        <>
+          <EuiSpacer size="s" />
+          <div className="contextEnginePrototype__connectorList">
+            {CONNECTOR_SOURCES.map((source) => {
+              const { icon } = namespaceSourceFor(source.id);
+              return (
+                <div key={source.id} className="contextEnginePrototype__connectorRow">
+                  <EuiCheckbox
+                    id={`context-engine-11-landing-connector-${source.id}`}
+                    checked={pickedIds.includes(source.id)}
+                    onChange={(event) => togglePicked(source.id, event.target.checked)}
+                    label={
+                      <span className="contextEnginePrototype__connectorLabel">
+                        <EuiIcon type={icon} size="m" aria-hidden={true} />
+                        <span>{source.name}</span>
+                      </span>
+                    }
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
+      {pickedIds.length > 0 ? (
+        <>
+          <EuiSpacer size="m" />
+          <div className="contextEnginePrototype__selectedSources">
+            {pickedIds.map((id) => (
+              <SourceChip key={id} id={id} onRemove={() => togglePicked(id, false)} />
+            ))}
+          </div>
+          <EuiSpacer size="s" />
+          <EuiText size="s" color="subdued">
+            <p>I will read the mapping and a sample of about 500 documents from each.</p>
+          </EuiText>
+        </>
+      ) : null}
+    </Tile>
+  );
+
+  const questionTile = (
+    <Tile
+      icon="question"
+      title="Start from a question"
+      line="Type a question your agent should answer well. Context finds the sources that can answer it."
+      testSubj="proto11QuestionTile"
+      action={
+        <EuiButton
+          size="s"
+          fill={filledPath === 'question'}
+          isDisabled={question.trim().length === 0}
+          onClick={() => openProposal(proposeFromQuestion(question, takenNames))}
+          data-test-subj="proto11FindSources"
+        >
+          Find sources
+        </EuiButton>
+      }
+    >
+      <EuiFieldText
         fullWidth
         compressed
-        rows={3}
-        resize="vertical"
-        placeholder="What it helps with, which data it uses, where it goes wrong."
-        value={describeText}
-        onChange={(event) => setDescribeText(event.target.value)}
-        aria-label="Describe what your agent does"
+        placeholder="Why is checkout-api returning 5xx this morning?"
+        value={question}
+        onChange={(event) => {
+          setQuestion(event.target.value);
+          markEdited('question');
+        }}
+        aria-label="A question your agent should answer well"
+        data-test-subj="proto11QuestionField"
       />
-    </EuiCard>
+      <EuiSpacer size="s" />
+      <EuiFlexGroup gutterSize="s" responsive={false} wrap>
+        {EXAMPLE_QUESTIONS.map((example) => (
+          <EuiFlexItem grow={false} key={example}>
+            <EuiBadge
+              color="hollow"
+              onClick={() => {
+                setQuestion(example);
+                markEdited('question');
+              }}
+              onClickAriaLabel={`Use the question ${example}`}
+              data-test-subj="proto11QuestionExample"
+            >
+              {example}
+            </EuiBadge>
+          </EuiFlexItem>
+        ))}
+      </EuiFlexGroup>
+    </Tile>
   );
 
   const renderProposal = (current: Proto11Proposal) => {
-    const goal = goalById(current.goal);
-    const template = TEMPLATES[goal.template];
+    const template = TEMPLATES[goalById(current.goal).template];
     const listItems = [
       {
-        title: 'Goal',
+        title: 'Name',
+        description: (
+          <EuiFieldText
+            compressed
+            value={proposalName}
+            onChange={(event) => setProposalName(event.target.value)}
+            aria-label="AI index name"
+            data-test-subj="proto11ProposalName"
+          />
+        ),
+      },
+      {
+        title: 'Automation',
         description: (
           <>
-            <EuiText size="s">
-              <strong>{goal.title}</strong>
-            </EuiText>
+            <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+              <EuiFlexItem grow={false}>
+                <EuiIcon type="bolt" size="m" aria-hidden={true} />
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiText size="s">
+                  <strong>{template.title}</strong>
+                </EuiText>
+              </EuiFlexItem>
+            </EuiFlexGroup>
             <EuiText size="s" color="subdued">
-              <em>
-                {current.goalWords.length > 0
-                  ? becauseMentions(current.goalWords)
-                  : 'because nothing more specific was mentioned'}
-              </em>
+              <p>{template.description}</p>
             </EuiText>
+            <BecauseLine>{current.automationBecause}</BecauseLine>
           </>
         ),
       },
@@ -240,90 +470,55 @@ export const Proto11Landing = ({
         title: 'Sources',
         description: (
           <>
-            <EuiFlexGroup gutterSize="xs" wrap responsive={false}>
+            <div className="contextEnginePrototype__selectedSources">
               {current.sourceIds.map((id) => (
-                <EuiFlexItem grow={false} key={id}>
-                  <EuiBadge color="hollow">{sourceName(id)}</EuiBadge>
-                </EuiFlexItem>
+                <SourceChip key={id} id={id} found={current.foundIds.includes(id)} />
               ))}
-            </EuiFlexGroup>
-            <EuiText size="s" color="subdued">
-              <em>
-                {current.sourceWords.length > 0
-                  ? becauseMentions(current.sourceWords)
-                  : 'because no source was named, these are the defaults for this goal'}
-              </em>
-            </EuiText>
+            </div>
+            <EuiSpacer size="xs" />
+            <BecauseLine>{current.sourcesBecause}</BecauseLine>
           </>
         ),
       },
-      {
-        title: 'Automation',
-        description: (
-          <>
-            <EuiText size="s">
-              <strong>{template.title}</strong>
-            </EuiText>
-            <EuiText size="s" color="subdued">
-              {template.description}
-            </EuiText>
-            <EuiText size="s" color="subdued">
-              <em>because it is the automation for {goal.title}</em>
-            </EuiText>
-          </>
-        ),
-      },
-      ...(current.struggleWords.length > 0
-        ? [
-            {
-              title: 'Automation',
-              description: (
-                <>
-                  <EuiText size="s">
-                    <strong>{TEMPLATES.gaps.title}</strong>
-                  </EuiText>
-                  <EuiText size="s" color="subdued">
-                    {TEMPLATES.gaps.description}
-                  </EuiText>
-                  <EuiText size="s" color="subdued">
-                    <em>{becauseMentions(current.struggleWords)}</em>. It needs an agent attached
-                    before it runs.
-                  </EuiText>
-                </>
-              ),
-            },
-          ]
+      ...(current.trace
+        ? [{ title: 'Agent traces', description: <TraceRow trace={current.trace} /> }]
         : []),
     ];
     return (
       <EuiPanel hasBorder paddingSize="l" data-test-subj="proto11Proposal">
-        <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+        <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
           <EuiFlexItem grow={false}>
             <EuiIcon type="productAgent" size="m" aria-hidden={true} />
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
-            <EuiText size="s">
-              <strong>Elastic AI Agent</strong>
+            <EuiTitle size="xs">
+              <h3>Here is what I would set up</h3>
+            </EuiTitle>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiText size="s" color="subdued">
+              Elastic AI Agent
             </EuiText>
           </EuiFlexItem>
         </EuiFlexGroup>
-        <EuiSpacer size="s" />
-        <EuiTitle size="xs">
-          <h4>Here is what I would set up</h4>
-        </EuiTitle>
-        <EuiSpacer size="m" />
-        <EuiDescriptionList type="column" compressed columnWidths={[1, 4]} listItems={listItems} />
         <EuiSpacer size="l" />
-        <EuiFlexGroup gutterSize="l" alignItems="center" responsive={false}>
+        <EuiDescriptionList type="column" columnWidths={[1, 4]} listItems={listItems} />
+        <EuiSpacer size="l" />
+        <EuiFlexGroup justifyContent="spaceBetween" alignItems="center" responsive={false}>
+          <EuiFlexItem grow={false}>
+            <EuiLink onClick={() => setProposal(null)} data-test-subj="proto11ProposalChange">
+              Change
+            </EuiLink>
+          </EuiFlexItem>
           <EuiFlexItem grow={false}>
             <EuiButton
               fill
               onClick={() =>
                 onCreateFromGoal({
                   goalId: current.goal,
+                  name: proposalName,
                   sourceIds: current.sourceIds,
-                  intent: describeText,
-                  struggleWords: current.struggleWords,
+                  ...(current.trace ? { trace: current.trace } : {}),
                 })
               }
               data-test-subj="proto11CreateAndRun"
@@ -331,73 +526,62 @@ export const Proto11Landing = ({
               Create and run
             </EuiButton>
           </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiLink
-              onClick={() => {
-                setHighlighted(current.goal);
-                setProposal(null);
-              }}
-            >
-              Change
-            </EuiLink>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiLink onClick={() => setProposal(null)}>Back</EuiLink>
-          </EuiFlexItem>
         </EuiFlexGroup>
       </EuiPanel>
     );
   };
 
+  const leftColumn = proposal ? (
+    renderProposal(proposal)
+  ) : (
+    <>
+      <EuiTitle size="s">
+        <h2>Get started with Context</h2>
+      </EuiTitle>
+      <EuiSpacer size="xs" />
+      <EuiText size="s" color="subdued">
+        <p>
+          Context turns your data into Knowledge Indicators, short facts your agents retrieve when
+          they answer.
+        </p>
+      </EuiText>
+      <EuiSpacer size="l" />
+      <EuiTitle size="xxs">
+        <h3>Start from what you have</h3>
+      </EuiTitle>
+      <EuiSpacer size="s" />
+      <EuiFlexGroup direction="column" gutterSize="m">
+        <EuiFlexItem>{agentTile}</EuiFlexItem>
+        <EuiFlexItem>{dataTile}</EuiFlexItem>
+        <EuiFlexItem>{questionTile}</EuiFlexItem>
+      </EuiFlexGroup>
+      <EuiSpacer size="m" />
+      <EuiText size="s" color="subdued">
+        <p>
+          About a minute to first results, from a sample of your data. Everything can be changed
+          afterwards.
+        </p>
+      </EuiText>
+      <EuiSpacer size="s" />
+      <EuiLink onClick={onCreateEmpty} data-test-subj="proto11CreateEmpty">
+        Create an empty AI index instead
+      </EuiLink>
+    </>
+  );
+
   return (
     <div className="contextEnginePrototype__proto11Landing" data-test-subj="proto11Landing">
-      <EuiPanel hasBorder paddingSize="l">
-        <EuiTitle size="s">
-          <h2>Get started with Context</h2>
-        </EuiTitle>
-        <EuiSpacer size="xs" />
-        <EuiText size="s" color="subdued">
-          <p>
-            Context turns your data into Knowledge Indicators, short facts your agents retrieve when
-            they answer.
-          </p>
-        </EuiText>
-        <EuiSpacer size="l" />
-        <EuiTitle size="xs">
-          <h3>What should your agent get better at?</h3>
-        </EuiTitle>
-        <EuiSpacer size="m" />
-        {proposal ? (
-          renderProposal(proposal)
-        ) : (
-          <EuiFlexGrid columns={3} gutterSize="m">
-            {GOALS.map((goal) => (
-              <EuiFlexItem key={goal.id}>{renderGoalCard(goal)}</EuiFlexItem>
-            ))}
-            <EuiFlexItem>{describeTile}</EuiFlexItem>
-          </EuiFlexGrid>
-        )}
-        <EuiSpacer size="m" />
-        <EuiText size="s" color="subdued">
-          <p>
-            About a minute to first results, from a sample of your data. Everything can be changed
-            afterwards.
-          </p>
-        </EuiText>
-        <EuiSpacer size="s" />
-        <EuiFlexGroup gutterSize="l" alignItems="center" responsive={false} wrap>
-          <EuiFlexItem grow={false}>
-            <EuiLink onClick={onCreateEmpty} data-test-subj="proto11CreateEmpty">
-              Create an empty AI index instead
-            </EuiLink>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiLink onClick={onTrySample} data-test-subj="proto11TrySample">
-              Try with sample data
-            </EuiLink>
-          </EuiFlexItem>
-        </EuiFlexGroup>
-      </EuiPanel>
+      <EuiFlexGroup
+        direction={stacked ? 'column' : 'row'}
+        gutterSize="xl"
+        alignItems={stacked ? 'stretch' : 'flexStart'}
+        responsive={false}
+      >
+        <EuiFlexItem grow={7}>{leftColumn}</EuiFlexItem>
+        <EuiFlexItem grow={5}>
+          <Proto11SamplePanel docsHref={docsHref} onExploreSample={onExploreSample} />
+        </EuiFlexItem>
+      </EuiFlexGroup>
       {managedInset}
       {catalog}
     </div>

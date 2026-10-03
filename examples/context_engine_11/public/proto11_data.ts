@@ -58,7 +58,7 @@ export const WEB_OPS_SOURCES: WebOpsSource[] = [
     name: 'logs-nginx.access-default',
     kind: 'Index',
     summary: 'HTTP access logs from the public edge',
-    keywords: ['nginx', 'access', 'http', 'traffic', 'latenc\\w*', 'checkout'],
+    keywords: ['nginx', 'access', 'http', 'traffic', 'latenc\\w*', 'checkout', '5xx', 'duration'],
   },
   {
     id: 'nginx-error',
@@ -291,11 +291,92 @@ export const GOALS: GoalDef[] = [
 export const goalById = (id: Proto11GoalId) => GOALS.find((goal) => goal.id === id) as GoalDef;
 
 export const ELASTIC_AGENT_OPTIONS = [
-  'web-ops-assistant',
   'Significant Events Judge',
+  'web-ops-assistant',
   'loyalty-support-agent',
 ];
 export const GENAI_TRACE_OPTIONS = ['traces-genai.otel-default'];
+
+export interface TraceQuestion {
+  question: string;
+  badge: string;
+  /** Word quoted back in the proposal, for example "hosts". */
+  topic: string;
+  /** Failed runs. Undefined when the question succeeded but was slow. */
+  failures?: number;
+  sourceIds: Proto11SourceId[];
+}
+
+const TRACE_QUESTIONS: Record<string, TraceQuestion[]> = {
+  'Significant Events Judge': [
+    {
+      question: 'Which hosts are saturated right now?',
+      badge: 'failed 7 times',
+      topic: 'hosts',
+      failures: 7,
+      sourceIds: ['cpu'],
+    },
+    {
+      question: 'What broke after the last deploy?',
+      badge: 'failed 4 times',
+      topic: 'deploys',
+      failures: 4,
+      sourceIds: ['k8s', 'nginx-error'],
+    },
+    {
+      question: 'Error rate for checkout-api',
+      badge: 'slow, 6 steps',
+      topic: 'checkout-api',
+      sourceIds: ['nginx-access'],
+    },
+  ],
+  'web-ops-assistant': [
+    {
+      question: 'Why is checkout-api returning 5xx?',
+      badge: 'failed 5 times',
+      topic: '5xx errors',
+      failures: 5,
+      sourceIds: ['nginx-access', 'nginx-error'],
+    },
+    {
+      question: 'Which pods are crash looping?',
+      badge: 'failed 3 times',
+      topic: 'pods',
+      failures: 3,
+      sourceIds: ['k8s'],
+    },
+    {
+      question: 'p95 latency for search-api',
+      badge: 'slow, 5 steps',
+      topic: 'latency',
+      sourceIds: ['nginx-access'],
+    },
+  ],
+  'traces-genai.otel-default': [
+    {
+      question: 'Who is on call for payments?',
+      badge: 'failed 6 times',
+      topic: 'on-call',
+      failures: 6,
+      sourceIds: ['runbooks'],
+    },
+    {
+      question: 'Is CPU high on the checkout hosts?',
+      badge: 'failed 2 times',
+      topic: 'CPU',
+      failures: 2,
+      sourceIds: ['cpu'],
+    },
+    {
+      question: 'Top paths by traffic today',
+      badge: 'slow, 4 steps',
+      topic: 'traffic',
+      sourceIds: ['nginx-access'],
+    },
+  ],
+};
+
+export const traceQuestionsFor = (agent: string): TraceQuestion[] => TRACE_QUESTIONS[agent] ?? [];
 
 // ---------- Knowledge Indicators (web-ops dataset) ----------
 
@@ -976,6 +1057,8 @@ const freshMeta = (
 export interface CreateFromGoalOptions {
   goalId: Proto11GoalId;
   takenNames: string[];
+  /** Name typed in the proposal. Falls back to the goal's base name. */
+  name?: string;
   sourceIds?: Proto11SourceId[];
   trace?: IndexTrace;
   intent?: string;
@@ -987,6 +1070,7 @@ export interface CreateFromGoalOptions {
 export const createProto11Namespace = ({
   goalId,
   takenNames,
+  name: requestedName,
   sourceIds,
   trace,
   intent,
@@ -994,7 +1078,7 @@ export const createProto11Namespace = ({
 }: CreateFromGoalOptions): Namespace => {
   const goal = goalById(goalId);
   const chosen = sourceIds && sourceIds.length > 0 ? sourceIds : goal.defaultSources;
-  const name = uniqueName(goal.baseName, takenNames);
+  const name = uniqueName(slugify(requestedName ?? '') || goal.baseName, takenNames);
   const indexName = backingIndexName(name);
   const agent = trace?.value;
   const runTemplates: Proto11TemplateId[] = [goal.template];
@@ -1214,19 +1298,7 @@ export const startRerun = (namespace: Namespace): Namespace => {
   return { ...namespace, proto11: { ...meta, fix: 'rerunning', fixTick: 0 } };
 };
 
-// ---------- describe what your agent does ----------
-
-const STRUGGLE_WORDS = [
-  'wrong',
-  'fail\\w*',
-  'struggl\\w*',
-  'mistakes?',
-  'hallucinat\\w*',
-  'incorrect\\w*',
-];
-const QUERY_WORDS = ['fields?', 'quer(?:y|ies)', 'es\\|ql', 'mappings?', 'ind(?:ex|ices|exes)'];
-const DOC_WORDS = ['runbooks?', 'polic(?:y|ies)', 'playbooks?', 'docs?', 'documents?'];
-const ENTITY_WORDS = ['services?', 'customers?', 'entit(?:y|ies)', 'hosts?', 'profiles?'];
+// ---------- landing: three ways in ----------
 
 const matchedWords = (text: string, patterns: string[]) => {
   const found: string[] = [];
@@ -1242,78 +1314,204 @@ const matchedWords = (text: string, patterns: string[]) => {
   return found;
 };
 
+export type Proto11Path = 'agent' | 'data' | 'question';
+
+/** What Elastic AI Agent would set up. Every because line names evidence from the mock. */
 export interface Proto11Proposal {
+  path: Proto11Path;
   goal: Proto11GoalId;
-  /** Words from the description that picked the goal. Empty when it is the default. */
-  goalWords: string[];
+  name: string;
+  automationBecause: string;
   sourceIds: Proto11SourceId[];
-  /** Words from the description that picked the sources. Empty when they are the goal defaults. */
-  sourceWords: string[];
-  struggleWords: string[];
+  sourcesBecause: string;
+  /** Sources the question path matched, shown with a found badge. */
+  foundIds: Proto11SourceId[];
+  trace?: IndexTrace;
 }
 
-/** Keyword match, honest about which words were matched. */
-export const proposeFromDescription = (text: string): Proto11Proposal => {
-  const struggleWords = matchedWords(text, STRUGGLE_WORDS);
-  const queryWords = matchedWords(text, QUERY_WORDS);
-  const docWords = matchedWords(text, DOC_WORDS);
-  const entityWords = matchedWords(text, ENTITY_WORDS);
+const uniqueIds = (ids: Proto11SourceId[]) => ids.filter((id, index) => ids.indexOf(id) === index);
 
-  const sourceMatches = WEB_OPS_SOURCES.flatMap((source) => {
-    const word = source.keywords.map((keyword) => matchedWords(text, [keyword])[0]).find(Boolean);
-    return word ? [{ id: source.id, word }] : [];
-  });
-  const sourceWords = sourceMatches
-    .map((item) => item.word)
+const quoted = (words: string[]) => joinList(words.map((word) => `"${word}"`));
+
+export const proposeFromAgent = (
+  agent: string,
+  traceType: IndexTrace['type'],
+  takenNames: string[]
+): Proto11Proposal => {
+  const questions = traceQuestionsFor(agent);
+  const top = questions
+    .filter((question) => question.failures !== undefined)
+    .sort((a, b) => (b.failures ?? 0) - (a.failures ?? 0))[0];
+  const traced = uniqueIds(questions.flatMap((question) => question.sourceIds));
+  const sourceIds = traced.length > 0 ? traced : goalById('gaps').defaultSources;
+  return {
+    path: 'agent',
+    goal: 'gaps',
+    name: uniqueName(`${slugify(agent)}-context`, takenNames),
+    automationBecause: top
+      ? `because your agent asked about ${top.topic} ${top.failures} times and failed`
+      : `because ${agent} has no traces yet, so it starts once tracing is connected`,
+    sourceIds,
+    sourcesBecause:
+      questions.length > 0
+        ? `because its questions name ${joinList(
+            questions.map((question) => question.topic)
+          )}, which live in ${joinList(sourceIds.map(sourceDisplayName))}`
+        : 'because there are no traces to read yet, these are the defaults for this automation',
+    foundIds: [],
+    trace: { value: agent, type: traceType },
+  };
+};
+
+export const proposeFromData = (
+  sourceIds: Proto11SourceId[],
+  takenNames: string[]
+): Proto11Proposal => {
+  const indices = sourceIds.filter((id) => sourceById(id).kind === 'Index');
+  const goal: Proto11GoalId = indices.length > 0 ? 'indices' : 'docs';
+  let automationBecause: string;
+  if (indices.length === 0) {
+    automationBecause =
+      sourceIds.length === 1
+        ? 'because the source you picked is a document connector'
+        : 'because the sources you picked are document connectors';
+  } else if (indices.length < sourceIds.length) {
+    automationBecause =
+      indices.length === 1
+        ? `because 1 of the ${sourceIds.length} sources you picked is an index`
+        : `because ${indices.length} of the ${sourceIds.length} sources you picked are indices`;
+  } else {
+    automationBecause =
+      indices.length === 1
+        ? 'because the source you picked is an index'
+        : 'because the sources you picked are indices';
+  }
+  return {
+    path: 'data',
+    goal,
+    name: uniqueName(goalById(goal).baseName, takenNames),
+    automationBecause,
+    sourceIds,
+    sourcesBecause: sourceIds.length === 1 ? 'because you picked it' : 'because you picked them',
+    foundIds: [],
+  };
+};
+
+const NAME_HINTS: Array<[RegExp, string]> = [
+  [/saturat/i, 'saturation'],
+  [/checkout/i, 'checkout'],
+  [/payment/i, 'payments'],
+  [/deploy/i, 'deploys'],
+  [/duration|latenc/i, 'latency'],
+  [/5xx|error/i, 'errors'],
+  [/runbook/i, 'runbooks'],
+  [/host/i, 'hosts'],
+];
+
+const nameFromQuestion = (text: string) => {
+  const hint = NAME_HINTS.find(([pattern]) => pattern.test(text));
+  return `web-ops-${hint ? hint[1] : 'questions'}`;
+};
+
+export const proposeFromQuestion = (text: string, takenNames: string[]): Proto11Proposal => {
+  const name = uniqueName(nameFromQuestion(text), takenNames);
+  const matches = WEB_OPS_SOURCES.map((source) => ({
+    id: source.id,
+    words: matchedWords(text, source.keywords),
+  })).filter((match) => match.words.length > 0);
+
+  if (matches.length === 0) {
+    return {
+      path: 'question',
+      goal: 'indices',
+      name,
+      automationBecause:
+        'because the question does not name a source, so it starts with an overview of your indices',
+      sourceIds: goalById('indices').defaultSources,
+      sourcesBecause: 'because nothing in the question matched a source, these are the defaults',
+      foundIds: [],
+    };
+  }
+
+  const sourceIds = matches.map((match) => match.id);
+  const words = matches
+    .flatMap((match) => match.words)
     .filter(
       (word, index, all) =>
         all.findIndex((other) => other.toLowerCase() === word.toLowerCase()) === index
     );
-
-  let goal: Proto11GoalId = 'indices';
-  let goalWords: string[] = [];
-  if (queryWords.length > 0) {
-    goal = 'indices';
-    goalWords = queryWords;
-  } else if (docWords.length > 0) {
-    goal = 'docs';
-    goalWords = docWords;
-  } else if (entityWords.length > 0) {
-    goal = 'entities';
-    goalWords = entityWords;
-  } else if (sourceMatches.length >= 2) {
-    goal = 'multi';
-    goalWords = sourceWords;
-  } else if (struggleWords.length > 0) {
-    goal = 'gaps';
-    goalWords = struggleWords;
-  }
-
-  const def = goalById(goal);
-  let sourceIds = sourceMatches.map((item) => item.id);
-  let matchedSourceWords = sourceWords;
-  if (sourceIds.length === 0) {
-    sourceIds = def.defaultSources;
-    matchedSourceWords = [];
-  } else if (templateSources(def.template, sourceIds).length === 0) {
-    sourceIds = [...sourceIds, ...def.defaultSources.filter((id) => !sourceIds.includes(id))];
-  }
-
+  const hasIndex = sourceIds.some((id) => sourceById(id).kind === 'Index');
   return {
-    goal,
-    goalWords,
+    path: 'question',
+    goal: hasIndex ? 'indices' : 'docs',
+    name,
+    automationBecause: `because the question names ${quoted(words)}, which live in ${joinList(
+      sourceIds.map(sourceDisplayName)
+    )}`,
     sourceIds,
-    sourceWords: matchedSourceWords,
-    struggleWords: goal === 'gaps' ? [] : struggleWords,
+    sourcesBecause: `because ${joinList(
+      matches.map((match) => `${sourceDisplayName(match.id)} matched ${quoted(match.words)}`)
+    )}`,
+    foundIds: sourceIds,
   };
 };
 
-export const becauseMentions = (words: string[]) => `because it mentions ${joinList(words)}`;
+export const namespaceSourceFor = (id: Proto11SourceId): NamespaceSource =>
+  toNamespaceSource(sourceById(id));
 
-export const sourceName = (id: Proto11SourceId) => sourceById(id).name;
+// ---------- sample panel on the landing ----------
 
-export const EXAMPLE_DESCRIPTION =
-  'My agent helps on-call engineers investigate checkout outages using our nginx logs, host CPU metrics and SRE runbooks. It often gets field names wrong and writes ES|QL that fails.';
+export interface SampleDemo {
+  question: string;
+  kiIds: string[];
+  withContext: { label: string; tokens: number };
+  withoutContext: { label: string; tokens: number };
+}
+
+export const SAMPLE_DEMOS: SampleDemo[] = [
+  {
+    question: 'Which hosts are saturated?',
+    kiIds: ['ki-050', 'ki-010', 'ki-060'],
+    withContext: { label: 'With Context: 1 retrieval, about 3,800 tokens', tokens: 3800 },
+    withoutContext: {
+      label: 'Without Context: 6 steps across 3 indices, about 9,400 tokens',
+      tokens: 9400,
+    },
+  },
+  {
+    question: 'What does event.duration mean in nginx logs?',
+    kiIds: ['ki-overview-nginx-access-2', 'ki-001', 'ki-overview-nginx-access-3'],
+    withContext: { label: 'With Context: 1 retrieval, about 2,100 tokens', tokens: 2100 },
+    withoutContext: {
+      label: 'Without Context: 4 steps across 2 indices, about 6,700 tokens',
+      tokens: 6700,
+    },
+  },
+  {
+    question: 'Who owns the payments runbook?',
+    kiIds: ['ki-digest-runbooks-4', 'ki-020', 'ki-040'],
+    withContext: { label: 'With Context: 1 retrieval, about 2,600 tokens', tokens: 2600 },
+    withoutContext: {
+      label: 'Without Context: 5 steps across 2 sources, about 8,200 tokens',
+      tokens: 8200,
+    },
+  },
+];
+
+export const EXAMPLE_QUESTIONS = SAMPLE_DEMOS.map((demo) => demo.question);
+
+export const SAMPLE_COUNTS = {
+  sources: WEB_OPS_SOURCES.length,
+  automations: 2,
+  indicators: PORTED_KIS.filter((ki) => ki.source !== 'traces').length,
+} as const;
+
+export const sampleIndicator = (
+  id: string
+): { indicator: KnowledgeIndicator; sourceName: string } | undefined => {
+  const ki = PORTED_KIS.find((item) => item.id === id);
+  return ki ? { indicator: toIndicator(ki), sourceName: sourceDisplayName(ki.source) } : undefined;
+};
 
 // ---------- automation card copy ----------
 

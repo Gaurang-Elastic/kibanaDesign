@@ -1495,9 +1495,11 @@ function ContextEngineApp({
                   </>
                 ) : null
               }
+              takenNames={namespaces.map((item) => item.name)}
+              docsHref={DOCS_HREF}
               onCreateFromGoal={createFromGoal}
               onCreateEmpty={openCreate}
-              onTrySample={trySample}
+              onExploreSample={trySample}
             />
           </PageBody>
         </>
