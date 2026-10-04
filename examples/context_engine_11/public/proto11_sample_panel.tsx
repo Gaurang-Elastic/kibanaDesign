@@ -217,7 +217,7 @@ const DemoRun = ({
 export const Proto11SampleStrip = ({ onExploreSample }: { onExploreSample: ExploreSample }) => {
   const { euiTheme } = useEuiTheme();
   const [expanded, setExpanded] = useState(false);
-  const [openPopover, setOpenPopover] = useState<PipelineId | null>(null);
+  const [openPopover, setOpenPopover] = useState<PipelineId | 'sample' | null>(null);
   const [demoIndex, setDemoIndex] = useState(0);
   const [stage, setStage] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -247,7 +247,45 @@ export const Proto11SampleStrip = ({ onExploreSample }: { onExploreSample: Explo
     >
       <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
         <EuiFlexItem grow={false}>
-          <EuiBadge color="hollow">Sample</EuiBadge>
+          <EuiPopover
+            button={
+              <EuiBadge
+                color="hollow"
+                onClick={() => setOpenPopover(openPopover === 'sample' ? null : 'sample')}
+                onClickAriaLabel="Show where the sample comes from"
+                data-test-subj="proto11SamplePipeline-sample"
+              >
+                Sample
+              </EuiBadge>
+            }
+            aria-label="Sample source"
+            isOpen={openPopover === 'sample'}
+            closePopover={() => setOpenPopover(null)}
+            panelPaddingSize="s"
+            anchorPosition="downLeft"
+          >
+            <EuiText
+              size="xs"
+              data-test-subj="proto11SampleProvenance"
+              css={css`
+                max-width: calc(${euiTheme.size.base} * 20);
+              `}
+            >
+              <p>
+                From the sample AI index{' '}
+                <EuiLink
+                  onClick={() => {
+                    setOpenPopover(null);
+                    onExploreSample('web-ops');
+                  }}
+                  data-test-subj="proto11SampleIndexLink"
+                >
+                  {SAMPLE_INDEX_NAME}
+                </EuiLink>
+                , used by the sample agent {SAMPLE_AGENT_NAME}.
+              </p>
+            </EuiText>
+          </EuiPopover>
         </EuiFlexItem>
         {PIPELINE.map((node, index) => (
           <React.Fragment key={node.label}>
@@ -335,19 +373,6 @@ export const Proto11SampleStrip = ({ onExploreSample }: { onExploreSample: Explo
           </EuiLink>
         </EuiFlexItem>
       </EuiFlexGroup>
-      <EuiSpacer size="xs" />
-      <EuiText size="xs" color="subdued" data-test-subj="proto11SampleProvenance">
-        <p>
-          From the sample AI index{' '}
-          <EuiLink
-            onClick={() => onExploreSample('web-ops')}
-            data-test-subj="proto11SampleIndexLink"
-          >
-            {SAMPLE_INDEX_NAME}
-          </EuiLink>
-          , used by the sample agent {SAMPLE_AGENT_NAME}.
-        </p>
-      </EuiText>
       {expanded ? (
         <>
           <EuiSpacer size="m" />
