@@ -95,7 +95,7 @@ import {
   type CreateFromGoalOptions,
 } from './proto11_data';
 import { Proto11ConnectedAgentsPanel } from './proto11_agents_panel';
-import { Proto11Landing } from './proto11_landing';
+import { Proto11HeroArt, Proto11Landing } from './proto11_landing';
 import { SAMPLE_MENU } from './proto11_sample_panel';
 import {
   Proto11FixFlyout,
@@ -1575,18 +1575,7 @@ function ContextEngineApp({
             <Proto11Landing
               key={own.length === 0 ? 'hero' : 'compact'}
               variant={own.length === 0 ? 'hero' : 'compact'}
-              heroArt={
-                typeof (isDarkMode ? heroDark : heroLight) === 'string' ? (
-                  <img src={isDarkMode ? heroDark : heroLight} alt="" width={320} />
-                ) : (
-                  React.createElement(isDarkMode ? heroDark : heroLight, {
-                    width: 320,
-                    height: 'auto',
-                    role: 'img',
-                    'aria-hidden': true,
-                  })
-                )
-              }
+              heroArt={<Proto11HeroArt />}
               indexGrid={
                 own.length === 0 ? (
                   managed ? (

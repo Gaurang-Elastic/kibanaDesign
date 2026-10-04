@@ -62,6 +62,8 @@ import { Proto11SampleStrip, SampleMenuButton, type ExploreSample } from './prot
 import type { Proto11SourceId } from './proto11_types';
 import { TraceRow } from './traces_panel';
 import heroTexture from './assets/context_hero_texture.svg';
+import heroArtLight from './assets/context-ai-index-light-animated.svg';
+import heroArtDark from './assets/context-ai-index-dark-animated.svg';
 
 type TraceSelector = 'elastic_agents' | 'genai_libraries';
 type DataTab = 'elasticsearch' | 'connectors';
@@ -812,6 +814,19 @@ const HeroTexture = () => {
         `}
       />
     </div>
+  );
+};
+
+/** Animated hero illustration. Plays its entrance once per mount, unless reduced motion is on. */
+export const Proto11HeroArt = () => {
+  const { colorMode } = useEuiTheme();
+  return (
+    <img
+      src={colorMode === 'DARK' ? heroArtDark : heroArtLight}
+      alt=""
+      width={320}
+      data-test-subj="proto11HeroArt"
+    />
   );
 };
 
