@@ -105,61 +105,69 @@ const DemoRun = ({
   stage: number;
   onOpenIndicator: (id: string) => void;
 }) => {
+  const { euiTheme } = useEuiTheme();
   const cards = demo.kiIds.slice(0, Math.max(0, stage - 1));
+  const headlineLineCss = css`
+    display: flex;
+    align-items: center;
+    min-height: ${euiTheme.size.l};
+  `;
   return (
-    <EuiFlexGroup gutterSize="xl" alignItems="flexStart" aria-live="polite">
-      <EuiFlexItem>
-        <div className="contextEnginePrototype__proto11DemoRun">
-          <div className="contextEnginePrototype__proto11Enter">
-            <EuiText size="xs">
-              <strong>Agent asks</strong>
-            </EuiText>
-            <EuiText size="s" color="subdued">
-              <p>
-                <em>{demo.question}</em>
-              </p>
-            </EuiText>
-          </div>
-          {cards.length > 0 ? (
-            <div className="contextEnginePrototype__proto11Enter">
-              <EuiText size="xs">
-                <strong>Context returns</strong>
-              </EuiText>
+    <div className="contextEnginePrototype__proto11DemoRun" aria-live="polite">
+      <div className="contextEnginePrototype__proto11Enter">
+        <EuiText size="xs">
+          <strong>Agent asks</strong>
+        </EuiText>
+        <EuiText size="s" color="subdued">
+          <p>
+            <em>{demo.question}</em>
+          </p>
+        </EuiText>
+      </div>
+      {cards.length > 0 ? (
+        <EuiFlexGroup gutterSize="xl" alignItems="flexStart">
+          <EuiFlexItem>
+            <div className="contextEnginePrototype__proto11DemoRun">
+              <div className="contextEnginePrototype__proto11Enter" css={headlineLineCss}>
+                <EuiText size="xs">
+                  <strong>Context returns</strong>
+                </EuiText>
+              </div>
+              {cards.map((id) => {
+                const found = sampleIndicator(id);
+                if (!found) return null;
+                const { indicator, sourceName } = found;
+                return (
+                  <KiPreviewRow
+                    key={id}
+                    indicator={indicator}
+                    sourceName={sourceName}
+                    onOpen={() => onOpenIndicator(id)}
+                  />
+                );
+              })}
             </div>
-          ) : null}
-          {cards.map((id) => {
-            const found = sampleIndicator(id);
-            if (!found) return null;
-            const { indicator, sourceName } = found;
-            return (
-              <KiPreviewRow
-                key={id}
-                indicator={indicator}
-                sourceName={sourceName}
-                onOpen={() => onOpenIndicator(id)}
-              />
-            );
-          })}
-        </div>
-      </EuiFlexItem>
-      <EuiFlexItem>
-        {stage >= STAGE_DELAYS_MS.length ? (
-          <div
-            className="contextEnginePrototype__proto11Enter"
-            data-test-subj="proto11SampleCompare"
-          >
-            <ComparisonBlock
-              headline={sampleDemoHeadline(demo)}
-              rows={[
-                { label: demo.withContext.label, value: demo.withContext.tokens },
-                { label: demo.withoutContext.label, value: demo.withoutContext.tokens },
-              ]}
-              note="Sample run on sample data. Your numbers will differ."
-            />
-          </div>
-        ) : null}
-      </EuiFlexItem>
-    </EuiFlexGroup>
+          </EuiFlexItem>
+          <EuiFlexItem>
+            {stage >= STAGE_DELAYS_MS.length ? (
+              <div
+                className="contextEnginePrototype__proto11Enter"
+                data-test-subj="proto11SampleCompare"
+              >
+                <ComparisonBlock
+                  headline={sampleDemoHeadline(demo)}
+                  rows={[
+                    { label: demo.withContext.label, value: demo.withContext.tokens },
+                    { label: demo.withoutContext.label, value: demo.withoutContext.tokens },
+                  ]}
+                  note="Sample run on sample data. Your numbers will differ."
+                />
+              </div>
+            ) : null}
+          </EuiFlexItem>
+        </EuiFlexGroup>
+      ) : null}
+    </div>
   );
 };
 
