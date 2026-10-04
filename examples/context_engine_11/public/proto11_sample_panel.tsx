@@ -107,16 +107,6 @@ const DemoRun = ({
   `;
   return (
     <div className="contextEnginePrototype__proto11DemoRun" aria-live="polite">
-      <div className="contextEnginePrototype__proto11Enter">
-        <EuiText size="xs">
-          <strong>Agent asks</strong>
-        </EuiText>
-        <EuiText size="s" color="subdued">
-          <p>
-            <em>{demo.question}</em>
-          </p>
-        </EuiText>
-      </div>
       {cards.length > 0 ? (
         <div className="contextEnginePrototype__proto11Enter">
           <EuiText size="xs">
@@ -236,11 +226,16 @@ export const Proto11SampleStrip = () => {
       {expanded ? (
         <>
           <EuiSpacer size="m" />
-          <EuiFlexGroup gutterSize="s" responsive={false} wrap>
+          <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
+            <EuiFlexItem grow={false}>
+              <EuiText size="xs" color="subdued">
+                Agent asks
+              </EuiText>
+            </EuiFlexItem>
             {SAMPLE_DEMOS.map((item, index) => (
               <EuiFlexItem grow={false} key={item.question}>
                 <EuiBadge
-                  color={demoIndex === index ? 'default' : 'hollow'}
+                  color={demoIndex === index ? 'primary' : 'hollow'}
                   onClick={() => setDemoIndex(index)}
                   onClickAriaLabel={`Ask ${item.question}`}
                   data-test-subj="proto11SampleQuestion"
