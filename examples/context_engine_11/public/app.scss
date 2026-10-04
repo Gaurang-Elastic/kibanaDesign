@@ -1582,8 +1582,9 @@ html {
   width: 340px;
 }
 
-.contextEnginePrototype__proto11StripDemo {
-  max-width: 640px;
+.contextEnginePrototype__proto11KiRowTitle,
+.contextEnginePrototype__proto11ManagedRowDesc {
+  min-width: 0;
 }
 
 .contextEnginePrototype__proto11DemoRun {

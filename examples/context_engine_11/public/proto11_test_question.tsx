@@ -27,7 +27,7 @@ import {
   testQuestionExamples,
   type TestQuestionResult,
 } from './proto11_data';
-import { ComparisonBar, KiJsonFlyout, KiPreviewCard } from './proto11_ki_preview';
+import { ComparisonBlock, KiJsonFlyout, KiPreviewCard } from './proto11_ki_preview';
 
 const ESTIMATE_NOTE =
   'Estimated from a dry run against this AI index. Measured numbers appear in Usage once your agent is connected.';
@@ -57,9 +57,6 @@ export const Proto11TestQuestion = ({ namespace }: { namespace: Namespace }) => 
 
   const openIndicator = result?.indicators.find((item) => item.id === openId);
   const hit = result !== null && result.indicators.length > 0;
-  const maxSeconds = result
-    ? Math.max(result.withContext.seconds, result.withoutContext.seconds)
-    : 1;
 
   return (
     <EuiPanel
@@ -200,25 +197,23 @@ export const Proto11TestQuestion = ({ namespace }: { namespace: Namespace }) => 
               </EuiFlexItem>
             </EuiFlexGroup>
             <EuiSpacer size="m" />
-            {hit ? (
-              <>
-                <ComparisonBar
-                  label={`With Context, about ${result.withContext.seconds} seconds`}
-                  value={result.withContext.seconds}
-                  max={maxSeconds}
-                />
-                <EuiSpacer size="s" />
-                <ComparisonBar
-                  label={`Without Context, about ${result.withoutContext.seconds} seconds`}
-                  value={result.withoutContext.seconds}
-                  max={maxSeconds}
-                />
-                <EuiSpacer size="s" />
-              </>
-            ) : null}
-            <EuiText size="xs" color="subdued">
-              <p>{sample ? SAMPLE_NOTE : ESTIMATE_NOTE}</p>
-            </EuiText>
+            <ComparisonBlock
+              rows={
+                hit
+                  ? [
+                      {
+                        label: `With Context, about ${result.withContext.seconds} seconds`,
+                        value: result.withContext.seconds,
+                      },
+                      {
+                        label: `Without Context, about ${result.withoutContext.seconds} seconds`,
+                        value: result.withoutContext.seconds,
+                      },
+                    ]
+                  : []
+              }
+              note={sample ? SAMPLE_NOTE : ESTIMATE_NOTE}
+            />
           </EuiPanel>
         </>
       ) : null}

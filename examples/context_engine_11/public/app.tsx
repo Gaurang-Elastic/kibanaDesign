@@ -1442,6 +1442,60 @@ function ContextEngineApp({
     );
   };
 
+  const renderProto11ManagedRow = (namespace: Namespace) => {
+    const open = () => openDetail(namespace);
+    return (
+      <EuiPanel
+        hasBorder
+        paddingSize="m"
+        className="contextEnginePrototype__card"
+        onClick={open}
+        onKeyDown={(event: React.KeyboardEvent) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            open();
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label={`Open ${namespace.name}`}
+        data-test-subj="proto11ManagedRow"
+      >
+        <EuiFlexGroup gutterSize="m" alignItems="center" responsive={false}>
+          <EuiFlexItem grow={false}>
+            <EuiIcon type="lock" size="m" aria-hidden={true} />
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiTitle size="xs">
+              <h2>{namespace.name}</h2>
+            </EuiTitle>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiBadge color="hollow">Managed</EuiBadge>
+          </EuiFlexItem>
+          <EuiFlexItem className="contextEnginePrototype__proto11ManagedRowDesc">
+            <EuiText size="xs" color="subdued">
+              <p>{namespace.intent || 'No description set.'}</p>
+            </EuiText>
+          </EuiFlexItem>
+          <EuiFlexItem grow={false}>
+            <EuiText size="s">
+              <EuiLink
+                onClick={(event: React.MouseEvent) => {
+                  event.stopPropagation();
+                  open();
+                }}
+                data-test-subj="proto11ExploreManaged"
+              >
+                Explore index
+              </EuiLink>
+            </EuiText>
+          </EuiFlexItem>
+        </EuiFlexGroup>
+      </EuiPanel>
+    );
+  };
+
   const renderLanding = () => {
     const hasOwnIndex = visibleNamespaces.some((item) => !item.managed);
     const showGetStarted = !hasOwnIndex;
@@ -1532,10 +1586,16 @@ function ContextEngineApp({
                 )
               }
               indexGrid={
-                <EuiFlexGrid columns={3} gutterSize="l" data-test-subj="proto11IndexGrid">
-                  {managed ? renderCatalogItem(managed, 'card', true) : null}
-                  {own.map((namespace) => renderCatalogItem(namespace, 'card'))}
-                </EuiFlexGrid>
+                own.length === 0 ? (
+                  managed ? (
+                    renderProto11ManagedRow(managed)
+                  ) : null
+                ) : (
+                  <EuiFlexGrid columns={3} gutterSize="l" data-test-subj="proto11IndexGrid">
+                    {managed ? renderCatalogItem(managed, 'card', true) : null}
+                    {own.map((namespace) => renderCatalogItem(namespace, 'card'))}
+                  </EuiFlexGrid>
+                )
               }
               takenNames={namespaces.map((item) => item.name)}
               onCreateFromGoal={createFromGoal}

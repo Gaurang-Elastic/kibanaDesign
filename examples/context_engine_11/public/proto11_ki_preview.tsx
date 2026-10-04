@@ -63,6 +63,76 @@ export const KiPreviewCard = ({
   </EuiPanel>
 );
 
+/** One-line clickable KI row: title, hollow type badge and source. */
+export const KiPreviewRow = ({
+  indicator,
+  sourceName,
+  onOpen,
+}: {
+  indicator: KnowledgeIndicator;
+  sourceName: string;
+  onOpen: () => void;
+}) => (
+  <EuiPanel
+    hasBorder
+    paddingSize="s"
+    className="contextEnginePrototype__proto11Enter"
+    onClick={onOpen}
+    aria-label={`Open ${indicator.title}`}
+    data-test-subj="proto11KiPreviewRow"
+  >
+    <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+      <EuiFlexItem className="contextEnginePrototype__proto11KiRowTitle">
+        <EuiText size="s" textAlign="left">
+          <strong>{indicator.title}</strong>
+        </EuiText>
+      </EuiFlexItem>
+      <EuiFlexItem grow={false}>
+        <EuiBadge color="hollow">{typeLabel(indicator.type)}</EuiBadge>
+      </EuiFlexItem>
+      <EuiFlexItem grow={false}>
+        <EuiText size="xs" color="subdued">
+          {sourceName}
+        </EuiText>
+      </EuiFlexItem>
+    </EuiFlexGroup>
+  </EuiPanel>
+);
+
+/** Optional headline, proportional bars and the estimate or sample note under them. */
+export const ComparisonBlock = ({
+  headline,
+  rows,
+  note,
+}: {
+  headline?: string;
+  rows: ReadonlyArray<{ label: string; value: number }>;
+  note: string;
+}) => {
+  const max = Math.max(1, ...rows.map((row) => row.value));
+  return (
+    <div data-test-subj="proto11Comparison">
+      {headline ? (
+        <>
+          <EuiTitle size="xs">
+            <h4>{headline}</h4>
+          </EuiTitle>
+          <EuiSpacer size="m" />
+        </>
+      ) : null}
+      {rows.map((row) => (
+        <React.Fragment key={row.label}>
+          <ComparisonBar label={row.label} value={row.value} max={max} />
+          <EuiSpacer size="s" />
+        </React.Fragment>
+      ))}
+      <EuiText size="xs" color="subdued">
+        <p>{note}</p>
+      </EuiText>
+    </div>
+  );
+};
+
 /** Labelled neutral bar, proportional to `max`. */
 export const ComparisonBar = ({
   label,

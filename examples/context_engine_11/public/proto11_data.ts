@@ -1725,40 +1725,56 @@ export interface SampleDemo {
   question: string;
   kiIds: string[];
   withContext: { label: string; tokens: number };
-  withoutContext: { label: string; tokens: number };
+  withoutContext: { label: string; tokens: number; calls: number };
 }
 
 export const SAMPLE_DEMOS: SampleDemo[] = [
   {
-    question: 'Which hosts are saturated?',
-    kiIds: ['ki-050', 'ki-010', 'ki-060'],
-    withContext: { label: 'With Context: 1 retrieval, about 3,800 tokens', tokens: 3800 },
+    question: 'Why is checkout-api returning 5xx?',
+    kiIds: ['ki-020', 'ki-002', 'ki-040'],
+    withContext: { label: 'With Context: 1 retrieval, about 3,400 tokens', tokens: 3400 },
     withoutContext: {
-      label: 'Without Context: 6 steps across 3 indices, about 9,400 tokens',
-      tokens: 9400,
+      label: 'Without Context: 5 calls across 3 sources, about 11,200 tokens',
+      tokens: 11200,
+      calls: 5,
     },
   },
   {
-    question: 'What does event.duration mean in nginx logs?',
-    kiIds: ['ki-overview-nginx-access-2', 'ki-001', 'ki-overview-nginx-access-3'],
-    withContext: { label: 'With Context: 1 retrieval, about 2,100 tokens', tokens: 2100 },
+    question: 'Which runbook covers certificate expiry?',
+    kiIds: ['ki-digest-runbooks-1', 'ki-digest-runbooks-2', 'ki-digest-runbooks-6'],
+    withContext: { label: 'With Context: 1 retrieval, about 1,900 tokens', tokens: 1900 },
     withoutContext: {
-      label: 'Without Context: 4 steps across 2 indices, about 6,700 tokens',
-      tokens: 6700,
+      label: 'Without Context: 4 calls across 2 sources, about 6,100 tokens',
+      tokens: 6100,
+      calls: 4,
     },
   },
   {
-    question: 'Who owns the payments runbook?',
-    kiIds: ['ki-digest-runbooks-4', 'ki-020', 'ki-040'],
-    withContext: { label: 'With Context: 1 retrieval, about 2,600 tokens', tokens: 2600 },
+    question: 'Top paths by traffic today',
+    kiIds: ['ki-overview-nginx-access-4', 'ki-003', 'ki-001'],
+    withContext: { label: 'With Context: 1 retrieval, about 2,400 tokens', tokens: 2400 },
     withoutContext: {
-      label: 'Without Context: 5 steps across 2 sources, about 8,200 tokens',
-      tokens: 8200,
+      label: 'Without Context: 4 calls on 1 index, about 7,300 tokens',
+      tokens: 7300,
+      calls: 4,
     },
   },
 ];
 
-export const EXAMPLE_QUESTIONS = SAMPLE_DEMOS.map((demo) => demo.question);
+const CALL_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+
+/** Headline for a sample comparison, computed from its mock figures. */
+export const sampleDemoHeadline = ({ withContext, withoutContext }: SampleDemo): string => {
+  const saved = Math.round((1 - withContext.tokens / withoutContext.tokens) * 100);
+  const calls = CALL_WORDS[withoutContext.calls] ?? String(withoutContext.calls);
+  return `About ${saved}% fewer tokens, one call instead of ${calls}.`;
+};
+
+export const EXAMPLE_QUESTIONS = [
+  'Which hosts are saturated?',
+  'What does event.duration mean in nginx logs?',
+  'Who owns the payments runbook?',
+];
 
 export const SAMPLE_COUNTS = {
   sources: WEB_OPS_SOURCES.length,

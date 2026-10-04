@@ -11,7 +11,7 @@ import React, { useEffect, useState } from 'react';
 import { css } from '@emotion/react';
 import {
   EuiBadge,
-  EuiButton,
+  EuiButtonEmpty,
   EuiContextMenu,
   EuiFlexGroup,
   EuiFlexItem,
@@ -24,8 +24,14 @@ import {
   useEuiTheme,
 } from '@elastic/eui';
 
-import { SAMPLE_COUNTS, SAMPLE_DEMOS, sampleIndicator, type SampleDemo } from './proto11_data';
-import { ComparisonBar, KiJsonFlyout, KiPreviewCard } from './proto11_ki_preview';
+import {
+  SAMPLE_COUNTS,
+  SAMPLE_DEMOS,
+  sampleDemoHeadline,
+  sampleIndicator,
+  type SampleDemo,
+} from './proto11_data';
+import { ComparisonBlock, KiJsonFlyout, KiPreviewRow } from './proto11_ki_preview';
 import type { Proto11SampleScenario } from './proto11_types';
 
 /** Ask, first card, second card, third card, comparison. About four seconds with the slide-ins. */
@@ -53,15 +59,16 @@ export const SampleMenuButton = ({
   return (
     <EuiPopover
       button={
-        <EuiButton
+        <EuiButtonEmpty
           size="s"
+          flush="left"
           iconType="chevronSingleDown"
           iconSide="right"
           onClick={() => setOpen((isOpen) => !isOpen)}
           data-test-subj="proto11TrySample"
         >
           Explore a sample AI index
-        </EuiButton>
+        </EuiButtonEmpty>
       }
       aria-label="Sample AI indices"
       isOpen={open}
@@ -99,55 +106,60 @@ const DemoRun = ({
   onOpenIndicator: (id: string) => void;
 }) => {
   const cards = demo.kiIds.slice(0, Math.max(0, stage - 1));
-  const max = Math.max(demo.withContext.tokens, demo.withoutContext.tokens);
   return (
-    <div className="contextEnginePrototype__proto11DemoRun" aria-live="polite">
-      <div className="contextEnginePrototype__proto11Enter">
-        <EuiText size="xs">
-          <strong>Agent asks</strong>
-        </EuiText>
-        <EuiText size="s" color="subdued">
-          <p>
-            <em>{demo.question}</em>
-          </p>
-        </EuiText>
-      </div>
-      {cards.length > 0 ? (
-        <div className="contextEnginePrototype__proto11Enter">
-          <EuiText size="xs">
-            <strong>Context returns</strong>
-          </EuiText>
+    <EuiFlexGroup gutterSize="xl" alignItems="flexStart" aria-live="polite">
+      <EuiFlexItem>
+        <div className="contextEnginePrototype__proto11DemoRun">
+          <div className="contextEnginePrototype__proto11Enter">
+            <EuiText size="xs">
+              <strong>Agent asks</strong>
+            </EuiText>
+            <EuiText size="s" color="subdued">
+              <p>
+                <em>{demo.question}</em>
+              </p>
+            </EuiText>
+          </div>
+          {cards.length > 0 ? (
+            <div className="contextEnginePrototype__proto11Enter">
+              <EuiText size="xs">
+                <strong>Context returns</strong>
+              </EuiText>
+            </div>
+          ) : null}
+          {cards.map((id) => {
+            const found = sampleIndicator(id);
+            if (!found) return null;
+            const { indicator, sourceName } = found;
+            return (
+              <KiPreviewRow
+                key={id}
+                indicator={indicator}
+                sourceName={sourceName}
+                onOpen={() => onOpenIndicator(id)}
+              />
+            );
+          })}
         </div>
-      ) : null}
-      {cards.map((id) => {
-        const found = sampleIndicator(id);
-        if (!found) return null;
-        const { indicator, sourceName } = found;
-        return (
-          <KiPreviewCard
-            key={id}
-            indicator={indicator}
-            sourceName={sourceName}
-            onOpen={() => onOpenIndicator(id)}
-          />
-        );
-      })}
-      {stage >= STAGE_DELAYS_MS.length ? (
-        <div className="contextEnginePrototype__proto11Enter" data-test-subj="proto11SampleCompare">
-          <ComparisonBar label={demo.withContext.label} value={demo.withContext.tokens} max={max} />
-          <EuiSpacer size="s" />
-          <ComparisonBar
-            label={demo.withoutContext.label}
-            value={demo.withoutContext.tokens}
-            max={max}
-          />
-          <EuiSpacer size="s" />
-          <EuiText size="xs" color="subdued">
-            <p>Sample run on sample data. Your numbers will differ.</p>
-          </EuiText>
-        </div>
-      ) : null}
-    </div>
+      </EuiFlexItem>
+      <EuiFlexItem>
+        {stage >= STAGE_DELAYS_MS.length ? (
+          <div
+            className="contextEnginePrototype__proto11Enter"
+            data-test-subj="proto11SampleCompare"
+          >
+            <ComparisonBlock
+              headline={sampleDemoHeadline(demo)}
+              rows={[
+                { label: demo.withContext.label, value: demo.withContext.tokens },
+                { label: demo.withoutContext.label, value: demo.withoutContext.tokens },
+              ]}
+              note="Sample run on sample data. Your numbers will differ."
+            />
+          </div>
+        ) : null}
+      </EuiFlexItem>
+    </EuiFlexGroup>
   );
 };
 
@@ -239,9 +251,7 @@ export const Proto11SampleStrip = () => {
             ))}
           </EuiFlexGroup>
           <EuiSpacer size="m" />
-          <div className="contextEnginePrototype__proto11StripDemo">
-            <DemoRun key={demoIndex} demo={demo} stage={stage} onOpenIndicator={setOpenId} />
-          </div>
+          <DemoRun key={demoIndex} demo={demo} stage={stage} onOpenIndicator={setOpenId} />
         </>
       ) : null}
       {open ? (

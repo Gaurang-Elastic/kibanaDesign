@@ -12,6 +12,7 @@ import { css } from '@emotion/react';
 import {
   EuiBadge,
   EuiButton,
+  EuiButtonEmpty,
   EuiButtonGroup,
   EuiButtonIcon,
   EuiCheckbox,
@@ -674,7 +675,10 @@ const Composer = ({
               `}
             >
               <EuiText size="xs" color="subdued">
-                <p>You will see a proposal before anything is created.</p>
+                <p>
+                  You will see a proposal before anything is created. First results take about a
+                  minute.
+                </p>
               </EuiText>
               {proposeButton}
             </div>
@@ -749,18 +753,15 @@ export const Proto11Landing = ({
                   <SampleMenuButton onExploreSample={onExploreSample} />
                 </EuiFlexItem>
                 <EuiFlexItem grow={false}>
-                  <EuiButton size="s" onClick={onCreateEmpty} data-test-subj="proto11CreateEmpty">
+                  <EuiButtonEmpty
+                    size="s"
+                    onClick={onCreateEmpty}
+                    data-test-subj="proto11CreateEmpty"
+                  >
                     Create an empty AI index
-                  </EuiButton>
+                  </EuiButtonEmpty>
                 </EuiFlexItem>
               </EuiFlexGroup>
-              <EuiSpacer size="xs" />
-              <EuiText size="xs" color="subdued">
-                <p>
-                  About a minute to first results, from a sample of your data. Everything can be
-                  changed afterwards.
-                </p>
-              </EuiText>
             </div>
             <div className="contextEnginePrototype__proto11HeroArt">{heroArt}</div>
           </div>
