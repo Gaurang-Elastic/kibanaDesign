@@ -198,20 +198,26 @@ export const Proto11TestQuestion = ({ namespace }: { namespace: Namespace }) => 
             </EuiFlexGroup>
             <EuiSpacer size="m" />
             <ComparisonBlock
-              rows={
+              comparison={
                 hit
-                  ? [
-                      {
-                        label: `With Context, about ${result.withContext.seconds} seconds`,
-                        value: result.withContext.seconds,
+                  ? {
+                      withContext: {
+                        label: `With Context: 1 retrieval, about ${formatCount(
+                          result.withContext.tokens
+                        )} tokens`,
+                        tokens: result.withContext.tokens,
                       },
-                      {
-                        label: `Without Context, about ${result.withoutContext.seconds} seconds`,
-                        value: result.withoutContext.seconds,
+                      withoutContext: {
+                        label: `Without Context: ${
+                          result.withoutContext.steps.length
+                        } steps, about ${formatCount(result.withoutContext.tokens)} tokens`,
+                        tokens: result.withoutContext.tokens,
+                        calls: result.withoutContext.steps.length,
                       },
-                    ]
-                  : []
+                    }
+                  : undefined
               }
+              showHeadline={false}
               note={sample ? SAMPLE_NOTE : ESTIMATE_NOTE}
             />
           </EuiPanel>

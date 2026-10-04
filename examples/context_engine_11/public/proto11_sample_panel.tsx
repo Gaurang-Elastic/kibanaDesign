@@ -24,13 +24,7 @@ import {
   useEuiTheme,
 } from '@elastic/eui';
 
-import {
-  SAMPLE_COUNTS,
-  SAMPLE_DEMOS,
-  sampleDemoHeadline,
-  sampleIndicator,
-  type SampleDemo,
-} from './proto11_data';
+import { SAMPLE_COUNTS, SAMPLE_DEMOS, sampleIndicator, type SampleDemo } from './proto11_data';
 import { ComparisonBlock, KiJsonFlyout, KiPreviewRow } from './proto11_ki_preview';
 import type { Proto11SampleScenario } from './proto11_types';
 
@@ -155,11 +149,7 @@ const DemoRun = ({
                 data-test-subj="proto11SampleCompare"
               >
                 <ComparisonBlock
-                  headline={sampleDemoHeadline(demo)}
-                  rows={[
-                    { label: demo.withContext.label, value: demo.withContext.tokens },
-                    { label: demo.withoutContext.label, value: demo.withoutContext.tokens },
-                  ]}
+                  comparison={demo}
                   note="Sample run on sample data. Your numbers will differ."
                 />
               </div>

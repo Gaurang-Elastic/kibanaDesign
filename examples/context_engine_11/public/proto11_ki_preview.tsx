@@ -8,6 +8,7 @@
  */
 
 import React from 'react';
+import { css } from '@emotion/react';
 import {
   EuiBadge,
   EuiButtonEmpty,
@@ -19,14 +20,15 @@ import {
   EuiFlyoutFooter,
   EuiFlyoutHeader,
   EuiPanel,
-  EuiProgress,
   EuiSpacer,
   EuiText,
   EuiTitle,
+  useEuiTheme,
   useGeneratedHtmlId,
 } from '@elastic/eui';
 
 import { toIndicatorDocument, typeLabel, type KnowledgeIndicator } from './knowledge_indicators';
+import { comparisonHeadline, type TokenComparison } from './proto11_data';
 
 /** Small clickable KI card: title, hollow type badge, source in muted text. */
 export const KiPreviewCard = ({
@@ -99,58 +101,122 @@ export const KiPreviewRow = ({
   </EuiPanel>
 );
 
-/** Optional headline, proportional bars and the estimate or sample note under them. */
+/**
+ * Elastic brand teal, used deliberately to match the hero illustration.
+ * This is the only non-token colour in the plugin's TypeScript; the older
+ * stylesheet rules in app.scss carry their own literal fallbacks.
+ */
+const BRAND_TEAL = '#48EFCF';
+
+/** Optional headline, one ratio bar, its labels and the estimate or sample note under them. */
 export const ComparisonBlock = ({
-  headline,
-  rows,
+  comparison,
+  showHeadline = true,
   note,
 }: {
-  headline?: string;
-  rows: ReadonlyArray<{ label: string; value: number }>;
+  comparison?: TokenComparison;
+  showHeadline?: boolean;
   note: string;
+}) => (
+  <div data-test-subj="proto11Comparison">
+    {comparison ? (
+      <>
+        {showHeadline ? (
+          <>
+            <EuiTitle size="xs">
+              <h4>{comparisonHeadline(comparison)}</h4>
+            </EuiTitle>
+            <EuiSpacer size="m" />
+          </>
+        ) : null}
+        <RatioBar comparison={comparison} />
+        <EuiSpacer size="s" />
+      </>
+    ) : null}
+    <EuiText size="xs" color="subdued">
+      <p>{note}</p>
+    </EuiText>
+  </div>
+);
+
+/** Teal track for the Without Context total, filled from the left by the With Context share. */
+const RatioBar = ({
+  comparison: { withContext, withoutContext },
+}: {
+  comparison: TokenComparison;
 }) => {
-  const max = Math.max(1, ...rows.map((row) => row.value));
+  const { euiTheme } = useEuiTheme();
+  const ratio = Math.min(1, withContext.tokens / Math.max(1, withoutContext.tokens));
   return (
-    <div data-test-subj="proto11Comparison">
-      {headline ? (
-        <>
-          <EuiTitle size="xs">
-            <h4>{headline}</h4>
-          </EuiTitle>
-          <EuiSpacer size="m" />
-        </>
-      ) : null}
-      {rows.map((row) => (
-        <React.Fragment key={row.label}>
-          <ComparisonBar label={row.label} value={row.value} max={max} />
-          <EuiSpacer size="s" />
-        </React.Fragment>
-      ))}
-      <EuiText size="xs" color="subdued">
-        <p>{note}</p>
-      </EuiText>
+    <div data-test-subj="proto11RatioBar">
+      <div
+        role="img"
+        aria-label={`With Context uses about ${Math.round(
+          ratio * 100
+        )}% of the tokens used without Context`}
+        css={css`
+          height: ${euiTheme.size.xs};
+          border-radius: ${euiTheme.size.xxs};
+          background: ${BRAND_TEAL};
+          overflow: hidden;
+        `}
+      >
+        <div
+          css={css`
+            height: 100%;
+            background: ${euiTheme.colors.primary};
+          `}
+          style={{ width: `${ratio * 100}%` }}
+        />
+      </div>
+      <EuiSpacer size="s" />
+      <EuiFlexGroup gutterSize="l" alignItems="flexStart" responsive={false}>
+        <EuiFlexItem grow={false}>
+          <RatioLabel color={euiTheme.colors.primary} label={withContext.label} />
+        </EuiFlexItem>
+        <EuiFlexItem
+          css={css`
+            min-width: 0;
+          `}
+        >
+          <RatioLabel color={BRAND_TEAL} label={withoutContext.label} alignRight />
+        </EuiFlexItem>
+      </EuiFlexGroup>
     </div>
   );
 };
 
-/** Labelled neutral bar, proportional to `max`. */
-export const ComparisonBar = ({
+/** Label with a leading dot; the dot is inline so it stays beside the text when it wraps. */
+const RatioLabel = ({
+  color,
   label,
-  value,
-  max,
+  alignRight = false,
 }: {
+  color: string;
   label: string;
-  value: number;
-  max: number;
-}) => (
-  <div>
-    <EuiText size="xs">
-      <p>{label}</p>
+  alignRight?: boolean;
+}) => {
+  const { euiTheme } = useEuiTheme();
+  return (
+    <EuiText size="xs" textAlign={alignRight ? 'right' : 'left'}>
+      <p>
+        <span
+          aria-hidden="true"
+          css={css`
+            display: inline-block;
+            width: ${euiTheme.size.s};
+            height: ${euiTheme.size.s};
+            margin-right: ${euiTheme.size.xs};
+            border-radius: 50%;
+            background: ${color};
+            vertical-align: middle;
+          `}
+        />
+        {label}
+      </p>
     </EuiText>
-    <EuiSpacer size="xs" />
-    <EuiProgress value={value} max={max} size="s" color="subdued" aria-label={label} />
-  </div>
-);
+  );
+};
 
 /** KI flyout with the raw document, as stored in the AI index. */
 export const KiJsonFlyout = ({

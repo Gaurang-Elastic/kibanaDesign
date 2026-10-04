@@ -1721,11 +1721,15 @@ export const namespaceSourceFor = (id: Proto11SourceId): NamespaceSource =>
 
 // ---------- sample panel on the landing ----------
 
-export interface SampleDemo {
-  question: string;
-  kiIds: string[];
+/** With and without Context token figures behind a comparison headline and ratio bar. */
+export interface TokenComparison {
   withContext: { label: string; tokens: number };
   withoutContext: { label: string; tokens: number; calls: number };
+}
+
+export interface SampleDemo extends TokenComparison {
+  question: string;
+  kiIds: string[];
 }
 
 export const SAMPLE_DEMOS: SampleDemo[] = [
@@ -1763,8 +1767,8 @@ export const SAMPLE_DEMOS: SampleDemo[] = [
 
 const CALL_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 
-/** Headline for a sample comparison, computed from its mock figures. */
-export const sampleDemoHeadline = ({ withContext, withoutContext }: SampleDemo): string => {
+/** Headline for a comparison, computed from the same figures as its ratio bar. */
+export const comparisonHeadline = ({ withContext, withoutContext }: TokenComparison): string => {
   const saved = Math.round((1 - withContext.tokens / withoutContext.tokens) * 100);
   const calls = CALL_WORDS[withoutContext.calls] ?? String(withoutContext.calls);
   return `About ${saved}% fewer tokens, one call instead of ${calls}.`;
