@@ -108,7 +108,7 @@ export const KiPreviewRow = ({
  */
 const BRAND_TEAL = '#48EFCF';
 
-/** Optional headline, one ratio bar, its labels and the estimate or sample note under them. */
+/** Optional headline, With and Without Context bars, and the estimate or sample note under them. */
 export const ComparisonBlock = ({
   comparison,
   showHeadline = true,
@@ -129,8 +129,8 @@ export const ComparisonBlock = ({
             <EuiSpacer size="m" />
           </>
         ) : null}
-        <RatioBar comparison={comparison} />
-        <EuiSpacer size="s" />
+        <ComparisonBars comparison={comparison} />
+        <EuiSpacer size="m" />
       </>
     ) : null}
     <EuiText size="xs" color="subdued">
@@ -139,82 +139,63 @@ export const ComparisonBlock = ({
   </div>
 );
 
-/** Teal track for the Without Context total, filled from the left by the With Context share. */
-const RatioBar = ({
+/** With and Without Context bars on one scale: Without Context fills its track. */
+const ComparisonBars = ({
   comparison: { withContext, withoutContext },
 }: {
   comparison: TokenComparison;
 }) => {
   const { euiTheme } = useEuiTheme();
   const ratio = Math.min(1, withContext.tokens / Math.max(1, withoutContext.tokens));
+  const rows = [
+    {
+      label: 'With Context',
+      detail: withContext.detail,
+      share: ratio,
+      color: euiTheme.colors.primary,
+    },
+    { label: 'Without Context', detail: withoutContext.detail, share: 1, color: BRAND_TEAL },
+  ];
   return (
-    <div data-test-subj="proto11RatioBar">
-      <div
-        role="img"
-        aria-label={`With Context uses about ${Math.round(
-          ratio * 100
-        )}% of the tokens used without Context`}
-        css={css`
-          height: ${euiTheme.size.xs};
-          border-radius: ${euiTheme.size.xxs};
-          background: ${BRAND_TEAL};
-          overflow: hidden;
-        `}
-      >
-        <div
-          css={css`
-            height: 100%;
-            background: ${euiTheme.colors.primary};
-          `}
-          style={{ width: `${ratio * 100}%` }}
-        />
-      </div>
-      <EuiSpacer size="s" />
-      <EuiFlexGroup gutterSize="l" alignItems="flexStart" responsive={false}>
-        <EuiFlexItem grow={false}>
-          <RatioLabel color={euiTheme.colors.primary} label={withContext.label} />
-        </EuiFlexItem>
-        <EuiFlexItem
-          css={css`
-            min-width: 0;
-          `}
-        >
-          <RatioLabel color={BRAND_TEAL} label={withoutContext.label} alignRight />
-        </EuiFlexItem>
-      </EuiFlexGroup>
+    <div
+      data-test-subj="proto11ComparisonBars"
+      css={css`
+        display: grid;
+        grid-template-columns: 110px minmax(${euiTheme.size.xxxxl}, 1fr) auto;
+        align-items: center;
+        column-gap: ${euiTheme.size.m};
+        row-gap: ${euiTheme.size.s};
+      `}
+    >
+      {rows.map(({ label, detail, share, color }) => (
+        <React.Fragment key={label}>
+          <EuiText size="xs">
+            <p>{label}</p>
+          </EuiText>
+          <div
+            role="img"
+            aria-label={`${label}: ${detail}`}
+            css={css`
+              height: ${euiTheme.size.xs};
+              border-radius: ${euiTheme.size.xxs};
+              background: ${euiTheme.colors.lightShade};
+              overflow: hidden;
+            `}
+          >
+            <div
+              css={css`
+                height: 100%;
+                background: ${color};
+              `}
+              style={{ width: `${share * 100}%` }}
+            />
+          </div>
+          <EuiText size="xs">
+            <p>{detail}</p>
+          </EuiText>
+        </React.Fragment>
+      ))}
     </div>
-  );
-};
-
-/** Label with a leading dot; the dot is inline so it stays beside the text when it wraps. */
-const RatioLabel = ({
-  color,
-  label,
-  alignRight = false,
-}: {
-  color: string;
-  label: string;
-  alignRight?: boolean;
-}) => {
-  const { euiTheme } = useEuiTheme();
-  return (
-    <EuiText size="xs" textAlign={alignRight ? 'right' : 'left'}>
-      <p>
-        <span
-          aria-hidden="true"
-          css={css`
-            display: inline-block;
-            width: ${euiTheme.size.s};
-            height: ${euiTheme.size.s};
-            margin-right: ${euiTheme.size.xs};
-            border-radius: 50%;
-            background: ${color};
-            vertical-align: middle;
-          `}
-        />
-        {label}
-      </p>
-    </EuiText>
   );
 };
 

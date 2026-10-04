@@ -202,15 +202,15 @@ export const Proto11TestQuestion = ({ namespace }: { namespace: Namespace }) => 
                 hit
                   ? {
                       withContext: {
-                        label: `With Context: 1 retrieval, about ${formatCount(
+                        detail: `1 retrieval, about ${formatCount(
                           result.withContext.tokens
                         )} tokens`,
                         tokens: result.withContext.tokens,
                       },
                       withoutContext: {
-                        label: `Without Context: ${
-                          result.withoutContext.steps.length
-                        } steps, about ${formatCount(result.withoutContext.tokens)} tokens`,
+                        detail: `${result.withoutContext.steps.length} steps, about ${formatCount(
+                          result.withoutContext.tokens
+                        )} tokens`,
                         tokens: result.withoutContext.tokens,
                         calls: result.withoutContext.steps.length,
                       },

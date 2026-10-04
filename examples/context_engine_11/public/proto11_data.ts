@@ -1721,10 +1721,10 @@ export const namespaceSourceFor = (id: Proto11SourceId): NamespaceSource =>
 
 // ---------- sample panel on the landing ----------
 
-/** With and without Context token figures behind a comparison headline and ratio bar. */
+/** With and without Context token figures behind a comparison headline and its bars. */
 export interface TokenComparison {
-  withContext: { label: string; tokens: number };
-  withoutContext: { label: string; tokens: number; calls: number };
+  withContext: { detail: string; tokens: number };
+  withoutContext: { detail: string; tokens: number; calls: number };
 }
 
 export interface SampleDemo extends TokenComparison {
@@ -1736,9 +1736,9 @@ export const SAMPLE_DEMOS: SampleDemo[] = [
   {
     question: 'Why is checkout-api returning 5xx?',
     kiIds: ['ki-020', 'ki-002', 'ki-040'],
-    withContext: { label: 'With Context: 1 retrieval, about 3,400 tokens', tokens: 3400 },
+    withContext: { detail: '1 retrieval, about 3,400 tokens', tokens: 3400 },
     withoutContext: {
-      label: 'Without Context: 5 calls across 3 sources, about 11,200 tokens',
+      detail: '5 calls across 3 sources, about 11,200 tokens',
       tokens: 11200,
       calls: 5,
     },
@@ -1746,9 +1746,9 @@ export const SAMPLE_DEMOS: SampleDemo[] = [
   {
     question: 'Which runbook covers certificate expiry?',
     kiIds: ['ki-digest-runbooks-1', 'ki-digest-runbooks-2', 'ki-digest-runbooks-6'],
-    withContext: { label: 'With Context: 1 retrieval, about 1,900 tokens', tokens: 1900 },
+    withContext: { detail: '1 retrieval, about 1,900 tokens', tokens: 1900 },
     withoutContext: {
-      label: 'Without Context: 4 calls across 2 sources, about 6,100 tokens',
+      detail: '4 calls across 2 sources, about 6,100 tokens',
       tokens: 6100,
       calls: 4,
     },
@@ -1756,9 +1756,9 @@ export const SAMPLE_DEMOS: SampleDemo[] = [
   {
     question: 'Top paths by traffic today',
     kiIds: ['ki-overview-nginx-access-4', 'ki-003', 'ki-001'],
-    withContext: { label: 'With Context: 1 retrieval, about 2,400 tokens', tokens: 2400 },
+    withContext: { detail: '1 retrieval, about 2,400 tokens', tokens: 2400 },
     withoutContext: {
-      label: 'Without Context: 4 calls on 1 index, about 7,300 tokens',
+      detail: '4 calls on 1 index, about 7,300 tokens',
       tokens: 7300,
       calls: 4,
     },
