@@ -646,14 +646,7 @@ const Composer = ({
           </div>
         ) : (
           <>
-            <div
-              css={css`
-                ${railCss}
-                border-bottom: ${euiTheme.border.thin};
-              `}
-            >
-              {scopes}
-            </div>
+            <div css={railCss}>{scopes}</div>
             {field}
             <div
               css={css`
