@@ -53,8 +53,8 @@ import {
   type CreateFromGoalOptions,
   type Proto11Proposal,
 } from './proto11_data';
-import { Proto11SampleStrip, SampleMenuButton } from './proto11_sample_panel';
-import type { Proto11SampleScenario, Proto11SourceId } from './proto11_types';
+import { Proto11SampleStrip, SampleMenuButton, type ExploreSample } from './proto11_sample_panel';
+import type { Proto11SourceId } from './proto11_types';
 import { TraceRow } from './traces_panel';
 import heroTexture from './assets/context_hero_texture.svg';
 
@@ -738,7 +738,7 @@ export const Proto11Landing = ({
   takenNames: string[];
   onCreateFromGoal: (options: Omit<CreateFromGoalOptions, 'takenNames'>) => void;
   onCreateEmpty: () => void;
-  onExploreSample: (scenario: Proto11SampleScenario) => void;
+  onExploreSample: ExploreSample;
 }) => {
   if (variant === 'compact') {
     return (
@@ -802,7 +802,7 @@ export const Proto11Landing = ({
             </div>
           </div>
         </EuiPanel>
-        <Proto11SampleStrip />
+        <Proto11SampleStrip onExploreSample={onExploreSample} />
       </EuiPanel>
       <EuiSpacer size="xl" />
       {indexGrid}

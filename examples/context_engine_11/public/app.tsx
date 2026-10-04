@@ -854,10 +854,10 @@ function ContextEngineApp({
     openDetail(created);
   };
 
-  const trySample = (scenario: Proto11SampleScenario) => {
+  const trySample = (scenario: Proto11SampleScenario, tab: DetailTab = 'overview') => {
     const existing = namespaces.find((item) => sampleScenarioOf(item) === scenario);
     if (existing) {
-      openDetail(existing);
+      openDetail(existing, tab);
       return;
     }
     const created = createSampleNamespace(scenario);
@@ -865,7 +865,7 @@ function ContextEngineApp({
       created,
       ...current.filter((item) => item.name !== sampleNameFor(scenario)),
     ]);
-    openDetail(created);
+    openDetail(created, tab);
   };
 
   const removeSample = (namespaceName: string) => {

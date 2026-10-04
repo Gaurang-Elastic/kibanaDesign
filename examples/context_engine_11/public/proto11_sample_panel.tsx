@@ -24,19 +24,79 @@ import {
   useEuiTheme,
 } from '@elastic/eui';
 
-import { SAMPLE_COUNTS, SAMPLE_DEMOS, sampleIndicator, type SampleDemo } from './proto11_data';
+import {
+  SAMPLE_COUNTS,
+  SAMPLE_DEMOS,
+  SAMPLE_INDEX_NAME,
+  TEMPLATES,
+  WEB_OPS_SOURCES,
+  sampleIndicator,
+  type SampleDemo,
+} from './proto11_data';
 import { ComparisonBlock, KiJsonFlyout, KiPreviewRow } from './proto11_ki_preview';
 import type { Proto11SampleScenario } from './proto11_types';
 
 /** Ask, first card, second card, third card, comparison. About four seconds with the slide-ins. */
 const STAGE_DELAYS_MS = [0, 800, 1500, 2200, 3200];
 
-const PIPELINE: Array<{ icon: string; label: string; count?: number }> = [
-  { icon: 'database', label: 'Sources', count: SAMPLE_COUNTS.sources },
-  { icon: 'bolt', label: 'Automations', count: SAMPLE_COUNTS.automations },
-  { icon: 'tableSparkles', label: 'Knowledge Indicators', count: SAMPLE_COUNTS.indicators },
-  { icon: 'productAgent', label: 'Agent' },
+type PipelineId = 'sources' | 'automations' | 'indicators' | 'agent';
+
+const PIPELINE: Array<{ id: PipelineId; icon: string; label: string; count?: number }> = [
+  { id: 'sources', icon: 'database', label: 'Sources', count: SAMPLE_COUNTS.sources },
+  { id: 'automations', icon: 'bolt', label: 'Automations', count: SAMPLE_COUNTS.automations },
+  {
+    id: 'indicators',
+    icon: 'tableSparkles',
+    label: 'Knowledge Indicators',
+    count: SAMPLE_COUNTS.indicators,
+  },
+  { id: 'agent', icon: 'productAgent', label: 'Agent' },
 ];
+
+const SAMPLE_AGENT_NAME = 'web-ops-assistant';
+
+/** Opens a sample AI index, on the Knowledge Indicators tab when asked. */
+export type ExploreSample = (
+  scenario: Proto11SampleScenario,
+  tab?: 'overview' | 'knowledge'
+) => void;
+
+const PipelinePopoverBody = ({ id }: { id: PipelineId }) => {
+  if (id === 'sources') {
+    return (
+      <EuiFlexGroup direction="column" gutterSize="s" responsive={false}>
+        {WEB_OPS_SOURCES.map((source) => (
+          <EuiFlexItem key={source.id}>
+            <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+              <EuiFlexItem>
+                <EuiText size="xs">{source.name}</EuiText>
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiBadge color="hollow">{source.kind}</EuiBadge>
+              </EuiFlexItem>
+            </EuiFlexGroup>
+          </EuiFlexItem>
+        ))}
+      </EuiFlexGroup>
+    );
+  }
+  if (id === 'automations') {
+    return (
+      <EuiFlexGroup direction="column" gutterSize="s" responsive={false}>
+        {[TEMPLATES.overview.title, TEMPLATES.digest.title].map((title) => (
+          <EuiFlexItem key={title}>
+            <EuiText size="xs">{title}</EuiText>
+          </EuiFlexItem>
+        ))}
+      </EuiFlexGroup>
+    );
+  }
+  return (
+    <EuiText size="xs">
+      <p>{SAMPLE_AGENT_NAME}, sample agent, no retrievals recorded</p>
+    </EuiText>
+  );
+};
 
 export const SAMPLE_MENU: ReadonlyArray<{ scenario: Proto11SampleScenario; label: string }> = [
   { scenario: 'web-ops', label: 'Web operations' },
@@ -154,9 +214,10 @@ const DemoRun = ({
 };
 
 /** Footer band of the landing hero: the sample pipeline, with the live demo on request. */
-export const Proto11SampleStrip = () => {
+export const Proto11SampleStrip = ({ onExploreSample }: { onExploreSample: ExploreSample }) => {
   const { euiTheme } = useEuiTheme();
   const [expanded, setExpanded] = useState(false);
+  const [openPopover, setOpenPopover] = useState<PipelineId | null>(null);
   const [demoIndex, setDemoIndex] = useState(0);
   const [stage, setStage] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -201,11 +262,62 @@ export const Proto11SampleStrip = () => {
                   <EuiIcon type={node.icon} size="m" aria-hidden={true} />
                 </EuiFlexItem>
                 <EuiFlexItem grow={false}>
-                  <EuiText size="xs">{node.label}</EuiText>
+                  {node.id === 'agent' ? (
+                    <EuiPopover
+                      button={
+                        <EuiLink
+                          color="text"
+                          onClick={() => setOpenPopover(openPopover === 'agent' ? null : 'agent')}
+                          aria-label="Show the sample agent"
+                          data-test-subj="proto11SamplePipeline-agent"
+                        >
+                          <EuiText size="xs">{node.label}</EuiText>
+                        </EuiLink>
+                      }
+                      aria-label="Sample agent"
+                      isOpen={openPopover === 'agent'}
+                      closePopover={() => setOpenPopover(null)}
+                      panelPaddingSize="s"
+                      anchorPosition="downCenter"
+                    >
+                      <PipelinePopoverBody id="agent" />
+                    </EuiPopover>
+                  ) : (
+                    <EuiText size="xs">{node.label}</EuiText>
+                  )}
                 </EuiFlexItem>
                 {node.count !== undefined ? (
                   <EuiFlexItem grow={false}>
-                    <EuiBadge color="hollow">{node.count}</EuiBadge>
+                    {node.id === 'indicators' ? (
+                      <EuiBadge
+                        color="hollow"
+                        onClick={() => onExploreSample('web-ops', 'knowledge')}
+                        onClickAriaLabel={`Open the Knowledge Indicators of ${SAMPLE_INDEX_NAME}`}
+                        data-test-subj="proto11SamplePipeline-indicators"
+                      >
+                        {node.count}
+                      </EuiBadge>
+                    ) : (
+                      <EuiPopover
+                        button={
+                          <EuiBadge
+                            color="hollow"
+                            onClick={() => setOpenPopover(openPopover === node.id ? null : node.id)}
+                            onClickAriaLabel={`Show the sample ${node.label.toLowerCase()}`}
+                            data-test-subj={`proto11SamplePipeline-${node.id}`}
+                          >
+                            {node.count}
+                          </EuiBadge>
+                        }
+                        aria-label={`Sample ${node.label.toLowerCase()}`}
+                        isOpen={openPopover === node.id}
+                        closePopover={() => setOpenPopover(null)}
+                        panelPaddingSize="s"
+                        anchorPosition="downCenter"
+                      >
+                        <PipelinePopoverBody id={node.id} />
+                      </EuiPopover>
+                    )}
                   </EuiFlexItem>
                 ) : null}
               </EuiFlexGroup>
@@ -223,6 +335,19 @@ export const Proto11SampleStrip = () => {
           </EuiLink>
         </EuiFlexItem>
       </EuiFlexGroup>
+      <EuiSpacer size="xs" />
+      <EuiText size="xs" color="subdued" data-test-subj="proto11SampleProvenance">
+        <p>
+          From the sample AI index{' '}
+          <EuiLink
+            onClick={() => onExploreSample('web-ops')}
+            data-test-subj="proto11SampleIndexLink"
+          >
+            {SAMPLE_INDEX_NAME}
+          </EuiLink>
+          , used by the sample agent {SAMPLE_AGENT_NAME}.
+        </p>
+      </EuiText>
       {expanded ? (
         <>
           <EuiSpacer size="m" />
