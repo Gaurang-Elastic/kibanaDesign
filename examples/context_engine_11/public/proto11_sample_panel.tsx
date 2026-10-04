@@ -11,7 +11,7 @@ import React, { useEffect, useState } from 'react';
 import { css } from '@emotion/react';
 import {
   EuiBadge,
-  EuiButtonEmpty,
+  EuiButton,
   EuiContextMenu,
   EuiFlexGroup,
   EuiFlexItem,
@@ -53,15 +53,16 @@ export const SampleMenuButton = ({
   return (
     <EuiPopover
       button={
-        <EuiButtonEmpty
+        <EuiButton
           size="s"
+          color="text"
           iconType="chevronSingleDown"
           iconSide="right"
           onClick={() => setOpen((isOpen) => !isOpen)}
           data-test-subj="proto11TrySample"
         >
           Explore a sample AI index
-        </EuiButtonEmpty>
+        </EuiButton>
       }
       aria-label="Sample AI indices"
       isOpen={open}

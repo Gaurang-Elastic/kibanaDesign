@@ -12,7 +12,6 @@ import { css } from '@emotion/react';
 import {
   EuiBadge,
   EuiButton,
-  EuiButtonEmpty,
   EuiButtonGroup,
   EuiButtonIcon,
   EuiCheckbox,
@@ -786,13 +785,14 @@ export const Proto11Landing = ({
                   <SampleMenuButton onExploreSample={onExploreSample} />
                 </EuiFlexItem>
                 <EuiFlexItem grow={false}>
-                  <EuiButtonEmpty
+                  <EuiButton
                     size="s"
+                    color="text"
                     onClick={onCreateEmpty}
                     data-test-subj="proto11CreateEmpty"
                   >
                     Create an empty AI index
-                  </EuiButtonEmpty>
+                  </EuiButton>
                 </EuiFlexItem>
               </EuiFlexGroup>
             </div>
