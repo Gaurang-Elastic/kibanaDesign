@@ -8,9 +8,11 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { css } from '@emotion/react';
 import {
   EuiBadge,
-  EuiContextMenuItem,
+  EuiButton,
+  EuiContextMenu,
   EuiFlexGroup,
   EuiFlexItem,
   EuiIcon,
@@ -19,6 +21,7 @@ import {
   EuiPopover,
   EuiSpacer,
   EuiText,
+  useEuiTheme,
 } from '@elastic/eui';
 
 import { SAMPLE_COUNTS, SAMPLE_DEMOS, sampleIndicator, type SampleDemo } from './proto11_data';
@@ -35,13 +38,13 @@ const PIPELINE: Array<{ icon: string; label: string; count?: number }> = [
   { icon: 'productAgent', label: 'Agent' },
 ];
 
-const SAMPLE_MENU: Array<{ scenario: Proto11SampleScenario; label: string }> = [
+export const SAMPLE_MENU: ReadonlyArray<{ scenario: Proto11SampleScenario; label: string }> = [
   { scenario: 'web-ops', label: 'Web operations' },
   { scenario: 'higher-ed', label: 'Higher education' },
 ];
 
-/** Quiet link that opens the sample dataset menu. */
-export const SampleMenuLink = ({
+/** Secondary button that opens the sample dataset menu. */
+export const SampleMenuButton = ({
   onExploreSample,
 }: {
   onExploreSample: (scenario: Proto11SampleScenario) => void;
@@ -50,9 +53,15 @@ export const SampleMenuLink = ({
   return (
     <EuiPopover
       button={
-        <EuiLink onClick={() => setOpen((isOpen) => !isOpen)} data-test-subj="proto11TrySample">
-          Explore a sample AI index <EuiIcon type="chevronSingleDown" size="s" aria-hidden={true} />
-        </EuiLink>
+        <EuiButton
+          size="s"
+          iconType="chevronSingleDown"
+          iconSide="right"
+          onClick={() => setOpen((isOpen) => !isOpen)}
+          data-test-subj="proto11TrySample"
+        >
+          Explore a sample AI index
+        </EuiButton>
       }
       aria-label="Sample AI indices"
       isOpen={open}
@@ -60,20 +69,22 @@ export const SampleMenuLink = ({
       panelPaddingSize="none"
       anchorPosition="downLeft"
     >
-      <div>
-        {SAMPLE_MENU.map(({ scenario, label }) => (
-          <EuiContextMenuItem
-            key={scenario}
-            onClick={() => {
-              setOpen(false);
-              onExploreSample(scenario);
-            }}
-            data-test-subj={`proto11Sample-${scenario}`}
-          >
-            {label}
-          </EuiContextMenuItem>
-        ))}
-      </div>
+      <EuiContextMenu
+        initialPanelId={0}
+        panels={[
+          {
+            id: 0,
+            items: SAMPLE_MENU.map(({ scenario, label }) => ({
+              name: label,
+              onClick: () => {
+                setOpen(false);
+                onExploreSample(scenario);
+              },
+              'data-test-subj': `proto11Sample-${scenario}`,
+            })),
+          },
+        ]}
+      />
     </EuiPopover>
   );
 };
@@ -140,8 +151,9 @@ const DemoRun = ({
   );
 };
 
-/** Quiet strip under the landing hero: the sample pipeline, with the live demo on request. */
+/** Footer band of the landing hero: the sample pipeline, with the live demo on request. */
 export const Proto11SampleStrip = () => {
+  const { euiTheme } = useEuiTheme();
   const [expanded, setExpanded] = useState(false);
   const [demoIndex, setDemoIndex] = useState(0);
   const [stage, setStage] = useState(0);
@@ -160,8 +172,17 @@ export const Proto11SampleStrip = () => {
   const open = openId ? sampleIndicator(openId) : undefined;
 
   return (
-    <EuiPanel color="subdued" paddingSize="m" data-test-subj="proto11SampleStrip">
-      <EuiFlexGroup gutterSize="m" alignItems="center" responsive={false} wrap>
+    <EuiPanel
+      color="subdued"
+      paddingSize="m"
+      hasShadow={false}
+      borderRadius="none"
+      css={css`
+        border-top: ${euiTheme.border.thin};
+      `}
+      data-test-subj="proto11SampleStrip"
+    >
+      <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
         <EuiFlexItem grow={false}>
           <EuiBadge color="hollow">Sample</EuiBadge>
         </EuiFlexItem>

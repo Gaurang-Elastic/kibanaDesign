@@ -1492,9 +1492,6 @@ html {
 }
 
 .contextEnginePrototype__proto11Landing {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
   margin-inline: auto;
   max-width: 1280px;
   width: 100%;
@@ -1507,9 +1504,13 @@ html {
 }
 
 .contextEnginePrototype__proto11HeroArt {
-  flex: 0 0 280px;
+  display: flex;
+  flex: 0 1 38%;
+  justify-content: center;
+  max-width: 320px;
 
-  img {
+  img,
+  svg {
     display: block;
     height: auto;
     max-width: 100%;
@@ -1521,14 +1522,37 @@ html {
 }
 
 .contextEnginePrototype__proto11HeroContent {
-  flex: 1 1 auto;
+  flex: 1 1 62%;
   min-width: 0;
 }
 
-.contextEnginePrototype__proto11Composer {
+.contextEnginePrototype__proto11ComposerRow {
+  align-items: center;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.contextEnginePrototype__proto11ComposerRowScopes,
+.contextEnginePrototype__proto11ComposerRowAction {
+  flex: 0 0 auto;
+}
+
+.contextEnginePrototype__proto11ComposerRowField {
+  flex: 1 1 240px;
+  min-width: 240px;
+}
+
+.contextEnginePrototype__proto11ScopeLabel {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  max-width: 260px;
+}
+
+.contextEnginePrototype__proto11ScopeText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .contextEnginePrototype__proto11Attachments {
@@ -1540,10 +1564,6 @@ html {
     min-height: 32px;
     padding: 2px 4px 2px 10px;
   }
-}
-
-.contextEnginePrototype__proto11ComposerField {
-  min-width: 280px;
 }
 
 .contextEnginePrototype__proto11AttachPopover {

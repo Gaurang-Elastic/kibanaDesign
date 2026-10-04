@@ -94,6 +94,7 @@ import {
 } from './proto11_data';
 import { Proto11ConnectedAgentsPanel } from './proto11_agents_panel';
 import { Proto11Landing } from './proto11_landing';
+import { SAMPLE_MENU } from './proto11_sample_panel';
 import {
   Proto11FixFlyout,
   Proto11RejectedNotice,
@@ -1485,11 +1486,32 @@ function ContextEngineApp({
 
     if (proto11On) {
       const own = visibleNamespaces.filter((item) => !item.managed);
+      const proto11Menu: AppHeaderMenu =
+        own.length === 0
+          ? createIndexMenu
+          : {
+              ...createIndexMenu,
+              items: [
+                {
+                  id: 'explore-sample',
+                  label: 'Explore a sample AI index',
+                  iconType: 'flask',
+                  overflow: true,
+                  testId: 'proto11HeaderSample',
+                  items: SAMPLE_MENU.map(({ scenario, label }) => ({
+                    id: `sample-${scenario}`,
+                    label,
+                    run: () => trySample(scenario),
+                    testId: `proto11HeaderSample-${scenario}`,
+                  })),
+                },
+              ],
+            };
       return (
         <>
           <PageHeader
             title="Context"
-            menu={createIndexMenu}
+            menu={proto11Menu}
             badges={proto11HeaderBadges}
             sectionClassName="contextEnginePrototype__headerSection--quietCreate"
           />
@@ -1499,10 +1521,10 @@ function ContextEngineApp({
               variant={own.length === 0 ? 'hero' : 'compact'}
               heroArt={
                 typeof (isDarkMode ? heroDark : heroLight) === 'string' ? (
-                  <img src={isDarkMode ? heroDark : heroLight} alt="" width={280} />
+                  <img src={isDarkMode ? heroDark : heroLight} alt="" width={320} />
                 ) : (
                   React.createElement(isDarkMode ? heroDark : heroLight, {
-                    width: 280,
+                    width: 320,
                     height: 'auto',
                     role: 'img',
                     'aria-hidden': true,
