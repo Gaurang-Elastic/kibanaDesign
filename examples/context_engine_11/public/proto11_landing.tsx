@@ -10,6 +10,7 @@
 import React, { useRef, useState } from 'react';
 import { css } from '@emotion/react';
 import {
+  EuiAvatar,
   EuiBadge,
   EuiButton,
   EuiButtonGroup,
@@ -23,8 +24,11 @@ import {
   EuiFlexGroup,
   EuiFlexItem,
   EuiFormRow,
+  EuiHorizontalRule,
   EuiIcon,
   EuiLink,
+  EuiListGroup,
+  EuiListGroupItem,
   EuiPanel,
   EuiPopover,
   EuiSelect,
@@ -40,16 +44,17 @@ import {
 } from '@elastic/eui';
 
 import {
-  ELASTIC_AGENT_OPTIONS,
   EXAMPLE_QUESTIONS,
   GENAI_TRACE_OPTIONS,
   TEMPLATES,
   WEB_OPS_SOURCES,
   goalById,
   namespaceSourceFor,
+  pickerAgents,
   proposeFromComposer,
   traceQuestionsFor,
   type ComposerInput,
+  type PickerAgent,
   type CreateFromGoalOptions,
   type Proto11Proposal,
 } from './proto11_data';
@@ -241,6 +246,85 @@ const ScopeLabel = ({ icon, children }: { icon: string; children: React.ReactNod
   </span>
 );
 
+/** Agent Builder style avatar: Elastic logo for managed agents, initials for custom ones. */
+const PickerAgentAvatar = ({ agent: { name, managed } }: { agent: PickerAgent }) => {
+  const { euiTheme } = useEuiTheme();
+  const ringCss = css`
+    border: ${euiTheme.border.width.thin} solid ${euiTheme.colors.borderBaseSubdued};
+    border-radius: 50%;
+  `;
+  if (!managed) {
+    return <EuiAvatar size="s" type="user" name={name} css={ringCss} aria-hidden={true} />;
+  }
+  return (
+    <span
+      aria-hidden="true"
+      css={[
+        ringCss,
+        css`
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          inline-size: ${euiTheme.size.l};
+          block-size: ${euiTheme.size.l};
+        `,
+      ]}
+    >
+      <EuiIcon type="logoElastic" size="m" aria-hidden={true} />
+    </span>
+  );
+};
+
+const PickerAgentList = ({
+  selected,
+  onSelect,
+}: {
+  selected: string;
+  onSelect: (name: string) => void;
+}) => {
+  const { euiTheme } = useEuiTheme();
+  const { traced, untraced } = pickerAgents();
+  const renderItems = (agents: PickerAgent[]) =>
+    agents.map((agent) => (
+      <EuiListGroupItem
+        key={agent.name}
+        icon={<PickerAgentAvatar agent={agent} />}
+        isActive={agent.name === selected}
+        onClick={() => onSelect(agent.name)}
+        data-test-subj="proto11AgentPickerItem"
+        label={
+          <>
+            {agent.name}
+            {agent.traceSummary ? (
+              <EuiTextColor color="subdued">{`, ${agent.traceSummary}`}</EuiTextColor>
+            ) : null}
+          </>
+        }
+      />
+    ));
+  return (
+    <div data-test-subj="proto11AgentPicker">
+      <EuiListGroup maxWidth={false}>{renderItems(traced)}</EuiListGroup>
+      {untraced.length > 0 ? (
+        <>
+          <EuiHorizontalRule margin="xs" />
+          <EuiText
+            size="xs"
+            color="subdued"
+            css={css`
+              padding: ${euiTheme.size.xs} ${euiTheme.size.s};
+            `}
+          >
+            No traces yet
+          </EuiText>
+          <EuiListGroup maxWidth={false}>{renderItems(untraced)}</EuiListGroup>
+        </>
+      ) : null}
+    </div>
+  );
+};
+
 const AgentScope = ({
   agent,
   onChange,
@@ -252,8 +336,10 @@ const AgentScope = ({
   const [selector, setSelector] = useState<TraceSelector>(
     agent?.traceType === 'index' ? 'genai_libraries' : 'elastic_agents'
   );
-  const options = selector === 'elastic_agents' ? ELASTIC_AGENT_OPTIONS : GENAI_TRACE_OPTIONS;
-  const selected = agent && options.includes(agent.name) ? agent.name : '';
+  const selected =
+    agent && agent.traceType === (selector === 'elastic_agents' ? 'elastic_agent' : 'index')
+      ? agent.name
+      : '';
   return (
     <EuiPopover
       button={
@@ -285,23 +371,30 @@ const AgentScope = ({
           onChange={(id) => setSelector(id as TraceSelector)}
         />
         <EuiSpacer size="s" />
-        <EuiSelect
-          key={selector}
-          compressed
-          fullWidth
-          hasNoInitialSelection
-          value={selected}
-          options={options.map((value) => ({ value, text: value }))}
-          onChange={(event) => {
-            setOpen(false);
-            onChange({
-              name: event.target.value,
-              traceType: selector === 'elastic_agents' ? 'elastic_agent' : 'index',
-            });
-          }}
-          aria-label={selector === 'elastic_agents' ? 'Agent' : 'Trace index or data stream'}
-          data-test-subj="proto11AttachAgentSelect"
-        />
+        {selector === 'elastic_agents' ? (
+          <PickerAgentList
+            selected={selected}
+            onSelect={(name) => {
+              setOpen(false);
+              onChange({ name, traceType: 'elastic_agent' });
+            }}
+          />
+        ) : (
+          <EuiSelect
+            key={selector}
+            compressed
+            fullWidth
+            hasNoInitialSelection
+            value={selected}
+            options={GENAI_TRACE_OPTIONS.map((value) => ({ value, text: value }))}
+            onChange={(event) => {
+              setOpen(false);
+              onChange({ name: event.target.value, traceType: 'index' });
+            }}
+            aria-label="Trace index or data stream"
+            data-test-subj="proto11AttachAgentSelect"
+          />
+        )}
         {agent ? (
           <>
             <EuiSpacer size="s" />

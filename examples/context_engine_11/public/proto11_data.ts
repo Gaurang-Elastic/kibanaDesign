@@ -325,6 +325,50 @@ export const ELASTIC_AGENT_OPTIONS = [
 ];
 export const GENAI_TRACE_OPTIONS = ['traces-genai.otel-default'];
 
+/** Agent Builder agent as listed in the composer's Agent picker, with its trace summary. */
+export interface PickerAgent {
+  name: string;
+  /** Elastic-managed agents show the Elastic logo; custom agents show initials. */
+  managed: boolean;
+  failed: number;
+  traces: number;
+  traceSummary?: string;
+}
+
+const PICKER_AGENTS: PickerAgent[] = [
+  {
+    name: 'Significant Events Judge',
+    managed: true,
+    failed: 7,
+    traces: 7,
+    traceSummary: '7 failed in 7 days',
+  },
+  { name: 'web-ops-assistant', managed: false, failed: 4, traces: 4, traceSummary: '4 failed' },
+  {
+    name: 'Streams Investigator',
+    managed: true,
+    failed: 2,
+    traces: 12,
+    traceSummary: '12 questions, 2 failed',
+  },
+  { name: 'Elastic AI Agent', managed: true, failed: 0, traces: 0 },
+  { name: 'Significant Events Discovery', managed: true, failed: 0, traces: 0 },
+  { name: 'loyalty-support-agent', managed: false, failed: 0, traces: 0 },
+];
+
+const byName = (a: PickerAgent, b: PickerAgent) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+
+/** Picker agents by failed questions, then total traces, then name; untraced agents split out. */
+export const pickerAgents = (): { traced: PickerAgent[]; untraced: PickerAgent[] } => {
+  const sorted = [...PICKER_AGENTS].sort(
+    (a, b) => b.failed - a.failed || b.traces - a.traces || byName(a, b)
+  );
+  return {
+    traced: sorted.filter((agent) => agent.traces > 0),
+    untraced: sorted.filter((agent) => agent.traces === 0),
+  };
+};
+
 export interface TraceQuestion {
   question: string;
   badge: string;
@@ -377,6 +421,21 @@ const TRACE_QUESTIONS: Record<string, TraceQuestion[]> = {
       question: 'p95 latency for search-api',
       badge: 'slow, 5 steps',
       topic: 'latency',
+      sourceIds: ['nginx-access'],
+    },
+  ],
+  'Streams Investigator': [
+    {
+      question: 'Which streams changed their schema this week?',
+      badge: 'failed 2 times',
+      topic: 'stream schemas',
+      failures: 2,
+      sourceIds: ['k8s', 'nginx-error'],
+    },
+    {
+      question: 'Error rate for checkout-api',
+      badge: 'slow, 5 steps',
+      topic: 'checkout-api',
       sourceIds: ['nginx-access'],
     },
   ],
