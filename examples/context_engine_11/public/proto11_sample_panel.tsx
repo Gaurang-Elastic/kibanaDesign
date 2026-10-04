@@ -101,10 +101,9 @@ const DemoRun = ({
 }) => {
   const { euiTheme } = useEuiTheme();
   const cards = demo.kiIds.slice(0, Math.max(0, stage - 1));
-  const headlineLineCss = css`
-    display: flex;
-    align-items: center;
-    min-height: ${euiTheme.size.l};
+  // Puts the headline text on the same line as the first Knowledge Indicator row's title.
+  const compareCss = css`
+    padding-top: calc(${euiTheme.size.xs} + ${euiTheme.size.xxs});
   `;
   return (
     <div className="contextEnginePrototype__proto11DemoRun" aria-live="polite">
@@ -119,14 +118,16 @@ const DemoRun = ({
         </EuiText>
       </div>
       {cards.length > 0 ? (
+        <div className="contextEnginePrototype__proto11Enter">
+          <EuiText size="xs">
+            <strong>Context returns</strong>
+          </EuiText>
+        </div>
+      ) : null}
+      {cards.length > 0 ? (
         <EuiFlexGroup gutterSize="xl" alignItems="flexStart">
           <EuiFlexItem>
             <div className="contextEnginePrototype__proto11DemoRun">
-              <div className="contextEnginePrototype__proto11Enter" css={headlineLineCss}>
-                <EuiText size="xs">
-                  <strong>Context returns</strong>
-                </EuiText>
-              </div>
               {cards.map((id) => {
                 const found = sampleIndicator(id);
                 if (!found) return null;
@@ -147,6 +148,7 @@ const DemoRun = ({
               <div
                 className="contextEnginePrototype__proto11Enter"
                 data-test-subj="proto11SampleCompare"
+                css={compareCss}
               >
                 <ComparisonBlock
                   comparison={demo}
