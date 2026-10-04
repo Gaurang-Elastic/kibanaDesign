@@ -631,22 +631,40 @@ const Composer = ({
       }}
       data-test-subj="proto11Composer"
     >
-      <EuiPanel hasBorder paddingSize="none" css={boxCss} data-test-subj="proto11ComposerBox">
-        {compact ? (
-          <div
-            className="contextEnginePrototype__proto11ComposerRow"
-            css={css`
-              padding: ${euiTheme.size.s};
-              gap: ${euiTheme.size.s};
-            `}
+      {compact ? (
+        <div
+          className="contextEnginePrototype__proto11ComposerRow"
+          css={css`
+            gap: ${euiTheme.size.s};
+          `}
+        >
+          <div className="contextEnginePrototype__proto11ComposerRowScopes">{scopes}</div>
+          <EuiPanel
+            hasBorder
+            paddingSize="none"
+            className="contextEnginePrototype__proto11ComposerRowBox"
+            css={boxCss}
+            data-test-subj="proto11ComposerBox"
           >
-            <div className="contextEnginePrototype__proto11ComposerRowScopes">{scopes}</div>
-            <div className="contextEnginePrototype__proto11ComposerRowField">{field}</div>
-            <div className="contextEnginePrototype__proto11ComposerRowAction">{proposeButton}</div>
-          </div>
-        ) : (
-          <>
-            <div css={railCss}>{scopes}</div>
+            <div
+              className="contextEnginePrototype__proto11ComposerRow"
+              css={css`
+                padding-right: ${euiTheme.size.xs};
+                gap: ${euiTheme.size.s};
+              `}
+            >
+              <div className="contextEnginePrototype__proto11ComposerRowField">{field}</div>
+              <div className="contextEnginePrototype__proto11ComposerRowAction">
+                {proposeButton}
+              </div>
+            </div>
+          </EuiPanel>
+        </div>
+      ) : (
+        <>
+          {scopes}
+          <EuiSpacer size="s" />
+          <EuiPanel hasBorder paddingSize="none" css={boxCss} data-test-subj="proto11ComposerBox">
             {field}
             <div
               css={css`
@@ -660,9 +678,9 @@ const Composer = ({
               </EuiText>
               {proposeButton}
             </div>
-          </>
-        )}
-      </EuiPanel>
+          </EuiPanel>
+        </>
+      )}
       {below}
     </div>
   );

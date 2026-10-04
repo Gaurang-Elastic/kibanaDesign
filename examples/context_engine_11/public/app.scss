@@ -1537,6 +1537,18 @@ html {
   flex: 0 0 auto;
 }
 
+.contextEnginePrototype__proto11ComposerRowBox {
+  align-items: center;
+  display: flex;
+  flex: 1 1 360px;
+  min-height: 40px;
+  min-width: 0;
+
+  > .contextEnginePrototype__proto11ComposerRow {
+    flex: 1 1 auto;
+  }
+}
+
 .contextEnginePrototype__proto11ComposerRowField {
   flex: 1 1 240px;
   min-width: 240px;
