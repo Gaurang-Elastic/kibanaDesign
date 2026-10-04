@@ -57,6 +57,7 @@ import {
 import { Proto11SampleStrip, SampleMenuButton } from './proto11_sample_panel';
 import type { Proto11SampleScenario, Proto11SourceId } from './proto11_types';
 import { TraceRow } from './traces_panel';
+import heroTexture from './assets/context_hero_texture.svg';
 
 type TraceSelector = 'elastic_agents' | 'genai_libraries';
 type DataTab = 'elasticsearch' | 'connectors';
@@ -690,6 +691,38 @@ const Composer = ({
   );
 };
 
+/** Faint texture behind the hero illustration, faded out towards the hero copy. */
+const HeroTexture = () => {
+  const { euiTheme, colorMode } = useEuiTheme();
+  return (
+    <div
+      aria-hidden="true"
+      data-test-subj="proto11HeroTexture"
+      css={css`
+        position: absolute;
+        /* Reaches past the hero's xl padding to its top, right and bottom edges. */
+        inset: -${euiTheme.size.xl} -${euiTheme.size.xl} -${euiTheme.size.xl} 0;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 0;
+        opacity: ${colorMode === 'DARK' ? 0.08 : 0.12};
+        mask-image: linear-gradient(to right, transparent 0%, black 35%);
+      `}
+    >
+      <div
+        css={css`
+          position: absolute;
+          right: -10%;
+          bottom: -20%;
+          width: 140%;
+          aspect-ratio: 1270 / 1219;
+          background: url(${heroTexture}) no-repeat center / 100% auto;
+        `}
+      />
+    </div>
+  );
+};
+
 /** Proto 11 On landing. Hero with the composer when there are no AI indices, a compact bar otherwise. */
 export const Proto11Landing = ({
   variant,
@@ -763,7 +796,10 @@ export const Proto11Landing = ({
                 </EuiFlexItem>
               </EuiFlexGroup>
             </div>
-            <div className="contextEnginePrototype__proto11HeroArt">{heroArt}</div>
+            <div className="contextEnginePrototype__proto11HeroArt">
+              <HeroTexture />
+              {heroArt}
+            </div>
           </div>
         </EuiPanel>
         <Proto11SampleStrip />

@@ -1504,16 +1504,21 @@ html {
 }
 
 .contextEnginePrototype__proto11HeroArt {
+  align-items: center;
+  align-self: stretch;
   display: flex;
   flex: 0 1 38%;
   justify-content: center;
   max-width: 320px;
+  position: relative;
 
   img,
   svg {
     display: block;
     height: auto;
     max-width: 100%;
+    position: relative;
+    z-index: 1;
   }
 
   @media (max-width: 999px) {
