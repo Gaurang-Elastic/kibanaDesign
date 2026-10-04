@@ -1510,6 +1510,8 @@ html {
   flex: 0 1 38%;
   justify-content: center;
   max-width: 320px;
+  // Matches the hero's action row (16px spacer + 32px buttons) so the art centres on the title and composer.
+  padding-bottom: 48px;
   position: relative;
 
   img,
