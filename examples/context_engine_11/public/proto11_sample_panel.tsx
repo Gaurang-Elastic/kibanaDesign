@@ -55,7 +55,6 @@ export const SampleMenuButton = ({
       button={
         <EuiButtonEmpty
           size="s"
-          flush="left"
           iconType="chevronSingleDown"
           iconSide="right"
           onClick={() => setOpen((isOpen) => !isOpen)}
