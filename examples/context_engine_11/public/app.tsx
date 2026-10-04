@@ -1497,6 +1497,18 @@ function ContextEngineApp({
             <Proto11Landing
               key={own.length === 0 ? 'hero' : 'compact'}
               variant={own.length === 0 ? 'hero' : 'compact'}
+              heroArt={
+                typeof (isDarkMode ? heroDark : heroLight) === 'string' ? (
+                  <img src={isDarkMode ? heroDark : heroLight} alt="" width={280} />
+                ) : (
+                  React.createElement(isDarkMode ? heroDark : heroLight, {
+                    width: 280,
+                    height: 'auto',
+                    role: 'img',
+                    'aria-hidden': true,
+                  })
+                )
+              }
               indexGrid={
                 <EuiFlexGrid columns={3} gutterSize="l" data-test-subj="proto11IndexGrid">
                   {managed ? renderCatalogItem(managed, 'card', true) : null}

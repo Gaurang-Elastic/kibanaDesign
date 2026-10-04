@@ -34,7 +34,6 @@ import {
   EuiToolTip,
 } from '@elastic/eui';
 
-import heroImage from './assets/context_hero.png';
 import {
   ELASTIC_AGENT_OPTIONS,
   EXAMPLE_QUESTIONS,
@@ -587,6 +586,7 @@ const Composer = ({
 /** Proto 11 On landing. Hero with the composer when there are no AI indices, a compact bar otherwise. */
 export const Proto11Landing = ({
   variant,
+  heroArt,
   indexGrid,
   takenNames,
   onCreateFromGoal,
@@ -594,6 +594,7 @@ export const Proto11Landing = ({
   onExploreSample,
 }: {
   variant: 'hero' | 'compact';
+  heroArt: React.ReactNode;
   indexGrid: React.ReactNode;
   takenNames: string[];
   onCreateFromGoal: (options: Omit<CreateFromGoalOptions, 'takenNames'>) => void;
@@ -615,9 +616,6 @@ export const Proto11Landing = ({
     <div className="contextEnginePrototype__proto11Landing" data-test-subj="proto11Landing">
       <EuiPanel hasBorder paddingSize="xl" data-test-subj="proto11Hero">
         <div className="contextEnginePrototype__proto11Hero">
-          <div className="contextEnginePrototype__proto11HeroArt">
-            <img src={heroImage} alt="" width={280} />
-          </div>
           <div className="contextEnginePrototype__proto11HeroContent">
             <EuiTitle size="m">
               <h2>Get started with Context</h2>
@@ -650,6 +648,7 @@ export const Proto11Landing = ({
               </EuiFlexItem>
             </EuiFlexGroup>
           </div>
+          <div className="contextEnginePrototype__proto11HeroArt">{heroArt}</div>
         </div>
       </EuiPanel>
       <Proto11SampleStrip />
