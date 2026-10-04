@@ -139,7 +139,7 @@ export const ComparisonBlock = ({
   </div>
 );
 
-/** With and Without Context bars on one scale: Without Context fills its track. */
+/** With and Without Context bars on one scale: blue fill over a teal track, Without Context full. */
 const ComparisonBars = ({
   comparison: { withContext, withoutContext },
 }: {
@@ -148,13 +148,8 @@ const ComparisonBars = ({
   const { euiTheme } = useEuiTheme();
   const ratio = Math.min(1, withContext.tokens / Math.max(1, withoutContext.tokens));
   const rows = [
-    {
-      label: 'With Context',
-      detail: withContext.detail,
-      share: ratio,
-      color: euiTheme.colors.primary,
-    },
-    { label: 'Without Context', detail: withoutContext.detail, share: 1, color: BRAND_TEAL },
+    { label: 'With Context', detail: withContext.detail, share: ratio },
+    { label: 'Without Context', detail: withoutContext.detail, share: 1 },
   ];
   return (
     <div
@@ -167,7 +162,7 @@ const ComparisonBars = ({
         row-gap: ${euiTheme.size.s};
       `}
     >
-      {rows.map(({ label, detail, share, color }) => (
+      {rows.map(({ label, detail, share }) => (
         <React.Fragment key={label}>
           <EuiText size="xs">
             <p>{label}</p>
@@ -178,14 +173,14 @@ const ComparisonBars = ({
             css={css`
               height: ${euiTheme.size.xs};
               border-radius: ${euiTheme.size.xxs};
-              background: ${euiTheme.colors.lightShade};
+              background: ${BRAND_TEAL};
               overflow: hidden;
             `}
           >
             <div
               css={css`
                 height: 100%;
-                background: ${color};
+                background: ${euiTheme.colors.primary};
               `}
               style={{ width: `${share * 100}%` }}
             />
