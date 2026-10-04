@@ -25,6 +25,8 @@ import {
   type NamespaceSource,
 } from './namespace_data';
 import type {
+  Proto11ChatTurn,
+  Proto11FixChat,
   Proto11GoalId,
   Proto11Meta,
   Proto11SampleScenario,
@@ -1480,6 +1482,46 @@ const setRunStatus = (
     : {}),
 });
 
+const fixChatOf = (meta: Proto11Meta): Proto11FixChat =>
+  meta.fixChat ?? { card: 'confirm', turns: [] };
+
+const withTurns = (
+  meta: Proto11Meta,
+  turns: Proto11ChatTurn[],
+  card?: Proto11FixChat['card']
+): Proto11Meta => {
+  const chat = fixChatOf(meta);
+  return { ...meta, fixChat: { card: card ?? chat.card, turns: [...chat.turns, ...turns] } };
+};
+
+/** Only the automations that produced rejected KIs take part in a re-run. */
+const setRerunStatus = (
+  namespace: Namespace,
+  meta: Proto11Meta,
+  runStatus: Automation['runStatus'],
+  ran: boolean
+): Namespace => {
+  const templates = new Set(planFor(meta).rejected.map((ki) => ki.template));
+  return {
+    ...namespace,
+    ...(ran ? { updated: 'just now' } : {}),
+    automations: namespace.automations.map((automation) =>
+      automation.templateId && templates.has(automation.templateId)
+        ? {
+            ...automation,
+            runStatus,
+            ...(ran ? { hasRun: true, lastRunAt: 'just now' } : {}),
+          }
+        : automation
+    ),
+  };
+};
+
+const statusAfterRerun = (meta: Proto11Meta): Automation['runStatus'] => {
+  if (meta.phase === 'sampleReady') return 'sampleReady';
+  return meta.phase === 'fullRun' ? 'running' : 'enabled';
+};
+
 /** One step of the simulated runs. Returns the same object when nothing changes. */
 export const advanceProto11 = (namespace: Namespace): Namespace => {
   const meta = namespace.proto11;
@@ -1524,15 +1566,23 @@ export const advanceProto11 = (namespace: Namespace): Namespace => {
       plan.rejected.length,
       Math.round((plan.rejected.length * fixTick) / RERUN_TICKS)
     );
-    next =
-      fixTick >= RERUN_TICKS
-        ? {
-            ...next,
-            fix: 'fixed',
-            fixTick: 0,
-            written: { ...next.written, fixed: plan.rejected.length },
-          }
-        : { ...next, fixTick, written: { ...next.written, fixed } };
+    if (fixTick >= RERUN_TICKS) {
+      const finished: Proto11Meta = {
+        ...next,
+        fix: 'fixed',
+        fixTick: 0,
+        written: { ...next.written, fixed: plan.rejected.length },
+      };
+      const total = writtenItems(finished).length;
+      next = withTurns(finished, [
+        {
+          role: 'agent',
+          text: `Done. ${total} Knowledge Indicators ready, 0 rejected.`,
+        },
+      ]);
+      return setRerunStatus(withWritten(namespace, next), next, statusAfterRerun(next), true);
+    }
+    next = { ...next, fixTick, written: { ...next.written, fixed } };
   } else if (next.fix === 'fixed') {
     const fixTick = next.fixTick + 1;
     next = fixTick >= NOTE_TICKS ? { ...next, fix: 'done', fixTick: 0 } : { ...next, fixTick };
@@ -1551,7 +1601,53 @@ export const startFullRun = (namespace: Namespace): Namespace => {
 export const startRerun = (namespace: Namespace): Namespace => {
   const meta = namespace.proto11;
   if (!meta || meta.fix !== 'none') return namespace;
-  return { ...namespace, proto11: { ...meta, fix: 'rerunning', fixTick: 0 } };
+  const next: Proto11Meta = { ...withTurns(meta, [], 'rerun'), fix: 'rerunning', fixTick: 0 };
+  return setRerunStatus({ ...namespace, proto11: next }, next, 'running', false);
+};
+
+export const declineRerun = (namespace: Namespace): Namespace => {
+  const meta = namespace.proto11;
+  if (!meta || meta.fix !== 'none') return namespace;
+  return {
+    ...namespace,
+    proto11: withTurns(
+      meta,
+      [
+        {
+          role: 'agent',
+          text: 'The automation is already fixed; the next scheduled run will pick them up.',
+        },
+      ],
+      'declined'
+    ),
+  };
+};
+
+const RERUN_REPLY = /^(?:yes|run it|yes,? run it)[.!]*$/i;
+
+const fixFallbackReply = (meta: Proto11Meta) => {
+  if (meta.fix === 'rerunning') return 'Still re-running. I will post here when it finishes.';
+  if (meta.fix !== 'none') return 'Nothing is waiting to re-run.';
+  const total = rejectedTotal(meta);
+  return `Reply yes to re-run the ${total} rejected Knowledge ${
+    total === 1 ? 'Indicator' : 'Indicators'
+  }.`;
+};
+
+/** A message typed in the fix panel. "yes" or "run it" confirms the re-run. */
+export const sendFixMessage = (namespace: Namespace, message: string): Namespace => {
+  const meta = namespace.proto11;
+  const text = message.trim();
+  if (!meta || !text) return namespace;
+  const asked = { ...namespace, proto11: withTurns(meta, [{ role: 'user', text }]) };
+  if (meta.fix === 'none' && RERUN_REPLY.test(text)) return startRerun(asked);
+  return {
+    ...namespace,
+    proto11: withTurns(meta, [
+      { role: 'user', text },
+      { role: 'agent', text: fixFallbackReply(meta) },
+    ]),
+  };
 };
 
 // ---------- landing: three ways in ----------
@@ -2057,7 +2153,9 @@ export const proto11AddedLine = (automation: Automation, namespace: Namespace) =
     case 'sampleReady':
       return 'Added by Elastic AI Agent, first pass ran on a sample just now';
     case 'running':
-      return 'Added by Elastic AI Agent, running on all data';
+      return namespace.proto11?.fix === 'rerunning'
+        ? 'Added by Elastic AI Agent, re-running rejected Knowledge Indicators'
+        : 'Added by Elastic AI Agent, running on all data';
     case 'needsAgent':
       return (namespace.traces?.length ?? 0) > 0
         ? 'Added by Elastic AI Agent, agent attached'

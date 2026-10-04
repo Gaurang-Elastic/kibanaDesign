@@ -37,6 +37,18 @@ export type Proto11Phase = 'firstPass' | 'sampleReady' | 'fullRun' | 'complete';
 /** rerunning: re-running rejected KIs. fixed: success note showing. done: note closed. */
 export type Proto11FixState = 'none' | 'rerunning' | 'fixed' | 'done';
 
+export interface Proto11ChatTurn {
+  role: 'user' | 'agent';
+  text: string;
+}
+
+/** confirm: the card asks. declined: Not now was chosen. rerun: the re-run was confirmed. */
+export interface Proto11FixChat {
+  card: 'confirm' | 'declined' | 'rerun';
+  /** Turns after the agent's first message, which ends with the card. */
+  turns: Proto11ChatTurn[];
+}
+
 export interface Proto11Meta {
   goal: Proto11GoalId;
   sample?: boolean;
@@ -53,6 +65,8 @@ export interface Proto11Meta {
   written: { sample: number; full: number; fixed: number };
   fix: Proto11FixState;
   fixTick: number;
+  /** Lives on the meta so the run can post to it while the panel is closed. */
+  fixChat?: Proto11FixChat;
   /** KI ids opened from the Knowledge Indicators tab. */
   lookedAt: string[];
   checkHidden: boolean;

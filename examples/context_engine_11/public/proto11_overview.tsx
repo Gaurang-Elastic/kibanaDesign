@@ -7,14 +7,16 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   EuiButton,
   EuiButtonEmpty,
+  EuiButtonIcon,
   EuiCallOut,
   EuiCode,
   EuiCodeBlock,
   EuiConfirmModal,
+  EuiFieldText,
   EuiFlexGroup,
   EuiFlexItem,
   EuiFlyout,
@@ -23,11 +25,13 @@ import {
   EuiFlyoutHeader,
   EuiIcon,
   EuiLink,
+  EuiLoadingSpinner,
   EuiPanel,
   EuiProgress,
   EuiSpacer,
   EuiText,
   EuiTitle,
+  EuiToolTip,
   useGeneratedHtmlId,
 } from '@elastic/eui';
 
@@ -224,21 +228,119 @@ export const Proto11RejectedNotice = ({
   );
 };
 
+const RerunCard = ({
+  meta,
+  passed,
+  onRerun,
+  onDecline,
+}: {
+  meta: Proto11Meta;
+  passed: number;
+  onRerun: () => void;
+  onDecline: () => void;
+}) => {
+  const total = rejectedTotal(meta);
+  const card = meta.fixChat?.card ?? 'confirm';
+  if (card === 'rerun') {
+    const running = meta.fix === 'rerunning';
+    return (
+      <EuiPanel
+        hasBorder
+        paddingSize="m"
+        className="contextEnginePrototype__agentConfirmCard"
+        data-test-subj="proto11RerunCard"
+      >
+        <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+          <EuiFlexItem grow={false}>
+            {running ? (
+              <EuiLoadingSpinner size="m" />
+            ) : (
+              <EuiIcon type="checkCircleFill" color="success" aria-hidden={true} />
+            )}
+          </EuiFlexItem>
+          <EuiFlexItem>
+            <EuiText size="s">
+              <p aria-live="polite">
+                {running ? `Re-running ${kiCount(total)}` : `Re-ran ${kiCount(total)}`}
+              </p>
+            </EuiText>
+          </EuiFlexItem>
+        </EuiFlexGroup>
+      </EuiPanel>
+    );
+  }
+  return (
+    <EuiPanel
+      hasBorder
+      paddingSize="m"
+      className="contextEnginePrototype__agentConfirmCard"
+      data-test-subj="proto11RerunCard"
+    >
+      <EuiTitle size="xs">
+        <h3>
+          Re-run the {total} rejected {total === 1 ? 'Knowledge Indicator' : 'Knowledge Indicators'}
+          ?
+        </h3>
+      </EuiTitle>
+      <EuiSpacer size="xs" />
+      <EuiText size="s" color="subdued">
+        <p>Only the rejected ones; the {passed} that passed are untouched.</p>
+      </EuiText>
+      {card === 'confirm' ? (
+        <>
+          <EuiSpacer size="m" />
+          <EuiFlexGroup justifyContent="flexEnd" gutterSize="s" responsive={false}>
+            <EuiFlexItem grow={false}>
+              <EuiButtonEmpty size="s" onClick={onDecline} data-test-subj="proto11RerunNotNow">
+                Not now
+              </EuiButtonEmpty>
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <EuiButton size="s" fill onClick={onRerun} data-test-subj="proto11RerunRejected">
+                Re-run rejected
+              </EuiButton>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        </>
+      ) : null}
+    </EuiPanel>
+  );
+};
+
 /** Mocked Elastic AI Agent turn that proposes fixes for the rejected KIs. */
 export const Proto11FixFlyout = ({
   namespace,
   meta,
   onClose,
   onRerun,
+  onDecline,
+  onSend,
 }: {
   namespace: Namespace;
   meta: Proto11Meta;
   onClose: () => void;
   onRerun: () => void;
+  onDecline: () => void;
+  onSend: (message: string) => void;
 }) => {
+  const [draft, setDraft] = useState('');
+  const endRef = useRef<HTMLDivElement | null>(null);
   const total = rejectedTotal(meta);
   const groups = failureGroupsFor(meta);
   const automationTitle = TEMPLATES[meta.runTemplates[0]].title;
+  const turns = meta.fixChat?.turns ?? [];
+  const passed = namespace.indicators.length - meta.written.fixed;
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: 'end' });
+  }, [turns.length]);
+
+  const send = () => {
+    if (!draft.trim()) return;
+    onSend(draft);
+    setDraft('');
+  };
+
   return (
     <EuiFlyout
       ownFocus
@@ -280,23 +382,60 @@ export const Proto11FixFlyout = ({
               </li>
             ))}
           </ul>
-          <p>
-            I have updated the {automationTitle} automation. Re-run the {total} rejected Knowledge
-            Indicators?
-          </p>
+          <p>I have updated the {automationTitle} automation.</p>
         </EuiText>
+        <RerunCard meta={meta} passed={passed} onRerun={onRerun} onDecline={onDecline} />
+        {turns.map((turn, index) => (
+          <React.Fragment key={index}>
+            <EuiSpacer size="m" />
+            {turn.role === 'user' ? (
+              <div className="contextEnginePrototype__agentUserTurn">
+                <EuiText size="s">
+                  <p>{turn.text}</p>
+                </EuiText>
+              </div>
+            ) : (
+              <EuiText size="s" data-test-subj="proto11FixAgentTurn">
+                <p>{turn.text}</p>
+              </EuiText>
+            )}
+          </React.Fragment>
+        ))}
+        <div ref={endRef} />
       </EuiFlyoutBody>
       <EuiFlyoutFooter>
-        <EuiFlexGroup justifyContent="flexEnd" gutterSize="s" responsive={false}>
-          <EuiFlexItem grow={false}>
-            <EuiButtonEmpty onClick={onClose}>Not now</EuiButtonEmpty>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiButton fill onClick={onRerun} data-test-subj="proto11RerunRejected">
-              Re-run rejected
-            </EuiButton>
-          </EuiFlexItem>
-        </EuiFlexGroup>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            send();
+          }}
+        >
+          <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+            <EuiFlexItem>
+              <EuiFieldText
+                fullWidth
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder="Message Elastic AI Agent"
+                aria-label="Message Elastic AI Agent"
+                data-test-subj="proto11FixComposer"
+              />
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <EuiToolTip content="Send" disableScreenReaderOutput>
+                <EuiButtonIcon
+                  type="submit"
+                  iconType="sortUp"
+                  display="base"
+                  size="m"
+                  isDisabled={!draft.trim()}
+                  aria-label="Send"
+                  data-test-subj="proto11FixSend"
+                />
+              </EuiToolTip>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        </form>
       </EuiFlyoutFooter>
     </EuiFlyout>
   );

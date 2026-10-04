@@ -82,11 +82,13 @@ import {
   advanceProto11,
   createProto11Namespace,
   createSampleNamespace,
+  declineRerun,
   indicatorSourceGroup,
   proto11AddedLine,
   proto11StatusPill,
   sampleNameFor,
   sampleScenarioOf,
+  sendFixMessage,
   sourceHasOutstandingRejections,
   startFullRun,
   startRerun,
@@ -2799,10 +2801,11 @@ function ContextEngineApp({
             namespace={namespace}
             meta={meta}
             onClose={() => setFixFlyoutFor(null)}
-            onRerun={() => {
-              setFixFlyoutFor(null);
-              updateProto11Namespace(namespace.name, startRerun);
-            }}
+            onRerun={() => updateProto11Namespace(namespace.name, startRerun)}
+            onDecline={() => updateProto11Namespace(namespace.name, declineRerun)}
+            onSend={(message) =>
+              updateProto11Namespace(namespace.name, (item) => sendFixMessage(item, message))
+            }
           />
         ) : null}
         {pendingPanelSwitch && activeEditPanel ? (
