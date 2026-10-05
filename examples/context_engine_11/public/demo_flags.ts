@@ -49,19 +49,28 @@ export const STEP_RAIL_ENABLED = false;
 /** Storage key for the Proto 11 switcher. Off when nothing is stored. */
 export const PROTO11_SETUP = 'contextEngineExample11.PROTO11_SETUP';
 
-const loadProto11Setup = (): boolean => {
-  if (typeof window === 'undefined') return false;
+/** Off renders v2.4. On is Proto 11. Memory adds the Memories exploration. */
+export type Proto11Mode = 'off' | 'on' | 'memory';
+
+const loadProto11Mode = (): Proto11Mode => {
+  if (typeof window === 'undefined') return 'off';
   try {
-    return window.localStorage.getItem(PROTO11_SETUP) === 'on';
+    const stored = window.localStorage.getItem(PROTO11_SETUP);
+    if (stored === 'on' || stored === 'memory') return stored;
+    return 'off';
   } catch {
-    return false;
+    return 'off';
   }
 };
+
+const initialProto11Mode = loadProto11Mode();
 
 export interface DemoFlags {
   catalogState: CatalogDemoState;
   /** Proto 11 opinionated setup. Off renders v2.4 unchanged. */
   proto11Setup: boolean;
+  /** On + Memory. Shows the Memories tab where the memory switch is on. */
+  proto11Memory: boolean;
   skillUnavailable: boolean;
   nextRunEmpty: boolean;
   sharedDestinationKis: boolean;
@@ -72,7 +81,8 @@ export interface DemoFlags {
 
 export const demoFlags$ = new BehaviorSubject<DemoFlags>({
   catalogState: 'working',
-  proto11Setup: loadProto11Setup(),
+  proto11Setup: initialProto11Mode !== 'off',
+  proto11Memory: initialProto11Mode === 'memory',
   skillUnavailable: false,
   nextRunEmpty: false,
   sharedDestinationKis: false,
@@ -86,13 +96,16 @@ const patch = (partial: Partial<DemoFlags>) => {
 };
 
 export const setDemoCatalogState = (catalogState: CatalogDemoState) => patch({ catalogState });
-export const setDemoProto11Setup = (proto11Setup: boolean) => {
+export const setDemoProto11Mode = (mode: Proto11Mode) => {
   try {
-    window.localStorage.setItem(PROTO11_SETUP, proto11Setup ? 'on' : 'off');
+    window.localStorage.setItem(PROTO11_SETUP, mode);
   } catch {
     // Private mode. The switcher still works for this mount.
   }
-  patch({ proto11Setup });
+  patch({ proto11Setup: mode !== 'off', proto11Memory: mode === 'memory' });
+};
+export const setDemoProto11Setup = (proto11Setup: boolean) => {
+  setDemoProto11Mode(proto11Setup ? 'on' : 'off');
 };
 export const setDemoSkillUnavailable = (skillUnavailable: boolean) => patch({ skillUnavailable });
 export const setDemoNextRunEmpty = (nextRunEmpty: boolean) => patch({ nextRunEmpty });

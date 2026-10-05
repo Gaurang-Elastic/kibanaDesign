@@ -915,6 +915,24 @@ html {
   justify-content: space-between;
 }
 
+.contextEnginePrototype__memoryRow {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.contextEnginePrototype__memoryText {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.contextEnginePrototype__memoryAgent,
+.contextEnginePrototype__memoryWhen {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .contextEnginePrototype__kiAccordion {
   border-bottom: 1px solid var(--euiBorderColor, #d3dae6);
 

@@ -77,7 +77,7 @@ import {
   TRY_QUESTION_ENABLED,
   demoFlags$,
   setDemoCatalogState,
-  setDemoProto11Setup,
+  setDemoProto11Mode,
   type CatalogDemoState,
 } from './demo_flags';
 import {
@@ -116,6 +116,7 @@ import {
   Proto11SampleCallout,
 } from './proto11_overview';
 import { Proto11TestQuestion } from './proto11_test_question';
+import { Proto11MemoriesTab, type IndexMemory } from './proto11_memories_tab';
 import { Proto11UsageSummary, Proto11UsageTab } from './proto11_usage_tab';
 import { usageTabVisible } from './proto11_usage';
 import type { ConnectedAgent, Proto11Meta, Proto11SampleScenario } from './proto11_types';
@@ -161,7 +162,7 @@ import { AgentTracesPanel } from './traces_panel';
 import { TABLE_SPARKLES_TYPE } from './register_table_sparkles';
 
 type Screen = 'index' | 'create' | 'detail';
-type DetailTab = 'overview' | 'knowledge' | 'usage' | 'improvements';
+type DetailTab = 'overview' | 'knowledge' | 'usage' | 'memories' | 'improvements';
 type EditablePanel = 'description' | 'traces' | 'sources' | 'agents';
 
 const EDITABLE_PANEL_LABEL: Record<EditablePanel, string> = {
@@ -1072,6 +1073,40 @@ function ContextEngineApp({
                   content: `Question with no match: ${unmatched}. AI index: ${namespace.displayName}.`,
                 },
                 description: unmatched,
+              },
+            ],
+          },
+        ],
+      });
+      return;
+    }
+    document
+      .querySelector<HTMLButtonElement>(
+        '[data-test-subj="AgentBuilderNavControlButton"], [data-test-subj="AgentBuilderNavControlButtonIcon"]'
+      )
+      ?.click();
+  };
+
+  const openMemoryPromote = (namespace: Namespace, memory: IndexMemory) => {
+    const message =
+      'Turn this memory into a Knowledge Indicator written by the Index overview automation.';
+    if (plugins.agentBuilder?.openChat) {
+      plugins.agentBuilder.openChat({
+        newConversation: true,
+        initialMessage: message,
+        autoSendInitialMessage: false,
+        attachments: [
+          {
+            type: 'group',
+            id: `memory-${memory.id}`,
+            label: memory.task,
+            items: [
+              {
+                type: 'text',
+                data: {
+                  content: `${memory.text}\nType: ${memory.type}\nAgent: ${memory.agent}\nAI index: ${namespace.displayName}`,
+                },
+                description: memory.text,
               },
             ],
           },
@@ -2007,6 +2042,11 @@ function ContextEngineApp({
       badges.push({ label: 'Managed', color: 'hollow' });
     }
     if (proto11HeaderBadges) badges.push(...proto11HeaderBadges);
+    const showMemoriesTab =
+      flags.proto11Memory && proto11On && Boolean(meta) && namespace.memoryEnabled !== false;
+    if (showMemoriesTab) {
+      badges.unshift({ label: 'Exploration', color: 'hollow' });
+    }
     const hideKnowledgeTab = Boolean(meta) && namespace.indicators.length === 0;
     const sourcesWithIndicators = new Set(
       meta
@@ -2017,7 +2057,9 @@ function ContextEngineApp({
     );
     const showUsageTab = proto11On && Boolean(meta) && usageTabVisible(namespace);
     const effectiveTab: DetailTab =
-      (hideKnowledgeTab && detailTab === 'knowledge') || (!showUsageTab && detailTab === 'usage')
+      (hideKnowledgeTab && detailTab === 'knowledge') ||
+      (!showUsageTab && detailTab === 'usage') ||
+      (!showMemoriesTab && detailTab === 'memories')
         ? 'overview'
         : detailTab;
     const tabs: AppHeaderTab[] = [
@@ -2045,6 +2087,16 @@ function ContextEngineApp({
               label: 'Usage',
               isSelected: effectiveTab === 'usage',
               onClick: () => setDetailTab('usage'),
+            } satisfies AppHeaderTab,
+          ]
+        : []),
+      ...(showMemoriesTab
+        ? [
+            {
+              id: 'memories',
+              label: 'Memories',
+              isSelected: effectiveTab === 'memories',
+              onClick: () => setDetailTab('memories'),
             } satisfies AppHeaderTab,
           ]
         : []),
@@ -3057,6 +3109,13 @@ function ContextEngineApp({
                   : undefined
               }
             />
+          ) : effectiveTab === 'memories' ? (
+            <Proto11MemoriesTab
+              namespace={namespace}
+              discoverHref={coreStart.http.basePath.prepend('/app/discover')}
+              agentBuilderHref={coreStart.http.basePath.prepend('/app/agent_builder')}
+              onPromote={(memory) => openMemoryPromote(namespace, memory)}
+            />
           ) : effectiveTab === 'usage' ? (
             <Proto11UsageTab
               namespace={namespace}
@@ -3519,9 +3578,15 @@ function ContextEngineApp({
             options={[
               { value: 'off', text: 'Off' },
               { value: 'on', text: 'On' },
+              { value: 'memory', text: 'On + Memory' },
             ]}
-            value={flags.proto11Setup ? 'on' : 'off'}
-            onChange={(event) => setDemoProto11Setup(event.target.value === 'on')}
+            value={flags.proto11Memory ? 'memory' : flags.proto11Setup ? 'on' : 'off'}
+            onChange={(event) => {
+              const mode = event.target.value;
+              if (mode === 'off' || mode === 'on' || mode === 'memory') {
+                setDemoProto11Mode(mode);
+              }
+            }}
             aria-label="Proto 11"
             data-test-subj="proto11Switcher"
           />
