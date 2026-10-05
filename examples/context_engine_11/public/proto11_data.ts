@@ -1681,6 +1681,18 @@ export interface Proto11Proposal {
   trace?: IndexTrace;
 }
 
+/** Plain-text proposal, attached when asking Elastic AI Agent to adjust it. */
+export const proposalSummary = (proposal: Proto11Proposal, name: string): string => {
+  const template = TEMPLATES[goalById(proposal.goal).template];
+  const sources = proposal.sourceIds.map((id) => sourceById(id).name);
+  return [
+    `Proposed setup for the AI index ${name}.`,
+    `Automation: ${template.title}. ${template.description} Chosen ${proposal.automationBecause}.`,
+    `Sources: ${joinList(sources)}. Chosen ${proposal.sourcesBecause}.`,
+    ...(proposal.trace ? [`Agent traces: ${proposal.trace.value}.`] : []),
+  ].join('\n');
+};
+
 const uniqueIds = (ids: Proto11SourceId[]) => ids.filter((id, index) => ids.indexOf(id) === index);
 
 const quoted = (words: string[]) => joinList(words.map((word) => `"${word}"`));

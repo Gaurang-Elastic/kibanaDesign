@@ -84,6 +84,7 @@ import {
   createSampleNamespace,
   declineRerun,
   indicatorSourceGroup,
+  proposalSummary,
   proto11AddedLine,
   proto11StatusPill,
   sampleNameFor,
@@ -95,7 +96,7 @@ import {
   type CreateFromGoalOptions,
 } from './proto11_data';
 import { Proto11ConnectedAgentsPanel } from './proto11_agents_panel';
-import { Proto11HeroArt, Proto11Landing } from './proto11_landing';
+import { Proto11HeroArt, Proto11Landing, type AskAgentAboutProposal } from './proto11_landing';
 import { SAMPLE_MENU } from './proto11_sample_panel';
 import {
   Proto11FixFlyout,
@@ -987,6 +988,36 @@ function ContextEngineApp({
     setAgentOpen(true);
   };
 
+  const openProposalAgent: AskAgentAboutProposal = (proposal, name) => {
+    if (plugins.agentBuilder?.openChat) {
+      plugins.agentBuilder.openChat({
+        newConversation: true,
+        initialMessage: 'Adjust this proposed setup.',
+        autoSendInitialMessage: false,
+        attachments: [
+          {
+            type: 'group',
+            id: `proposed-setup-${name}`,
+            label: `Proposed setup: ${name}`,
+            items: [
+              {
+                type: 'text',
+                data: { content: proposalSummary(proposal, name) },
+                description: `Proposed setup: ${name}`,
+              },
+            ],
+          },
+        ],
+      });
+      return;
+    }
+    document
+      .querySelector<HTMLButtonElement>(
+        '[data-test-subj="AgentBuilderNavControlButton"], [data-test-subj="AgentBuilderNavControlButtonIcon"]'
+      )
+      ?.click();
+  };
+
   const openRefineAgent = (namespace: Namespace, item: OverviewImprovement) => {
     const message = `Propose an improvement for this failure pattern. Verify it against the source first, then suggest one bounded change. Proposed fix: ${item.proposedFix}`;
     if (plugins.agentBuilder?.openChat) {
@@ -1592,6 +1623,7 @@ function ContextEngineApp({
               onCreateFromGoal={createFromGoal}
               onCreateEmpty={openCreate}
               onExploreSample={trySample}
+              onAskAgent={openProposalAgent}
             />
           </PageBody>
         </>

@@ -61,6 +61,7 @@ import {
 import { Proto11SampleStrip, SampleMenuButton, type ExploreSample } from './proto11_sample_panel';
 import type { Proto11SourceId } from './proto11_types';
 import { TraceRow } from './traces_panel';
+import { TABLE_SPARKLES_TYPE } from './register_table_sparkles';
 import heroTexture from './assets/context_hero_texture.svg';
 import heroArtLight from './assets/context-ai-index-light-animated.svg';
 import heroArtDark from './assets/context-ai-index-dark-animated.svg';
@@ -68,6 +69,7 @@ import heroArtDark from './assets/context-ai-index-dark-animated.svg';
 type TraceSelector = 'elastic_agents' | 'genai_libraries';
 type DataTab = 'elasticsearch' | 'connectors';
 type ComposerAgent = NonNullable<ComposerInput['agent']>;
+export type AskAgentAboutProposal = (proposal: Proto11Proposal, name: string) => void;
 
 const TRACE_SELECTOR_OPTIONS = [
   { id: 'elastic_agents' as const, label: 'Agents on Elastic' },
@@ -141,11 +143,14 @@ const ProposalCard = ({
   proposal,
   onChange,
   onCreate,
+  onAskAgent,
 }: {
   proposal: Proto11Proposal;
   onChange: () => void;
   onCreate: (name: string) => void;
+  onAskAgent: (name: string) => void;
 }) => {
+  const { euiTheme } = useEuiTheme();
   const [name, setName] = useState(proposal.name);
   const template = TEMPLATES[goalById(proposal.goal).template];
   const listItems = [
@@ -209,17 +214,12 @@ const ProposalCard = ({
     >
       <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
         <EuiFlexItem grow={false}>
-          <EuiIcon type="productAgent" size="m" aria-hidden={true} />
+          <EuiIcon type={TABLE_SPARKLES_TYPE} size="m" aria-hidden={true} />
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
           <EuiTitle size="xs">
-            <h3>Here is what I would set up</h3>
+            <h3>Proposed setup</h3>
           </EuiTitle>
-        </EuiFlexItem>
-        <EuiFlexItem grow={false}>
-          <EuiText size="s" color="subdued">
-            Elastic AI Agent
-          </EuiText>
         </EuiFlexItem>
       </EuiFlexGroup>
       <EuiSpacer size="l" />
@@ -227,9 +227,31 @@ const ProposalCard = ({
       <EuiSpacer size="l" />
       <EuiFlexGroup justifyContent="spaceBetween" alignItems="center" responsive={false}>
         <EuiFlexItem grow={false}>
-          <EuiLink onClick={onChange} data-test-subj="proto11ProposalChange">
-            Change
-          </EuiLink>
+          <EuiFlexGroup gutterSize="l" alignItems="center" responsive={false} wrap>
+            <EuiFlexItem grow={false}>
+              <EuiLink
+                color="text"
+                onClick={() => onAskAgent(name)}
+                data-test-subj="proto11ProposalAskAgent"
+              >
+                <EuiIcon
+                  type="productAgent"
+                  size="s"
+                  aria-hidden={true}
+                  css={css`
+                    margin-right: ${euiTheme.size.xs};
+                    vertical-align: text-bottom;
+                  `}
+                />
+                Ask Elastic AI Agent to adjust this
+              </EuiLink>
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <EuiLink onClick={onChange} data-test-subj="proto11ProposalChange">
+                Change
+              </EuiLink>
+            </EuiFlexItem>
+          </EuiFlexGroup>
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
           <EuiButton fill onClick={() => onCreate(name)} data-test-subj="proto11CreateAndRun">
@@ -550,10 +572,12 @@ const Composer = ({
   compact,
   takenNames,
   onCreateFromGoal,
+  onAskAgent,
 }: {
   compact: boolean;
   takenNames: string[];
   onCreateFromGoal: (options: Omit<CreateFromGoalOptions, 'takenNames'>) => void;
+  onAskAgent: AskAgentAboutProposal;
 }) => {
   const [text, setText] = useState('');
   const [agent, setAgent] = useState<ComposerAgent | null>(null);
@@ -700,6 +724,7 @@ const Composer = ({
         key={`${proposal.path}-${proposal.name}-${proposal.sourceIds.join(',')}`}
         proposal={proposal}
         onChange={() => setProposal(null)}
+        onAskAgent={(name) => onAskAgent(proposal, name)}
         onCreate={(name) =>
           onCreateFromGoal({
             goalId: proposal.goal,
@@ -839,6 +864,7 @@ export const Proto11Landing = ({
   onCreateFromGoal,
   onCreateEmpty,
   onExploreSample,
+  onAskAgent,
 }: {
   variant: 'hero' | 'compact';
   heroArt: React.ReactNode;
@@ -847,11 +873,17 @@ export const Proto11Landing = ({
   onCreateFromGoal: (options: Omit<CreateFromGoalOptions, 'takenNames'>) => void;
   onCreateEmpty: () => void;
   onExploreSample: ExploreSample;
+  onAskAgent: AskAgentAboutProposal;
 }) => {
   if (variant === 'compact') {
     return (
       <div className="contextEnginePrototype__proto11Landing" data-test-subj="proto11Landing">
-        <Composer compact takenNames={takenNames} onCreateFromGoal={onCreateFromGoal} />
+        <Composer
+          compact
+          takenNames={takenNames}
+          onCreateFromGoal={onCreateFromGoal}
+          onAskAgent={onAskAgent}
+        />
         <EuiSpacer size="xl" />
         {indexGrid}
       </div>
@@ -886,6 +918,7 @@ export const Proto11Landing = ({
                 compact={false}
                 takenNames={takenNames}
                 onCreateFromGoal={onCreateFromGoal}
+                onAskAgent={onAskAgent}
               />
               <EuiSpacer size="m" />
               <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
