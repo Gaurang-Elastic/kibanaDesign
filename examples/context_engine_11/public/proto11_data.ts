@@ -1357,7 +1357,7 @@ const createHigherEdSample = (): Namespace => {
     sample: true,
     scenario: 'higher-ed',
     phase: 'complete',
-    connectedAgents: [{ name: 'enrollment-assistant', sample: true }],
+    connectedAgents: [{ name: 'enrollment-assistant', sample: true, lastRetrieval: '2 hours ago' }],
   };
   return {
     name,
@@ -1413,6 +1413,7 @@ export const createSampleNamespace = (scenario: Proto11SampleScenario = 'web-ops
     sample: true,
     scenario: 'web-ops',
     phase: 'complete',
+    connectedAgents: [{ name: 'web-ops-assistant', sample: true, lastRetrieval: '18 minutes ago' }],
   };
   return {
     name,

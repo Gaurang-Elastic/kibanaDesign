@@ -659,6 +659,23 @@ html {
   width: 100%;
 }
 
+.contextEnginePrototype__usagePeriod {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.contextEnginePrototype__usagePeriodSelect {
+  width: 180px;
+}
+
+.contextEnginePrototype__usageChart {
+  height: 240px;
+}
+
+.contextEnginePrototype__usageRow {
+  cursor: pointer;
+}
+
 .contextEnginePrototype__panel {
   /* paddingSize="l" from EUI */
 }

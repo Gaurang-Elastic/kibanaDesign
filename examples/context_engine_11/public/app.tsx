@@ -116,6 +116,8 @@ import {
   Proto11SampleCallout,
 } from './proto11_overview';
 import { Proto11TestQuestion } from './proto11_test_question';
+import { Proto11UsageSummary, Proto11UsageTab } from './proto11_usage_tab';
+import { usageTabVisible } from './proto11_usage';
 import type { ConnectedAgent, Proto11Meta, Proto11SampleScenario } from './proto11_types';
 import { ImprovementsTab } from './improvements_tab';
 import { initialOpenImprovementCount } from './improvements_data';
@@ -159,7 +161,7 @@ import { AgentTracesPanel } from './traces_panel';
 import { TABLE_SPARKLES_TYPE } from './register_table_sparkles';
 
 type Screen = 'index' | 'create' | 'detail';
-type DetailTab = 'overview' | 'knowledge' | 'improvements';
+type DetailTab = 'overview' | 'knowledge' | 'usage' | 'improvements';
 type EditablePanel = 'description' | 'traces' | 'sources' | 'agents';
 
 const EDITABLE_PANEL_LABEL: Record<EditablePanel, string> = {
@@ -1039,6 +1041,39 @@ function ContextEngineApp({
     };
     setAgent(session);
     setAgentOpen(true);
+  };
+
+  const openUnmatchedQuestion = (namespace: Namespace, unmatched: string) => {
+    const message = `Propose a fix for this question. No Knowledge Indicator in ${namespace.displayName} answered it. Question: ${unmatched}`;
+    if (plugins.agentBuilder?.openChat) {
+      plugins.agentBuilder.openChat({
+        newConversation: true,
+        initialMessage: message,
+        autoSendInitialMessage: false,
+        attachments: [
+          {
+            type: 'group',
+            id: `unmatched-${namespace.name}`,
+            label: namespace.displayName,
+            items: [
+              {
+                type: 'text',
+                data: {
+                  content: `Question with no match: ${unmatched}. AI index: ${namespace.displayName}.`,
+                },
+                description: unmatched,
+              },
+            ],
+          },
+        ],
+      });
+      return;
+    }
+    document
+      .querySelector<HTMLButtonElement>(
+        '[data-test-subj="AgentBuilderNavControlButton"], [data-test-subj="AgentBuilderNavControlButtonIcon"]'
+      )
+      ?.click();
   };
 
   const openProposalAgent: AskAgentAboutProposal = (proposal, name) => {
@@ -1929,8 +1964,11 @@ function ContextEngineApp({
           )
         : []
     );
+    const showUsageTab = proto11On && Boolean(meta) && usageTabVisible(namespace);
     const effectiveTab: DetailTab =
-      hideKnowledgeTab && detailTab === 'knowledge' ? 'overview' : detailTab;
+      (hideKnowledgeTab && detailTab === 'knowledge') || (!showUsageTab && detailTab === 'usage')
+        ? 'overview'
+        : detailTab;
     const tabs: AppHeaderTab[] = [
       {
         id: 'overview',
@@ -1949,6 +1987,16 @@ function ContextEngineApp({
               ...(namespace.indicators.length > 0 ? { badge: namespace.indicators.length } : {}),
             } satisfies AppHeaderTab,
           ]),
+      ...(showUsageTab
+        ? [
+            {
+              id: 'usage',
+              label: 'Usage',
+              isSelected: effectiveTab === 'usage',
+              onClick: () => setDetailTab('usage'),
+            } satisfies AppHeaderTab,
+          ]
+        : []),
       ...(showImprovementsTab
         ? [
             {
@@ -2058,7 +2106,16 @@ function ContextEngineApp({
       setTracesEditing(false);
     };
     const saveAgents = () => {
-      updateProto11Meta(namespace.name, { connectedAgents: agentsDraft });
+      const previous = namespace.proto11?.connectedAgents ?? [];
+      const hadRetrieval =
+        Boolean(namespace.proto11?.sample) || previous.some((item) => Boolean(item.lastRetrieval));
+      const nextAgents =
+        hadRetrieval || agentsDraft.length === 0
+          ? agentsDraft
+          : agentsDraft.map((item, index) =>
+              index === 0 ? { ...item, lastRetrieval: 'just now' } : item
+            );
+      updateProto11Meta(namespace.name, { connectedAgents: nextAgents });
       setPendingPanelSwitch(null);
       setAgentsEditing(false);
     };
@@ -2367,6 +2424,12 @@ function ContextEngineApp({
                     </EuiFlexItem>
                   </EuiFlexGroup>
                 </EuiPanel>
+              ) : null}
+              {proto11On && meta ? (
+                <Proto11UsageSummary
+                  namespace={namespace}
+                  onViewUsage={() => setDetailTab('usage')}
+                />
               ) : null}
               {TRY_QUESTION_ENABLED && namespace.indicators.length > 0 ? (
                 <>
@@ -2908,6 +2971,11 @@ function ContextEngineApp({
                     }
                   : undefined
               }
+            />
+          ) : effectiveTab === 'usage' ? (
+            <Proto11UsageTab
+              namespace={namespace}
+              onProposeFix={(unmatched) => openUnmatchedQuestion(namespace, unmatched)}
             />
           ) : null}
         </PageBody>
