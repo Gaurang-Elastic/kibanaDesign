@@ -35,6 +35,7 @@ import {
   EuiFlyoutBody,
   EuiFlyoutFooter,
   EuiFlyoutHeader,
+  EuiFormRow,
   EuiHorizontalRule,
   EuiIcon,
   EuiLink,
@@ -45,6 +46,7 @@ import {
   EuiPopover,
   EuiSelect,
   EuiSpacer,
+  EuiSuperSelect,
   EuiSwitch,
   EuiText,
   EuiTextArea,
@@ -66,11 +68,12 @@ import {
 import './app.scss';
 import type { AppPluginStartDependencies } from './ai_agent';
 import {
-  CONTEXT_ENGINE_ENABLED,
   FEEDBACK_LOOP_ENABLED,
-  MEMORY_ENABLED,
+  MEMORY_HELPER,
+  MEMORY_SWITCH_LABEL,
   NEXT_STEP_BANNER,
   OVERVIEW_STATS_ENABLED,
+  SHOW_MEMORY_TOGGLE,
   TRY_QUESTION_ENABLED,
   demoFlags$,
   setDemoCatalogState,
@@ -82,6 +85,7 @@ import {
   advanceProto11,
   createProto11Namespace,
   createSampleNamespace,
+  curatedNamespaces,
   declineRerun,
   indicatorSourceGroup,
   proposalSummary,
@@ -470,8 +474,6 @@ const sourceTypeLabel = (source: NamespaceSource) =>
     ? source.typeLabel
     : 'Index';
 
-const SHOW_MEMORY_TOGGLE = MEMORY_ENABLED && CONTEXT_ENGINE_ENABLED;
-
 const MemorySwitch = ({
   checked,
   onChange,
@@ -479,14 +481,26 @@ const MemorySwitch = ({
   checked: boolean;
   onChange: (next: boolean) => void;
 }) => (
-  <div className="contextEnginePrototype__memorySwitch">
+  <EuiFormRow label="Memory" helpText={MEMORY_HELPER} fullWidth hasChildLabel>
     <EuiSwitch
-      label="Enable agent memory"
+      label={MEMORY_SWITCH_LABEL}
       checked={checked}
       onChange={(event) => onChange(event.target.checked)}
+      data-test-subj="contextEngineMemorySwitch"
     />
-    <EuiText size="s" color="subdued">
-      <p>Agents can store and recall memories in this index.</p>
+  </EuiFormRow>
+);
+
+const MemoryReadout = ({ on }: { on: boolean }) => (
+  <div className="contextEnginePrototype__memorySwitch" data-test-subj="contextEngineMemoryRow">
+    <EuiText size="xs">
+      <strong>Memory</strong>
+    </EuiText>
+    <EuiText size="s">
+      <p>{on ? 'On' : 'Off'}</p>
+    </EuiText>
+    <EuiText size="xs" color="subdued">
+      <p>{MEMORY_HELPER}</p>
     </EuiText>
   </div>
 );
@@ -568,6 +582,7 @@ function ContextEngineApp({
   const [automationsMenuOpen, setAutomationsMenuOpen] = useState<string | null>(null);
   const [catalogActionsOpen, setCatalogActionsOpen] = useState<string | null>(null);
   const [pendingDeleteIndex, setPendingDeleteIndex] = useState<Namespace | null>(null);
+  const [pendingReset, setPendingReset] = useState(false);
   const [useInAgentNamespace, setUseInAgentNamespace] = useState<Namespace | null>(null);
 
   const [agentOpen, setAgentOpen] = useState(false);
@@ -751,6 +766,7 @@ function ContextEngineApp({
     flags.feedbackLoopHealthy,
   ]);
   const proto11On = flags.proto11Setup;
+  const showMemory = SHOW_MEMORY_TOGGLE && proto11On;
   const visibleNamespaces = namespaces.filter((item) => {
     if (item.managed) return true;
     if (item.proto11 && !proto11On) return false;
@@ -871,6 +887,18 @@ function ContextEngineApp({
     openDetail(created, tab);
   };
 
+  const confirmResetDemoData = () => {
+    setPendingReset(false);
+    setNamespaces((current) => [
+      ...curatedNamespaces(),
+      ...current.filter((item) => !item.userCreated),
+    ]);
+    setReadyCalloutDismissed({});
+    setDemoCatalogState('learning');
+    goLanding();
+    coreStart.notifications.toasts.addSuccess('Demo data reset');
+  };
+
   const removeSample = (namespaceName: string) => {
     setNamespaces((current) => current.filter((item) => item.name !== namespaceName));
     goLanding();
@@ -915,7 +943,7 @@ function ContextEngineApp({
       name,
       displayName: name,
       intent: createIntent.trim(),
-      memoryEnabled: SHOW_MEMORY_TOGGLE ? createMemoryEnabled : true,
+      memoryEnabled: showMemory ? createMemoryEnabled : true,
       owner: 'you',
       updated: relativeNow(),
       indexName,
@@ -1800,7 +1828,7 @@ function ContextEngineApp({
                   <p>{DESCRIPTION_HELPER}</p>
                 </EuiText>
               </div>
-              {SHOW_MEMORY_TOGGLE ? (
+              {showMemory ? (
                 <>
                   <EuiSpacer size="m" />
                   <MemorySwitch checked={createMemoryEnabled} onChange={setCreateMemoryEnabled} />
@@ -1934,7 +1962,7 @@ function ContextEngineApp({
     const sourcesDirty = sourcesListDirty || sourcesEsqlDirty;
     const descriptionDirty =
       intentDraft.trim() !== namespace.intent ||
-      (SHOW_MEMORY_TOGGLE && memoryDraft !== (namespace.memoryEnabled !== false));
+      (showMemory && memoryDraft !== (namespace.memoryEnabled !== false));
     const tracesDirty =
       tracesSignature(tracesDraft) !== tracesSignature(namespace.traces ?? []);
     const connectedAgents = meta?.connectedAgents ?? [];
@@ -1992,7 +2020,7 @@ function ContextEngineApp({
       replaceNamespace({
         ...namespace,
         intent: intentDraft.trim(),
-        ...(SHOW_MEMORY_TOGGLE ? { memoryEnabled: memoryDraft } : {}),
+        ...(showMemory ? { memoryEnabled: memoryDraft } : {}),
       });
       setPendingPanelSwitch(null);
       setEditIntentOpen(false);
@@ -2231,7 +2259,7 @@ function ContextEngineApp({
                       [namespace.name]: true,
                     }))
                   }
-                  memoryEnabled={SHOW_MEMORY_TOGGLE && namespace.memoryEnabled !== false}
+                  memoryEnabled={showMemory && namespace.memoryEnabled !== false}
                 />
               ) : null}
               {NEXT_STEP_BANNER &&
@@ -2411,7 +2439,7 @@ function ContextEngineApp({
                     >
                       <p>{DESCRIPTION_HELPER}</p>
                     </EuiText>
-                    {SHOW_MEMORY_TOGGLE ? (
+                    {showMemory ? (
                       <>
                         <EuiSpacer size="m" />
                         <MemorySwitch checked={memoryDraft} onChange={setMemoryDraft} />
@@ -2422,6 +2450,12 @@ function ContextEngineApp({
                   <EuiText size="s">
                     <p>{namespace.intent}</p>
                   </EuiText>
+                ) : null}
+                {showMemory && !editIntentOpen ? (
+                  <>
+                    <EuiSpacer size="m" />
+                    <MemoryReadout on={namespace.memoryEnabled !== false} />
+                  </>
                 ) : null}
               </EuiPanel>
               <AgentTracesPanel
@@ -3202,17 +3236,51 @@ function ContextEngineApp({
           <EuiText size="xs" color="subdued" className="contextEnginePrototype__demoStateLabel">
             Demo state
           </EuiText>
-          <EuiSelect
-            compressed
-            options={[
-              ...(proto11On ? [{ value: 'empty', text: 'Empty' }] : []),
-              { value: 'learning', text: 'Learning' },
-              { value: 'working', text: 'Working' },
-            ]}
-            value={!proto11On && flags.catalogState === 'empty' ? 'learning' : flags.catalogState}
-            onChange={(event) => setDemoCatalogState(event.target.value as CatalogDemoState)}
-            aria-label="Demo state"
-          />
+          {proto11On ? (
+            <EuiSuperSelect<CatalogDemoState | 'reset'>
+              compressed
+              options={[
+                { value: 'empty', inputDisplay: 'Empty' },
+                { value: 'learning', inputDisplay: 'Learning' },
+                { value: 'working', inputDisplay: 'Working' },
+                {
+                  value: 'reset',
+                  inputDisplay: 'Reset demo data',
+                  dropdownDisplay: (
+                    <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                      <EuiFlexItem grow={false}>
+                        <EuiIcon type="refresh" size="s" aria-hidden={true} />
+                      </EuiFlexItem>
+                      <EuiFlexItem grow={false}>Reset demo data</EuiFlexItem>
+                    </EuiFlexGroup>
+                  ),
+                  'data-test-subj': 'contextEngineResetDemoData',
+                },
+              ]}
+              valueOfSelected={flags.catalogState}
+              popoverProps={{ panelMinWidth: 200 }}
+              onChange={(value) => {
+                if (value === 'reset') {
+                  setPendingReset(true);
+                  return;
+                }
+                setDemoCatalogState(value);
+              }}
+              aria-label="Demo state"
+              data-test-subj="contextEngineDemoState"
+            />
+          ) : (
+            <EuiSelect
+              compressed
+              options={[
+                { value: 'learning', text: 'Learning' },
+                { value: 'working', text: 'Working' },
+              ]}
+              value={flags.catalogState === 'empty' ? 'learning' : flags.catalogState}
+              onChange={(event) => setDemoCatalogState(event.target.value as CatalogDemoState)}
+              aria-label="Demo state"
+            />
+          )}
         </div>
         <div className="contextEnginePrototype__demoState contextEnginePrototype__demoState--proto11">
           <EuiText size="xs" color="subdued" className="contextEnginePrototype__demoStateLabel">
@@ -3241,6 +3309,24 @@ function ContextEngineApp({
             confirmButtonText="Remove"
             buttonColor="danger"
           />
+        ) : null}
+        {pendingReset ? (
+          <EuiConfirmModal
+            aria-labelledby="contextEngineResetDemoDataTitle"
+            titleProps={{ id: 'contextEngineResetDemoDataTitle' }}
+            title="Reset demo data?"
+            onCancel={() => setPendingReset(false)}
+            onConfirm={confirmResetDemoData}
+            cancelButtonText="Cancel"
+            confirmButtonText="Reset"
+            buttonColor="danger"
+            data-test-subj="contextEngineResetDemoDataConfirm"
+          >
+            <p>
+              This removes every AI index created in this browser and restores the curated set:
+              the managed elastic index, two sample AI indices and four example indices.
+            </p>
+          </EuiConfirmModal>
         ) : null}
         {pendingDeleteIndex ? (
           <EuiConfirmModal

@@ -109,6 +109,11 @@ const AgentRow = ({
             <strong>{agent.name}</strong>
           </EuiText>
         </EuiFlexItem>
+        {agent.sample ? (
+          <EuiFlexItem grow={false}>
+            <EuiBadge color="hollow">Sample</EuiBadge>
+          </EuiFlexItem>
+        ) : null}
         {saved ? (
           <EuiFlexItem grow={false}>
             <EuiBadge color="hollow">Context tools active</EuiBadge>

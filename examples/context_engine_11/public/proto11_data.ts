@@ -1356,6 +1356,7 @@ const createHigherEdSample = (): Namespace => {
     sample: true,
     scenario: 'higher-ed',
     phase: 'complete',
+    connectedAgents: [{ name: 'enrollment-assistant', sample: true }],
   };
   return {
     name,
@@ -1431,6 +1432,46 @@ export const createSampleNamespace = (scenario: Proto11SampleScenario = 'web-ops
     proto11: meta,
   };
 };
+
+const SIGNIFICANT_EVENTS_TRACE: IndexTrace = {
+  value: 'Significant Events Judge',
+  type: 'elastic_agent',
+};
+
+const CURATED_FROM_GOALS: ReadonlyArray<Omit<CreateFromGoalOptions, 'takenNames'>> = [
+  {
+    goalId: 'gaps',
+    name: 'significant-events-judge-context',
+    sourceIds: ['cpu', 'k8s', 'nginx-error', 'nginx-access'],
+    trace: SIGNIFICANT_EVENTS_TRACE,
+  },
+  { goalId: 'docs', name: 'sre-runbooks', sourceIds: ['runbooks'] },
+  { goalId: 'entities', name: 'service-profiles', sourceIds: ['nginx-access'] },
+  {
+    goalId: 'gaps',
+    name: 'web-ops-gaps',
+    sourceIds: ['nginx-access', 'nginx-error', 'cpu'],
+    trace: SIGNIFICANT_EVENTS_TRACE,
+  },
+];
+
+/** Runs the first pass to completion so the index opens at Run on all data. */
+const toSampleReady = (namespace: Namespace): Namespace => {
+  let current = namespace;
+  for (let step = 0; step <= FIRST_PASS_TICKS && current.proto11?.phase === 'firstPass'; step++) {
+    current = advanceProto11(current);
+  }
+  return current;
+};
+
+/** The Learning catalog that Reset demo data restores, besides the managed index. */
+export const curatedNamespaces = (): Namespace[] => [
+  createSampleNamespace('web-ops'),
+  createSampleNamespace('higher-ed'),
+  ...CURATED_FROM_GOALS.map((options) =>
+    toSampleReady(createProto11Namespace({ ...options, takenNames: [] }))
+  ),
+];
 
 // ---------- run engine ----------
 

@@ -43,6 +43,7 @@ import {
   useEuiTheme,
 } from '@elastic/eui';
 
+import { MEMORY_HELPER, SHOW_MEMORY_TOGGLE } from './demo_flags';
 import {
   EXAMPLE_QUESTIONS,
   GENAI_TRACE_OPTIONS,
@@ -203,6 +204,23 @@ const ProposalCard = ({
     },
     ...(proposal.trace
       ? [{ title: 'Agent traces', description: <TraceRow trace={proposal.trace} /> }]
+      : []),
+    ...(SHOW_MEMORY_TOGGLE
+      ? [
+          {
+            title: 'Memory',
+            description: (
+              <div data-test-subj="proto11ProposalMemory">
+                <EuiText size="s">
+                  <p>On</p>
+                </EuiText>
+                <EuiText size="s" color="subdued">
+                  <p>{MEMORY_HELPER}</p>
+                </EuiText>
+              </div>
+            ),
+          },
+        ]
       : []),
   ];
   return (

@@ -27,6 +27,8 @@ export interface ConnectedAgent {
   name: string;
   /** Relative time of the last retrieval. Undefined until one is recorded. */
   lastRetrieval?: string;
+  /** Ships with a sample AI index rather than being connected by the user. */
+  sample?: boolean;
 }
 
 export type Proto11RunStatus = 'firstPass' | 'sampleReady' | 'running' | 'enabled' | 'needsAgent';

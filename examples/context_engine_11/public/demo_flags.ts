@@ -28,7 +28,14 @@ export const TRY_QUESTION_ENABLED = false;
 export const CONTEXT_ENGINE_ENABLED = true;
 
 /** M3 memory switch. Hide the toggle entirely when off. */
-export const MEMORY_ENABLED = false;
+export const MEMORY_ENABLED = true;
+
+/** The memory switch needs both the M3 flag and the Context Engine. */
+export const SHOW_MEMORY_TOGGLE = MEMORY_ENABLED && CONTEXT_ENGINE_ENABLED;
+
+export const MEMORY_SWITCH_LABEL = 'Let agents store task memory in this AI index';
+export const MEMORY_HELPER =
+  'Agents using this index can save what they learn during a task and recall it later. Memories are visible to anyone with access to the index.';
 
 /** "Next: create an automation" banner. Off; the ready callout stays until dismissed. */
 export const NEXT_STEP_BANNER = false;
