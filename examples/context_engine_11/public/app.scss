@@ -1504,14 +1504,14 @@ html {
 }
 
 .contextEnginePrototype__proto11HeroArt {
-  align-items: center;
+  align-items: flex-start;
   align-self: stretch;
   display: flex;
   flex: 0 1 38%;
   justify-content: center;
   max-width: 320px;
-  // Matches the hero's action row (16px spacer + 32px buttons) so the art centres on the title and composer.
-  padding-bottom: 48px;
+  // Centres the art on the title and composer at rest, and holds it there when the proposal opens below.
+  padding-top: 38px;
   position: relative;
 
   img,

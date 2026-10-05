@@ -806,8 +806,8 @@ const HeroTexture = () => {
       <div
         css={css`
           position: absolute;
+          top: 0;
           right: -10%;
-          bottom: -20%;
           width: 140%;
           aspect-ratio: 1270 / 1219;
           background: url(${heroTexture}) no-repeat center / 100% auto;
