@@ -385,7 +385,7 @@ export const Proto11SampleStrip = ({ onExploreSample }: { onExploreSample: Explo
             {SAMPLE_DEMOS.map((item, index) => (
               <EuiFlexItem grow={false} key={item.question}>
                 <EuiBadge
-                  color={demoIndex === index ? 'primary' : 'hollow'}
+                  color={demoIndex === index ? 'default' : 'hollow'}
                   onClick={() => setDemoIndex(index)}
                   onClickAriaLabel={`Ask ${item.question}`}
                   data-test-subj="proto11SampleQuestion"
