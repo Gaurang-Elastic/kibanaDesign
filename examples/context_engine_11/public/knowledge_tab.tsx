@@ -486,145 +486,151 @@ export const KnowledgeTab = ({
       <EuiText size="s" color="subdued" className="contextEnginePrototype__kiSubtitleWrap">
         <p className="contextEnginePrototype__kiSubtitle">The knowledge your agents retrieve.</p>
       </EuiText>
-      {proto11?.testQuestion}
-      {showCheck && proto11 ? (
-        <EuiPanel
-          hasBorder
-          paddingSize="l"
-          className="contextEnginePrototype__panel"
-          data-test-subj="proto11CheckAFew"
-        >
-          <div className="contextEnginePrototype__panelHeader">
-            <div className="contextEnginePrototype__panelHeaderText">
-              <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-                <EuiFlexItem grow={false}>
-                  <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
-                    <h2>Check a few</h2>
-                  </EuiTitle>
-                </EuiFlexItem>
-                <EuiFlexItem grow={false}>
-                  <EuiBadge color="hollow">
-                    {lookedAtCount} of {Math.min(CHECK_TARGET, picks.length)} looked at
-                  </EuiBadge>
-                </EuiFlexItem>
-              </EuiFlexGroup>
-              <EuiText size="xs" color="subdued" className="contextEnginePrototype__panelDesc">
-                <p>One from each source. You do not need to review everything.</p>
-              </EuiText>
+      <div className="contextEnginePrototype__panels">
+        {proto11?.testQuestion}
+        {showCheck && proto11 ? (
+          <EuiPanel
+            hasBorder
+            paddingSize="l"
+            className="contextEnginePrototype__panel"
+            data-test-subj="proto11CheckAFew"
+          >
+            <div className="contextEnginePrototype__panelHeader">
+              <div className="contextEnginePrototype__panelHeaderText">
+                <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                  <EuiFlexItem grow={false}>
+                    <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
+                      <h2>Check a few</h2>
+                    </EuiTitle>
+                  </EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    <EuiBadge color="hollow">
+                      {lookedAtCount} of {Math.min(CHECK_TARGET, picks.length)} looked at
+                    </EuiBadge>
+                  </EuiFlexItem>
+                </EuiFlexGroup>
+                <EuiText size="xs" color="subdued" className="contextEnginePrototype__panelDesc">
+                  <p>One from each source. You do not need to review everything.</p>
+                </EuiText>
+              </div>
+              <div className="contextEnginePrototype__panelActions">
+                <EuiButtonEmpty size="s" onClick={proto11.onHideCheck}>
+                  Hide
+                </EuiButtonEmpty>
+              </div>
             </div>
-            <div className="contextEnginePrototype__panelActions">
-              <EuiButtonEmpty size="s" onClick={proto11.onHideCheck}>
-                Hide
-              </EuiButtonEmpty>
-            </div>
-          </div>
-          <EuiSpacer size="m" />
-          <EuiFlexGroup gutterSize="m" responsive={false}>
-            {picks.map((pick) => {
-              const group = indicatorSourceGroup(pick, namespace.sources, namespace.proto11?.agent);
-              const looked = proto11.lookedAt.includes(pick.id);
-              return (
-                <EuiFlexItem key={pick.id}>
-                  <EuiCard
-                    textAlign="left"
-                    paddingSize="m"
-                    hasBorder
-                    titleElement="h3"
-                    titleSize="xs"
-                    title={pick.title}
-                    description={group.name}
-                    onClick={() => openFromCheck(pick.id)}
-                    footer={
-                      <EuiFlexGroup gutterSize="xs" responsive={false} wrap>
-                        <EuiFlexItem grow={false}>
-                          <EuiBadge color={typeBadgeColor(pick.type)}>
-                            {typeLabel(pick.type)}
-                          </EuiBadge>
-                        </EuiFlexItem>
-                        {looked ? (
+            <EuiSpacer size="m" />
+            <EuiFlexGroup gutterSize="m" responsive={false}>
+              {picks.map((pick) => {
+                const group = indicatorSourceGroup(
+                  pick,
+                  namespace.sources,
+                  namespace.proto11?.agent
+                );
+                const looked = proto11.lookedAt.includes(pick.id);
+                return (
+                  <EuiFlexItem key={pick.id}>
+                    <EuiCard
+                      textAlign="left"
+                      paddingSize="m"
+                      hasBorder
+                      titleElement="h3"
+                      titleSize="xs"
+                      title={pick.title}
+                      description={group.name}
+                      onClick={() => openFromCheck(pick.id)}
+                      footer={
+                        <EuiFlexGroup gutterSize="xs" responsive={false} wrap>
                           <EuiFlexItem grow={false}>
-                            <EuiBadge color="hollow" iconType="eye">
-                              Looked at
+                            <EuiBadge color={typeBadgeColor(pick.type)}>
+                              {typeLabel(pick.type)}
                             </EuiBadge>
                           </EuiFlexItem>
-                        ) : null}
-                      </EuiFlexGroup>
-                    }
-                  />
-                </EuiFlexItem>
-              );
-            })}
-          </EuiFlexGroup>
-        </EuiPanel>
-      ) : null}
-      <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__panel">
-        <div className="contextEnginePrototype__kiLockup">
-          <EuiText size="s">
-            <p className="contextEnginePrototype__kiCountLine">
-              {count} {proto11?.sample ? 'sample ' : null}
-              <strong>{countNoun}</strong> in{' '}
-              <EuiLink href={discoverHref} target="_blank">
-                {backingIndexName(namespace.name)}
-              </EuiLink>
-              {proto11?.sample ? (
-                <>
-                  {' '}
-                  <EuiBadge color="hollow">Sample</EuiBadge>
-                </>
-              ) : null}
-            </p>
-          </EuiText>
-          <EuiButtonEmpty iconType="popout" iconSide="right" href={discoverHref} target="_blank">
-            View raw docs in Discover
-          </EuiButtonEmpty>
-        </div>
-        <EuiSpacer size="m" />
-
-        {hydrated.length === 0 ? (
-          <div className="contextEnginePrototype__kiEmpty">
-            <EuiIcon type="document" size="l" color="subdued" />
-            <EuiText size="s" color="subdued">
-              <p>No Knowledge Indicators found</p>
-            </EuiText>
-          </div>
-        ) : (
-          <div className="contextEnginePrototype__panelBody">
-            {sharedDestinationNote ? (
-              <EuiText size="s" color="subdued" className="contextEnginePrototype__kiSharedNote">
-                <p>
-                  Some of these may come from another AI index sharing this destination. Check the
-                  source column to confirm.
-                </p>
-              </EuiText>
-            ) : null}
-            <EuiButtonGroup
-              legend="Filter by type"
-              type="single"
-              color="text"
-              buttonSize="compressed"
-              options={typeGroupOptions}
-              idSelected={typeFilter}
-              onChange={(id) => setTypeFilter(id as KnowledgeType | 'all')}
-            />
-            <div className="contextEnginePrototype__kiTabList" ref={listRef}>
-              {renderList()}
-            </div>
-          </div>
-        )}
-
-        {KI_DETAIL_FLYOUT && flyout ? (
-          <KiDetailFlyout
-            flyout={flyout}
-            currentView={currentView}
-            namespace={namespace}
-            onClose={closeFlyout}
-            onOpenAutomation={openAutomation}
-            onOpenSources={openSources}
-            onReplaceIndicator={onReplaceIndicator}
-            setViewedVersion={setViewedVersion}
-          />
+                          {looked ? (
+                            <EuiFlexItem grow={false}>
+                              <EuiBadge color="hollow" iconType="eye">
+                                Looked at
+                              </EuiBadge>
+                            </EuiFlexItem>
+                          ) : null}
+                        </EuiFlexGroup>
+                      }
+                    />
+                  </EuiFlexItem>
+                );
+              })}
+            </EuiFlexGroup>
+          </EuiPanel>
         ) : null}
-      </EuiPanel>
+        <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__panel">
+          <div className="contextEnginePrototype__kiLockup">
+            <EuiText size="s">
+              <p className="contextEnginePrototype__kiCountLine">
+                {count} {proto11?.sample ? 'sample ' : null}
+                <strong>{countNoun}</strong> in{' '}
+                <EuiLink href={discoverHref} target="_blank">
+                  {backingIndexName(namespace.name)}
+                </EuiLink>
+                {proto11?.sample ? (
+                  <>
+                    {' '}
+                    <EuiBadge color="hollow">Sample</EuiBadge>
+                  </>
+                ) : null}
+              </p>
+            </EuiText>
+            <EuiButtonEmpty iconType="popout" iconSide="right" href={discoverHref} target="_blank">
+              View raw docs in Discover
+            </EuiButtonEmpty>
+          </div>
+          <EuiSpacer size="m" />
+
+          {hydrated.length === 0 ? (
+            <div className="contextEnginePrototype__kiEmpty">
+              <EuiIcon type="document" size="l" color="subdued" aria-hidden={true} />
+              <EuiText size="s" color="subdued">
+                <p>No Knowledge Indicators found</p>
+              </EuiText>
+            </div>
+          ) : (
+            <div className="contextEnginePrototype__panelBody">
+              {sharedDestinationNote ? (
+                <EuiText size="s" color="subdued" className="contextEnginePrototype__kiSharedNote">
+                  <p>
+                    Some of these may come from another AI index sharing this destination. Check the
+                    source column to confirm.
+                  </p>
+                </EuiText>
+              ) : null}
+              <EuiButtonGroup
+                legend="Filter by type"
+                type="single"
+                color="text"
+                buttonSize="compressed"
+                options={typeGroupOptions}
+                idSelected={typeFilter}
+                onChange={(id) => setTypeFilter(id as KnowledgeType | 'all')}
+              />
+              <div className="contextEnginePrototype__kiTabList" ref={listRef}>
+                {renderList()}
+              </div>
+            </div>
+          )}
+
+          {KI_DETAIL_FLYOUT && flyout ? (
+            <KiDetailFlyout
+              flyout={flyout}
+              currentView={currentView}
+              namespace={namespace}
+              onClose={closeFlyout}
+              onOpenAutomation={openAutomation}
+              onOpenSources={openSources}
+              onReplaceIndicator={onReplaceIndicator}
+              setViewedVersion={setViewedVersion}
+            />
+          ) : null}
+        </EuiPanel>
+      </div>
     </>
   );
 };
