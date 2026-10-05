@@ -185,6 +185,22 @@ export const usageForNamespace = (namespace: Namespace): UsageSeries | null => {
 export const usageTabVisible = (namespace: Namespace): boolean =>
   usageForNamespace(namespace) !== null;
 
+/**
+ * Retrievals in the default period, for indicators part B measured.
+ * Null when this index has no usage. Indicators that were not measured are absent, not zero.
+ */
+export const indicatorRetrievals = (namespace: Namespace): Map<string, number> | null => {
+  const usage = usageForNamespace(namespace);
+  if (!usage) return null;
+  const span = usage.days.length;
+  const counts = new Map<string, number>();
+  usage.top.forEach((item) => {
+    const scaled = scaleRetrievals(item.retrievals, DEFAULT_USAGE_PERIOD, span);
+    if (scaled !== null) counts.set(item.id, scaled);
+  });
+  return counts;
+};
+
 /** Days that fall inside the selected period. */
 export const filterUsageDays = (days: readonly UsageDay[], period: UsagePeriod): UsageDay[] =>
   days.filter((day) => day.daysAgo < PERIOD_DAYS[period]);

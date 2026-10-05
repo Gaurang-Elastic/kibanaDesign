@@ -96,6 +96,7 @@ export const WEB_OPS_SOURCES: WebOpsSource[] = [
 ];
 
 export const HIGHER_ED_SAMPLE_NAME = 'sample-higher-ed';
+export const LARGE_SAMPLE_NAME = 'sample-large';
 
 /** About 90 fields across the three indices. Values are invented. */
 const HIGHER_ED_SOURCES: WebOpsSource[] = [
@@ -1415,19 +1416,212 @@ const createHigherEdSample = (): Namespace => {
   };
 };
 
-export const sampleNameFor = (scenario: Proto11SampleScenario) =>
-  scenario === 'higher-ed' ? HIGHER_ED_SAMPLE_NAME : SAMPLE_INDEX_NAME;
+export const sampleNameFor = (scenario: Proto11SampleScenario) => {
+  if (scenario === 'higher-ed') return HIGHER_ED_SAMPLE_NAME;
+  if (scenario === 'large') return LARGE_SAMPLE_NAME;
+  return SAMPLE_INDEX_NAME;
+};
 
 export const sampleScenarioOf = (namespace: Namespace): Proto11SampleScenario | undefined =>
   namespace.proto11?.sample ? namespace.proto11.scenario ?? 'web-ops' : undefined;
 
+/**
+ * Extra web-ops Knowledge Indicators so the finished sample holds 48,
+ * none of them from the Kubernetes source. That source stays attached
+ * with an empty lineage, which is the gap the map draws.
+ */
+const WEB_OPS_EXTRA: PortedKi[] = [
+  {
+    id: 'ki-extra-1',
+    source: 'nginx-access',
+    template: 'overview',
+    type: 'index_metadata',
+    title: 'Field: http.response.status_code',
+    description: 'Numeric HTTP status. Use a range for an error class.',
+    content: 'http.response.status_code is a number. Use 500 to 599 for server errors.',
+    attributes: { tags: ['nginx', 'http'] },
+    related: ['ki-001'],
+  },
+  {
+    id: 'ki-extra-2',
+    source: 'nginx-access',
+    template: 'overview',
+    type: 'fact',
+    title: 'Health checks inflate request totals',
+    description: 'The HealthChecker user agent adds about 12% to request counts.',
+    content: 'Exclude user_agent.name: "HealthChecker" before computing a rate.',
+    attributes: { tags: ['nginx', 'health'] },
+    related: ['ki-002'],
+  },
+  {
+    id: 'ki-extra-3',
+    source: 'cpu',
+    template: 'overview',
+    type: 'fact',
+    title: 'Saturated host threshold',
+    description: 'Hosts above 0.85 normalized CPU are treated as saturated.',
+    content: 'system.cpu.total.norm.pct above 0.85 is the saturation line used in the runbooks.',
+    attributes: { tags: ['cpu'] },
+    related: ['ki-010'],
+  },
+  {
+    id: 'ki-extra-4',
+    source: 'nginx-error',
+    template: 'overview',
+    type: 'index_metadata',
+    title: 'Field: error.message',
+    description: 'The error text field. error.msg is not in this index.',
+    content: 'Filter and group nginx errors on error.message. The field error.msg does not exist.',
+    attributes: { tags: ['nginx', 'errors'] },
+    related: ['ki-030'],
+  },
+  {
+    id: 'ki-extra-5',
+    source: 'runbooks',
+    template: 'digest',
+    type: 'document',
+    title: 'Runbook: edge capacity',
+    description: 'When to add edge capacity, and who approves it.',
+    content:
+      'Add edge capacity when checkout CPU stays above 0.85 for 10 minutes. payments-sre approves the change.',
+    attributes: { tags: ['runbook', 'capacity'] },
+    related: ['ki-020'],
+  },
+  {
+    id: 'ki-extra-6',
+    source: 'cpu',
+    template: 'overview',
+    type: 'query_guide',
+    title: 'Answering "which hosts are hot right now?"',
+    description: 'A 15 minute window on normalized CPU, grouped by host.',
+    content:
+      'Use system.cpu.total.norm.pct from metrics-system.cpu-default over the last 15 minutes. Group by host.name.',
+    attributes: { tags: ['cpu', 'hosts'] },
+    related: ['ki-010'],
+  },
+];
+
+const LARGE_SOURCES: Array<{ name: string; subtitle: string }> = [
+  { name: 'logs-checkout.access-default', subtitle: 'Checkout access logs' },
+  { name: 'logs-checkout.error-default', subtitle: 'Checkout error logs' },
+  { name: 'metrics-host.cpu-default', subtitle: 'Host CPU metrics' },
+  { name: 'metrics-host.memory-default', subtitle: 'Host memory metrics' },
+  { name: 'logs-auth.audit-default', subtitle: 'Authentication audit logs' },
+  { name: 'metrics-service.latency-default', subtitle: 'Service latency metrics' },
+  { name: 'logs-deploy.change-default', subtitle: 'Deployment change events' },
+  { name: 'docs-sre-runbooks', subtitle: 'SRE runbooks' },
+];
+
+/** Seven smaller sources a click can open as a graph, and three larger ones. Sums to 2,400. */
+const LARGE_COUNTS = [180, 180, 200, 200, 200, 480, 480, 480];
+
+const LARGE_TYPES: KnowledgeType[] = [
+  'index_metadata',
+  'fact',
+  'query_guide',
+  'document',
+  'unit_profile',
+  'playbook',
+];
+
+const LARGE_GOVERNANCE: KnowledgeIndicator['governance'] = {
+  provenance: {
+    created_by: {
+      uri: 'workflow://index-overview',
+      metadata: { ingestion_method: 'workflow' },
+    },
+  },
+};
+
+/** About 2,400 mock Knowledge Indicators across 8 sources, for the treemap demo. */
+const createLargeSample = (): Namespace => {
+  const name = LARGE_SAMPLE_NAME;
+  const indexName = backingIndexName(name);
+  const sources = LARGE_SOURCES.map((source, index) => ({
+    id: `large-src-${index}`,
+    name: source.name,
+    subtitle: source.subtitle,
+    typeLabel: index === LARGE_SOURCES.length - 1 ? 'Connector' : 'Index',
+    icon: index === LARGE_SOURCES.length - 1 ? 'documents' : 'database',
+  }));
+  const indicators: KnowledgeIndicator[] = [];
+  LARGE_COUNTS.forEach((count, sourceIndex) => {
+    const source = sources[sourceIndex];
+    const uri =
+      source.typeLabel === 'Connector' ? `connector://${source.id}` : `index://${source.name}`;
+    for (let item = 0; item < count; item += 1) {
+      const id = `large-${sourceIndex}-${item}`;
+      const related = item > 0 && item % 4 === 0 ? [`large-${sourceIndex}-${item - 1}`] : [];
+      indicators.push({
+        id,
+        '@timestamp': PROTO11_TIMESTAMP,
+        type: LARGE_TYPES[item % LARGE_TYPES.length],
+        title: `${source.name} ${item + 1}`,
+        description: `Mock Knowledge Indicator ${item + 1} from ${source.name}.`,
+        content: `Written from ${source.name}.`,
+        updated_at: PROTO11_TIMESTAMP,
+        references: [
+          { uri, relation: 'derived_from' },
+          ...related.map((relatedId) => ({ uri: `ki://${relatedId}`, relation: 'relates_to' })),
+        ],
+        governance: LARGE_GOVERNANCE,
+      });
+    }
+  });
+  const reads = sources.map((source) => source.name);
+  const automations = [
+    {
+      ...buildAutomation({
+        namespaceName: name,
+        indexName,
+        template: 'overview',
+        sourceIds: [],
+        derivation: 'Chosen for the large sample so the map can show a treemap.',
+        runStatus: 'enabled' as const,
+      }),
+      hasRun: true,
+      lastRunAt: 'just now',
+      producesCount: indicators.length,
+      reads,
+    },
+  ];
+  const meta: Proto11Meta = {
+    ...freshMeta('indices', [], ['overview']),
+    sample: true,
+    scenario: 'large',
+    phase: 'complete',
+  };
+  return {
+    name,
+    displayName: name,
+    intent:
+      'Large sample index with about 2,400 Knowledge Indicators across 8 sources, for the map treemap.',
+    owner: 'you',
+    updated: 'just now',
+    indexName,
+    storageType: 'index',
+    userCreated: true,
+    sources,
+    traces: [],
+    automations,
+    indicators,
+    knowledge: statsFromIndicators(indicators),
+    tryQuestions: [],
+    proto11: meta,
+  };
+};
+
 /** The finished sample index for a scenario. Web-ops: five sources, two completed automations. */
 export const createSampleNamespace = (scenario: Proto11SampleScenario = 'web-ops'): Namespace => {
   if (scenario === 'higher-ed') return createHigherEdSample();
+  if (scenario === 'large') return createLargeSample();
   const name = SAMPLE_INDEX_NAME;
   const indexName = backingIndexName(name);
   const sourceIds = WEB_OPS_SOURCES.map((source) => source.id);
-  const kis = PORTED_KIS.filter((ki) => ki.source !== 'traces');
+  const kis = [
+    ...PORTED_KIS.filter((ki) => ki.source !== 'traces' && ki.source !== 'k8s'),
+    ...WEB_OPS_EXTRA,
+  ];
   const indicators = kis.map((ki) =>
     toIndicator(ki, ki.template === 'digest' ? 'digest' : 'overview')
   );
@@ -2219,7 +2413,9 @@ export const EXAMPLE_QUESTIONS = [
 export const SAMPLE_COUNTS = {
   sources: WEB_OPS_SOURCES.length,
   automations: 2,
-  indicators: PORTED_KIS.filter((ki) => ki.source !== 'traces').length,
+  indicators:
+    PORTED_KIS.filter((ki) => ki.source !== 'traces' && ki.source !== 'k8s').length +
+    WEB_OPS_EXTRA.length,
 } as const;
 
 export const sampleIndicator = (
@@ -2268,6 +2464,7 @@ const HIGHER_ED_FIGURES = {
 };
 
 const TEST_SCENARIOS: Record<Proto11SampleScenario, TestScenario[]> = {
+  large: [],
   'web-ops': [
     {
       question: 'Which hosts are saturated?',

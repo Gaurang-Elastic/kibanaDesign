@@ -3455,12 +3455,17 @@ function ContextEngineApp({
             Demo state
           </EuiText>
           {proto11On ? (
-            <EuiSuperSelect<CatalogDemoState | 'reset'>
+            <EuiSuperSelect<CatalogDemoState | 'reset' | 'large'>
               compressed
               options={[
                 { value: 'empty', inputDisplay: 'Empty' },
                 { value: 'learning', inputDisplay: 'Learning' },
                 { value: 'working', inputDisplay: 'Working' },
+                {
+                  value: 'large',
+                  inputDisplay: 'Large index',
+                  'data-test-subj': 'contextEngineLargeIndex',
+                },
                 {
                   value: 'reset',
                   inputDisplay: 'Reset demo data',
@@ -3480,6 +3485,11 @@ function ContextEngineApp({
               onChange={(value) => {
                 if (value === 'reset') {
                   setPendingReset(true);
+                  return;
+                }
+                if (value === 'large') {
+                  if (flags.catalogState === 'empty') setDemoCatalogState('learning');
+                  trySample('large', 'knowledge');
                   return;
                 }
                 setDemoCatalogState(value);

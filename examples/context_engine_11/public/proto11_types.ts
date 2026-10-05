@@ -21,7 +21,7 @@ export type Proto11SourceId =
   | 'tuition'
   | 'peers';
 
-export type Proto11SampleScenario = 'web-ops' | 'higher-ed';
+export type Proto11SampleScenario = 'web-ops' | 'higher-ed' | 'large';
 
 export interface ConnectedAgent {
   name: string;

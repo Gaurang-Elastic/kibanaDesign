@@ -44,6 +44,7 @@ import {
 } from './knowledge_indicators';
 import { backingIndexName, type Automation, type Namespace } from './namespace_data';
 import { indicatorSourceGroup } from './proto11_data';
+import { GRAPH_KI_LIMIT, Proto11KiMap } from './proto11_ki_map';
 import {
   KiDetailFlyout as Proto11KiDetailFlyout,
   kiFeedbackLabel,
@@ -51,6 +52,12 @@ import {
 } from './proto11_ki_detail';
 
 const CHECK_TARGET = 3;
+
+/** List or Map, remembered per index for this browser session. */
+const kiViewByIndex = new Map<string, 'list' | 'map'>();
+
+const viewForIndex = (name: string, count: number): 'list' | 'map' =>
+  kiViewByIndex.get(name) ?? (count > GRAPH_KI_LIMIT ? 'map' : 'list');
 
 export interface Proto11KnowledgeProps {
   sample: boolean;
@@ -399,7 +406,12 @@ export const KnowledgeTab = ({
   groupedBySource?: boolean;
   proto11?: Proto11KnowledgeProps;
 }) => {
+  const indicatorCountRef = useRef(namespace.indicators.length);
+  indicatorCountRef.current = namespace.indicators.length;
   const [typeFilter, setTypeFilter] = useState<KnowledgeType | 'all'>('all');
+  const [kiView, setKiView] = useState<'list' | 'map'>(() =>
+    viewForIndex(namespace.name, namespace.indicators.length)
+  );
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewedVersion, setViewedVersion] = useState<number | null>(null);
   const [openRows, setOpenRows] = useState<string[]>([]);
@@ -410,6 +422,7 @@ export const KnowledgeTab = ({
     setOpenId(null);
     setViewedVersion(null);
     setOpenRows([]);
+    setKiView(viewForIndex(namespace.name, indicatorCountRef.current));
   }, [namespace.name]);
 
   const hydrated = useMemo(
@@ -654,18 +667,50 @@ export const KnowledgeTab = ({
                   </p>
                 </EuiText>
               ) : null}
-              <EuiButtonGroup
-                legend="Filter by type"
-                type="single"
-                color="text"
-                buttonSize="compressed"
-                options={typeGroupOptions}
-                idSelected={typeFilter}
-                onChange={(id) => setTypeFilter(id as KnowledgeType | 'all')}
-              />
-              <div className="contextEnginePrototype__kiTabList" ref={listRef}>
-                {renderList()}
+              <div className="contextEnginePrototype__kiToolbar">
+                <EuiButtonGroup
+                  legend="Filter by type"
+                  type="single"
+                  color="text"
+                  buttonSize="compressed"
+                  options={typeGroupOptions}
+                  idSelected={typeFilter}
+                  onChange={(id) => setTypeFilter(id as KnowledgeType | 'all')}
+                />
+                {proto11 ? (
+                  <EuiButtonGroup
+                    legend="Knowledge Indicator view"
+                    type="single"
+                    color="text"
+                    buttonSize="compressed"
+                    options={[
+                      { id: 'list', label: 'List', 'data-test-subj': 'proto11KiViewList' },
+                      { id: 'map', label: 'Map', 'data-test-subj': 'proto11KiViewMap' },
+                    ]}
+                    idSelected={kiView}
+                    onChange={(id) => {
+                      const next = id as 'list' | 'map';
+                      kiViewByIndex.set(namespace.name, next);
+                      setKiView(next);
+                    }}
+                    data-test-subj="proto11KiView"
+                  />
+                ) : null}
               </div>
+              {proto11 && kiView === 'map' ? (
+                <Proto11KiMap
+                  namespace={namespace}
+                  indicators={filtered}
+                  allIndicators={hydrated}
+                  selectedId={openId}
+                  onSelect={openIndicator}
+                  onClear={closeFlyout}
+                />
+              ) : (
+                <div className="contextEnginePrototype__kiTabList" ref={listRef}>
+                  {renderList()}
+                </div>
+              )}
             </div>
           )}
 

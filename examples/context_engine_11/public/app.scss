@@ -983,6 +983,14 @@ html {
   font-weight: 600;
 }
 
+.contextEnginePrototype__kiToolbar {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
 .contextEnginePrototype__kiTabList {
   display: flex;
   flex-direction: column;
