@@ -8,6 +8,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
+import { css } from '@emotion/react';
 import {
   EuiButton,
   EuiButtonEmpty,
@@ -27,24 +28,81 @@ import {
   EuiLink,
   EuiLoadingSpinner,
   EuiPanel,
-  EuiProgress,
   EuiSpacer,
   EuiText,
   EuiTitle,
   EuiToolTip,
+  useEuiTheme,
   useGeneratedHtmlId,
 } from '@elastic/eui';
 
 import type { Namespace } from './namespace_data';
+import { kiVizColor } from './proto11_ki_colors';
 import {
-  FIRST_PASS_TICKS,
   TEMPLATES,
   currentReasoningLine,
   failureGroupsFor,
+  firstPassDots,
   outstandingRejected,
   rejectedTotal,
 } from './proto11_data';
 import type { Proto11Meta } from './proto11_types';
+
+const FirstPassDotGrid = ({ meta }: { meta: Proto11Meta }) => {
+  const { euiTheme } = useEuiTheme();
+  const { dots, written, rejected } = firstPassDots(meta);
+  return (
+    <div data-test-subj="proto11FirstPassDots">
+      <div
+        css={css`
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+        `}
+      >
+        {dots.map((dot) => {
+          const fill = dot.rejected ? euiTheme.colors.warning : kiVizColor(dot.type, euiTheme);
+          return (
+            <span
+              key={dot.id}
+              css={css`
+                width: 12px;
+                height: 12px;
+                box-sizing: border-box;
+                border-radius: 12px;
+                border: 1px solid ${dot.filled ? fill : euiTheme.colors.borderBaseSubdued};
+                background: ${dot.filled ? fill : 'transparent'};
+                @media (prefers-reduced-motion: no-preference) {
+                  transition: background-color 200ms ease-out, border-color 200ms ease-out;
+                }
+              `}
+            />
+          );
+        })}
+      </div>
+      <EuiSpacer size="s" />
+      <EuiFlexGroup
+        justifyContent="spaceBetween"
+        alignItems="center"
+        responsive={false}
+        gutterSize="s"
+      >
+        <EuiFlexItem>
+          <EuiText size="xs" color="subdued">
+            <p aria-live="polite">{currentReasoningLine(meta)}</p>
+          </EuiText>
+        </EuiFlexItem>
+        <EuiFlexItem grow={false}>
+          <EuiText size="xs" color="subdued">
+            <p>
+              {written} written · {rejected} rejected
+            </p>
+          </EuiText>
+        </EuiFlexItem>
+      </EuiFlexGroup>
+    </div>
+  );
+};
 
 const kiCount = (count: number) =>
   count === 1 ? '1 Knowledge Indicator' : `${count} Knowledge Indicators`;
@@ -63,6 +121,18 @@ export const Proto11RunCallout = ({
   onRunAll: () => void;
   onAdjust: () => void;
 }) => {
+  const [holdGrid, setHoldGrid] = useState(false);
+  const prevPhase = useRef(meta.phase);
+  useEffect(() => {
+    if (prevPhase.current === 'firstPass' && meta.phase === 'sampleReady') {
+      setHoldGrid(true);
+      const timer = window.setTimeout(() => setHoldGrid(false), 2000);
+      prevPhase.current = meta.phase;
+      return () => window.clearTimeout(timer);
+    }
+    prevPhase.current = meta.phase;
+  }, [meta.phase]);
+
   if (meta.sample) return null;
   if (meta.phase === 'firstPass') {
     return (
@@ -73,17 +143,7 @@ export const Proto11RunCallout = ({
         title="Building first Knowledge Indicators from a sample of your data"
         data-test-subj="proto11FirstPass"
       >
-        <EuiProgress
-          value={meta.tick}
-          max={FIRST_PASS_TICKS}
-          size="xs"
-          color="primary"
-          aria-label="First pass progress"
-        />
-        <EuiSpacer size="s" />
-        <EuiText size="xs" color="subdued">
-          <p aria-live="polite">{currentReasoningLine(meta)}</p>
-        </EuiText>
+        <FirstPassDotGrid meta={meta} />
       </EuiCallOut>
     );
   }
@@ -98,6 +158,12 @@ export const Proto11RunCallout = ({
         )} ready from a sample. Check a few before running on all your data.`}
         data-test-subj="proto11SampleReady"
       >
+        {holdGrid ? (
+          <>
+            <FirstPassDotGrid meta={meta} />
+            <EuiSpacer size="s" />
+          </>
+        ) : null}
         <EuiFlexGroup gutterSize="m" alignItems="center" responsive={false}>
           <EuiFlexItem grow={false}>
             <EuiButton

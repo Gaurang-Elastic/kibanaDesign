@@ -23,11 +23,13 @@ import {
   EuiSpacer,
   EuiText,
   EuiTitle,
+  transparentize,
   useEuiTheme,
   useGeneratedHtmlId,
 } from '@elastic/eui';
 
-import { toIndicatorDocument, typeLabel, type KnowledgeIndicator } from './knowledge_indicators';
+import { toIndicatorDocument, type KnowledgeIndicator } from './knowledge_indicators';
+import { KiTypeBadge } from './proto11_ki_colors';
 import { comparisonHeadline, type TokenComparison } from './proto11_data';
 
 /** Small clickable KI card: title, hollow type badge, source in muted text. */
@@ -54,7 +56,7 @@ export const KiPreviewCard = ({
     <EuiSpacer size="xs" />
     <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
       <EuiFlexItem grow={false}>
-        <EuiBadge color="hollow">{typeLabel(indicator.type)}</EuiBadge>
+        <KiTypeBadge type={indicator.type} />
       </EuiFlexItem>
       <EuiFlexItem grow={false}>
         <EuiText size="xs" color="subdued">
@@ -90,7 +92,7 @@ export const KiPreviewRow = ({
         </EuiText>
       </EuiFlexItem>
       <EuiFlexItem grow={false}>
-        <EuiBadge color="hollow">{typeLabel(indicator.type)}</EuiBadge>
+        <KiTypeBadge type={indicator.type} />
       </EuiFlexItem>
       <EuiFlexItem grow={false}>
         <EuiText size="xs" color="subdued">
@@ -107,6 +109,87 @@ export const KiPreviewRow = ({
  * stylesheet rules in app.scss carry their own literal fallbacks.
  */
 const BRAND_TEAL = '#48EFCF';
+
+const WITH_STEPS = [
+  { label: 'retrieve', tone: 'primary' },
+  { label: 'answer', tone: 'neutral' },
+] as const;
+
+const WITHOUT_STEPS = [
+  { label: 'list indices', tone: 'neutral' },
+  { label: 'read mapping', tone: 'neutral' },
+  { label: 'sample documents', tone: 'neutral' },
+  { label: 'write query', tone: 'neutral' },
+  { label: 'retry after field error', tone: 'warning' },
+  { label: 'answer', tone: 'neutral' },
+] as const;
+
+/** Retrieve and answer beside the dry-run steps, above the token bars. */
+const ComparisonSteps = () => {
+  const { euiTheme } = useEuiTheme();
+  const rows = [
+    { label: 'With Context', steps: WITH_STEPS },
+    { label: 'Without Context', steps: WITHOUT_STEPS },
+  ];
+  return (
+    <div data-test-subj="proto11ComparisonSteps">
+      {rows.map((row) => (
+        <div
+          key={row.label}
+          css={css`
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+          `}
+        >
+          <EuiText size="xs">
+            <span
+              css={css`
+                display: inline-block;
+                width: 110px;
+              `}
+            >
+              {row.label}
+            </span>
+          </EuiText>
+          {row.steps.map((step) => {
+            const background =
+              step.tone === 'primary'
+                ? transparentize(euiTheme.colors.primary, 0.75)
+                : step.tone === 'warning'
+                ? transparentize(euiTheme.colors.warning, 0.75)
+                : euiTheme.colors.lightestShade;
+            const color =
+              step.tone === 'primary'
+                ? euiTheme.colors.textPrimary
+                : step.tone === 'warning'
+                ? euiTheme.colors.textWarning
+                : euiTheme.colors.text;
+            return (
+              <span
+                key={step.label}
+                css={css`
+                  display: inline-flex;
+                  align-items: center;
+                  height: 18px;
+                  padding: 0 8px;
+                  border-radius: 2px;
+                  background: ${background};
+                  color: ${color};
+                  font-size: 11px;
+                `}
+              >
+                {step.label}
+              </span>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 /** Optional headline, With and Without Context bars, and the estimate or sample note under them. */
 export const ComparisonBlock = ({
@@ -129,6 +212,8 @@ export const ComparisonBlock = ({
             <EuiSpacer size="m" />
           </>
         ) : null}
+        <ComparisonSteps />
+        <EuiSpacer size="s" />
         <ComparisonBars comparison={comparison} />
         <EuiSpacer size="m" />
       </>
@@ -221,7 +306,7 @@ export const KiJsonFlyout = ({
             </EuiFlexItem>
           ) : null}
           <EuiFlexItem grow={false}>
-            <EuiBadge color="hollow">{typeLabel(indicator.type)}</EuiBadge>
+            <KiTypeBadge type={indicator.type} />
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
             <EuiBadge color="hollow">{sourceName}</EuiBadge>

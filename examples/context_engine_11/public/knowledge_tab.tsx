@@ -35,16 +35,15 @@ import {
   KNOWLEDGE_TYPE_ORDER,
   slugify,
   toIndicatorDocument,
-  typeBadgeColor,
   typeFilterLabel,
-  typeLabel,
   type HydratedKnowledgeIndicator,
   type KnowledgeIndicator,
   type KnowledgeType,
 } from './knowledge_indicators';
 import { backingIndexName, type Automation, type Namespace } from './namespace_data';
 import { indicatorSourceGroup } from './proto11_data';
-import { GRAPH_KI_LIMIT, Proto11KiMap } from './proto11_ki_map';
+import { Proto11KiMap } from './proto11_ki_map';
+import { KiTypeBadge } from './proto11_ki_colors';
 import {
   KiDetailFlyout as Proto11KiDetailFlyout,
   kiFeedbackLabel,
@@ -56,8 +55,7 @@ const CHECK_TARGET = 3;
 /** List or Map, remembered per index for this browser session. */
 const kiViewByIndex = new Map<string, 'list' | 'map'>();
 
-const viewForIndex = (name: string, count: number): 'list' | 'map' =>
-  kiViewByIndex.get(name) ?? (count > GRAPH_KI_LIMIT ? 'map' : 'list');
+const viewForIndex = (name: string): 'list' | 'map' => kiViewByIndex.get(name) ?? 'list';
 
 export interface Proto11KnowledgeProps {
   sample: boolean;
@@ -184,7 +182,7 @@ const KiDetailFlyout = ({
         <EuiSpacer size="s" />
         <EuiFlexGroup gutterSize="xs" responsive={false} wrap alignItems="center">
           <EuiFlexItem grow={false}>
-            <EuiBadge color={typeBadgeColor(flyout.type)}>{typeLabel(flyout.type)}</EuiBadge>
+            <KiTypeBadge type={flyout.type} />
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
             <EuiBadge color="hollow">{flyout.source}</EuiBadge>
@@ -344,7 +342,9 @@ const KiAccordionRow = ({
       buttonContent={
         <span className="contextEnginePrototype__kiTabListMain">
           <span className="contextEnginePrototype__kiTabListTitle">{indicator.title}</span>
-          <span className="contextEnginePrototype__kiTabListSub">{typeLabel(indicator.type)}</span>
+          <span className="contextEnginePrototype__kiTabListSub">
+            <KiTypeBadge type={indicator.type} />
+          </span>
           {feedback ? (
             <EuiBadge color="hollow" data-test-subj="proto11KiRowFeedback">
               {kiFeedbackLabel(feedback)}
@@ -406,12 +406,8 @@ export const KnowledgeTab = ({
   groupedBySource?: boolean;
   proto11?: Proto11KnowledgeProps;
 }) => {
-  const indicatorCountRef = useRef(namespace.indicators.length);
-  indicatorCountRef.current = namespace.indicators.length;
   const [typeFilter, setTypeFilter] = useState<KnowledgeType | 'all'>('all');
-  const [kiView, setKiView] = useState<'list' | 'map'>(() =>
-    viewForIndex(namespace.name, namespace.indicators.length)
-  );
+  const [kiView, setKiView] = useState<'list' | 'map'>(() => viewForIndex(namespace.name));
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewedVersion, setViewedVersion] = useState<number | null>(null);
   const [openRows, setOpenRows] = useState<string[]>([]);
@@ -422,7 +418,7 @@ export const KnowledgeTab = ({
     setOpenId(null);
     setViewedVersion(null);
     setOpenRows([]);
-    setKiView(viewForIndex(namespace.name, indicatorCountRef.current));
+    setKiView(viewForIndex(namespace.name));
   }, [namespace.name]);
 
   const hydrated = useMemo(
@@ -607,9 +603,7 @@ export const KnowledgeTab = ({
                       footer={
                         <EuiFlexGroup gutterSize="xs" responsive={false} wrap>
                           <EuiFlexItem grow={false}>
-                            <EuiBadge color={typeBadgeColor(pick.type)}>
-                              {typeLabel(pick.type)}
-                            </EuiBadge>
+                            <KiTypeBadge type={pick.type} />
                           </EuiFlexItem>
                           {looked ? (
                             <EuiFlexItem grow={false}>

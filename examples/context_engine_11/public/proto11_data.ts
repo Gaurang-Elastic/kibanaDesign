@@ -1027,6 +1027,40 @@ export const outstandingRejected = (meta: Proto11Meta) =>
 
 export const rejectedTotal = (meta: Proto11Meta) => planFor(meta).rejected.length;
 
+export interface FirstPassDot {
+  id: string;
+  type: KnowledgeType;
+  rejected: boolean;
+  filled: boolean;
+}
+
+/** Hollow dots for the first-pass callout, one per indicator expected in the sample. */
+export const firstPassDots = (
+  meta: Proto11Meta
+): { dots: FirstPassDot[]; written: number; rejected: number } => {
+  const plan = planFor(meta);
+  const complete = meta.phase !== 'firstPass';
+  const written = complete ? plan.sample.length : meta.written.sample;
+  const rejected = complete
+    ? plan.rejected.length
+    : Math.round((plan.rejected.length * meta.tick) / FIRST_PASS_TICKS);
+  const dots: FirstPassDot[] = [
+    ...plan.sample.map((item, index) => ({
+      id: item.id,
+      type: item.type,
+      rejected: false,
+      filled: index < written,
+    })),
+    ...plan.rejected.map((item, index) => ({
+      id: `rejected-${item.id}`,
+      type: item.type,
+      rejected: true,
+      filled: index < rejected,
+    })),
+  ];
+  return { dots, written, rejected };
+};
+
 export const failureGroupsFor = (meta: Proto11Meta): FailureGroup[] => {
   const { rejected } = planFor(meta);
   const bySource = new Map<Proto11SourceId, number>();
@@ -1446,7 +1480,7 @@ const WEB_OPS_EXTRA: PortedKi[] = [
     id: 'ki-extra-2',
     source: 'nginx-access',
     template: 'overview',
-    type: 'fact',
+    type: 'query_guide',
     title: 'Health checks inflate request totals',
     description: 'The HealthChecker user agent adds about 12% to request counts.',
     content: 'Exclude user_agent.name: "HealthChecker" before computing a rate.',
@@ -1457,7 +1491,7 @@ const WEB_OPS_EXTRA: PortedKi[] = [
     id: 'ki-extra-3',
     source: 'cpu',
     template: 'overview',
-    type: 'fact',
+    type: 'query_guide',
     title: 'Saturated host threshold',
     description: 'Hosts above 0.85 normalized CPU are treated as saturated.',
     content: 'system.cpu.total.norm.pct above 0.85 is the saturation line used in the runbooks.',
@@ -1515,14 +1549,7 @@ const LARGE_SOURCES: Array<{ name: string; subtitle: string }> = [
 /** Seven smaller sources a click can open as a graph, and three larger ones. Sums to 2,400. */
 const LARGE_COUNTS = [180, 180, 200, 200, 200, 480, 480, 480];
 
-const LARGE_TYPES: KnowledgeType[] = [
-  'index_metadata',
-  'fact',
-  'query_guide',
-  'document',
-  'unit_profile',
-  'playbook',
-];
+const LARGE_TYPES: KnowledgeType[] = ['index_metadata', 'document', 'unit_profile', 'query_guide'];
 
 const LARGE_GOVERNANCE: KnowledgeIndicator['governance'] = {
   provenance: {
@@ -1590,6 +1617,11 @@ const createLargeSample = (): Namespace => {
     sample: true,
     scenario: 'large',
     phase: 'complete',
+    connectedAgents: [
+      { name: 'checkout-analyst', sample: true },
+      { name: 'edge-oncall', sample: true },
+      { name: 'sre-assistant', sample: true },
+    ],
   };
   return {
     name,
@@ -1643,7 +1675,10 @@ export const createSampleNamespace = (scenario: Proto11SampleScenario = 'web-ops
     sample: true,
     scenario: 'web-ops',
     phase: 'complete',
-    connectedAgents: [{ name: 'web-ops-assistant', sample: true, lastRetrieval: '18 minutes ago' }],
+    connectedAgents: [
+      { name: 'web-ops-assistant', sample: true, lastRetrieval: '18 minutes ago' },
+      { name: 'edge-oncall', sample: true },
+    ],
   };
   return {
     name,

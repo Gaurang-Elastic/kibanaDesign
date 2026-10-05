@@ -40,12 +40,12 @@ import {
   indicatorSourceLabel,
   slugify,
   toIndicatorDocument,
-  typeLabel,
   type HydratedKnowledgeIndicator,
   type KnowledgeIndicator,
 } from './knowledge_indicators';
 import type { Automation, NamespaceSource } from './namespace_data';
 import { indicatorSourceGroup } from './proto11_data';
+import { KiTypeBadge } from './proto11_ki_colors';
 
 export type KiFeedbackMark = 'useful' | 'not';
 
@@ -294,7 +294,7 @@ export const KiDetailFlyout = ({
               </EuiFlexItem>
             ) : null}
             <EuiFlexItem grow={false}>
-              <EuiBadge color="hollow">{typeLabel(current.type)}</EuiBadge>
+              <KiTypeBadge type={current.type} />
             </EuiFlexItem>
             {feedback ? (
               <EuiFlexItem grow={false}>

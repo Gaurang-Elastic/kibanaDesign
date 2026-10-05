@@ -127,13 +127,12 @@ import {
   indicatorSourceLabel,
   slugify,
   statsFromIndicators,
-  typeBadgeColor,
-  typeLabel,
   type HydratedKnowledgeIndicator,
   type KnowledgeIndicator,
   type KnowledgeType,
 } from './knowledge_indicators';
 import { KnowledgeTab } from './knowledge_tab';
+import { KiTypeBadge, KiTypeStrip } from './proto11_ki_colors';
 import {
   automationAddedLine,
   automationMetaLine,
@@ -1607,6 +1606,8 @@ function ContextEngineApp({
           <EuiText size="xs" color="subdued" className="contextEnginePrototype__cardDesc">
             <p>{namespace.intent || 'No description set.'}</p>
           </EuiText>
+          <EuiSpacer size="s" />
+          <KiTypeStrip indicators={namespace.indicators} />
           {pills ? (
             <>
               <EuiSpacer size="s" />
@@ -1677,6 +1678,8 @@ function ContextEngineApp({
             <EuiText size="xs" color="subdued">
               <p>{namespace.intent || 'No description set.'}</p>
             </EuiText>
+            <EuiSpacer size="xs" />
+            <KiTypeStrip indicators={namespace.indicators} />
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
             <EuiText size="s">
@@ -2600,9 +2603,7 @@ function ContextEngineApp({
                                 </EuiText>
                               </EuiFlexItem>
                               <EuiFlexItem grow={false}>
-                                <EuiBadge color={typeBadgeColor(questionResult.indicator.type)}>
-                                  {typeLabel(questionResult.indicator.type)}
-                                </EuiBadge>
+                                <KiTypeBadge type={questionResult.indicator.type} />
                               </EuiFlexItem>
                               <EuiFlexItem grow={false}>
                                 <EuiText size="xs" color="subdued">
@@ -3309,9 +3310,7 @@ function ContextEngineApp({
                           <EuiText size="s">{example.title}</EuiText>
                         </EuiFlexItem>
                         <EuiFlexItem grow={false}>
-                          <EuiBadge color={typeBadgeColor(example.type)}>
-                            {typeLabel(example.type)}
-                          </EuiBadge>
+                          <KiTypeBadge type={example.type} />
                         </EuiFlexItem>
                         <EuiFlexItem grow={false}>
                           <EuiText size="xs" color="subdued">
