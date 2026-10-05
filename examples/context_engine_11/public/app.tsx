@@ -82,6 +82,7 @@ import {
 } from './demo_flags';
 import {
   PROTO11_TICK_MS,
+  addProposalToNamespace,
   advanceProto11,
   createProto11Namespace,
   createSampleNamespace,
@@ -98,9 +99,15 @@ import {
   startFullRun,
   startRerun,
   type CreateFromGoalOptions,
+  type Proto11Proposal,
 } from './proto11_data';
 import { Proto11ConnectedAgentsPanel } from './proto11_agents_panel';
-import { Proto11HeroArt, Proto11Landing, type AskAgentAboutProposal } from './proto11_landing';
+import {
+  Proto11Composer,
+  Proto11HeroArt,
+  Proto11Landing,
+  type AskAgentAboutProposal,
+} from './proto11_landing';
 import { SAMPLE_MENU } from './proto11_sample_panel';
 import {
   Proto11FixFlyout,
@@ -579,6 +586,8 @@ function ContextEngineApp({
   const [agentsEditing, setAgentsEditing] = useState(false);
   const [agentsDraft, setAgentsDraft] = useState<ConnectedAgent[]>([]);
   const [automationsAddOpen, setAutomationsAddOpen] = useState(false);
+  const [automationProposalOpen, setAutomationProposalOpen] = useState(false);
+  const proposalComposerRef = useRef<HTMLDivElement>(null);
   const [automationsMenuOpen, setAutomationsMenuOpen] = useState<string | null>(null);
   const [catalogActionsOpen, setCatalogActionsOpen] = useState<string | null>(null);
   const [pendingDeleteIndex, setPendingDeleteIndex] = useState<Namespace | null>(null);
@@ -639,6 +648,7 @@ function ContextEngineApp({
       !item.proto11.sample &&
       (item.proto11.phase === 'firstPass' ||
         item.proto11.phase === 'fullRun' ||
+        item.proto11.addon?.phase === 'firstPass' ||
         item.proto11.fix === 'rerunning' ||
         item.proto11.fix === 'fixed')
   );
@@ -806,11 +816,17 @@ function ContextEngineApp({
     setPendingPanelSwitch(null);
     setAutomationsAddOpen(false);
     setAutomationsMenuOpen(null);
+    setAutomationProposalOpen(false);
   };
 
   useEffect(() => {
     setNextStepDismissed(false);
   }, [activeName, screen]);
+
+  useEffect(() => {
+    if (!automationProposalOpen || screen !== 'detail') return;
+    proposalComposerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [automationProposalOpen, activeName, screen]);
 
   useEffect(() => {
     if (!pendingAutomationsScroll || detailTab !== 'overview') return;
@@ -873,6 +889,14 @@ function ContextEngineApp({
     openDetail(created);
   };
 
+  const addProposalToIndex = (targetName: string, proposal: Proto11Proposal) => {
+    const existing = namespaces.find((item) => item.name === targetName);
+    if (!existing) return;
+    const updated = addProposalToNamespace(existing, proposal);
+    setNamespaces((current) => current.map((item) => (item.name === targetName ? updated : item)));
+    openDetail(updated);
+  };
+
   const trySample = (scenario: Proto11SampleScenario, tab: DetailTab = 'overview') => {
     const existing = namespaces.find((item) => sampleScenarioOf(item) === scenario);
     if (existing) {
@@ -926,6 +950,7 @@ function ContextEngineApp({
     setPendingPanelSwitch(null);
     setAutomationsAddOpen(false);
     setAutomationsMenuOpen(null);
+    setAutomationProposalOpen(false);
     setScreen('detail');
   };
 
@@ -1648,7 +1673,9 @@ function ContextEngineApp({
                 )
               }
               takenNames={namespaces.map((item) => item.name)}
+              namespaces={namespaces}
               onCreateFromGoal={createFromGoal}
+              onAddToIndex={addProposalToIndex}
               onCreateEmpty={openCreate}
               onExploreSample={trySample}
               onAskAgent={openProposalAgent}
@@ -2149,6 +2176,21 @@ function ContextEngineApp({
             >
               Use AI Agent
             </EuiContextMenuItem>,
+            ...(proto11On
+              ? [
+                  <EuiContextMenuItem
+                    key="propose-from-question"
+                    icon="questionInCircle"
+                    onClick={() => {
+                      setAutomationsAddOpen(false);
+                      setAutomationProposalOpen(true);
+                    }}
+                    data-test-subj="proto11ProposeFromQuestion"
+                  >
+                    Propose from a question
+                  </EuiContextMenuItem>,
+                ]
+              : []),
           ]}
         />
       </EuiPopover>
@@ -2558,6 +2600,20 @@ function ContextEngineApp({
                   </>
                 ) : null}
               </EuiPanel>
+              {automationProposalOpen && proto11On ? (
+                <div ref={proposalComposerRef} data-test-subj="proto11AutomationComposer">
+                  <Proto11Composer
+                    compact={false}
+                    takenNames={namespaces.map((item) => item.name)}
+                    namespaces={namespaces}
+                    forcedTarget={namespace.name}
+                    onCreateFromGoal={createFromGoal}
+                    onAddToIndex={addProposalToIndex}
+                    onAskAgent={openProposalAgent}
+                  />
+                  <EuiSpacer size="l" />
+                </div>
+              ) : null}
               {automationsLocked ? (
                 <EuiPanel
                   hasBorder
@@ -2607,7 +2663,11 @@ function ContextEngineApp({
                       <div className="contextEnginePrototype__panelActions">
                         {suggestReason ? <DisabledReason>{suggestReason}</DisabledReason> : null}
                         {addAutomationButton(
-                          anyEditing ? 'empty' : hasAutomations ? 'button' : 'fill'
+                          automationProposalOpen || anyEditing
+                            ? 'empty'
+                            : hasAutomations
+                            ? 'button'
+                            : 'fill'
                         )}
                       </div>
                     ) : null}

@@ -72,4 +72,16 @@ export interface Proto11Meta {
   /** KI ids opened from the Knowledge Indicators tab. */
   lookedAt: string[];
   checkHidden: boolean;
+  /** A later automation running its own sample pass on an index that already exists. */
+  addon?: Proto11AddonRun;
+}
+
+/** Sample pass for an automation added to an existing AI index. */
+export interface Proto11AddonRun {
+  template: Proto11TemplateId;
+  sourceIds: Proto11SourceId[];
+  automationId: string;
+  tick: number;
+  written: number;
+  phase: 'firstPass' | 'sampleReady';
 }

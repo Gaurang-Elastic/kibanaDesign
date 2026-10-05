@@ -31,6 +31,7 @@ import {
   EuiListGroupItem,
   EuiPanel,
   EuiPopover,
+  EuiRadio,
   EuiSelect,
   EuiSpacer,
   EuiTab,
@@ -49,10 +50,12 @@ import {
   GENAI_TRACE_OPTIONS,
   TEMPLATES,
   WEB_OPS_SOURCES,
+  findReuseTarget,
   goalById,
   namespaceSourceFor,
   pickerAgents,
   proposeFromComposer,
+  type ReuseMatch,
   traceQuestionsFor,
   type ComposerInput,
   type PickerAgent,
@@ -61,6 +64,7 @@ import {
 } from './proto11_data';
 import { Proto11SampleStrip, SampleMenuButton, type ExploreSample } from './proto11_sample_panel';
 import type { Proto11SourceId } from './proto11_types';
+import type { Namespace } from './namespace_data';
 import { TraceRow } from './traces_panel';
 import { TABLE_SPARKLES_TYPE } from './register_table_sparkles';
 import heroTexture from './assets/context_hero_texture.svg';
@@ -142,31 +146,83 @@ const BecauseLine = ({ children }: { children: React.ReactNode }) => (
 
 const ProposalCard = ({
   proposal,
+  reuse,
   onChange,
   onCreate,
+  onAddTo,
   onAskAgent,
 }: {
   proposal: Proto11Proposal;
+  reuse?: ReuseMatch;
   onChange: () => void;
   onCreate: (name: string) => void;
+  onAddTo: (targetName: string) => void;
   onAskAgent: (name: string) => void;
 }) => {
   const { euiTheme } = useEuiTheme();
   const [name, setName] = useState(proposal.name);
+  const [mode, setMode] = useState<'add' | 'create'>(reuse ? 'add' : 'create');
+  const adding = Boolean(reuse) && mode === 'add';
   const template = TEMPLATES[goalById(proposal.goal).template];
+  const sourceIds = adding
+    ? proposal.sourceIds.filter((id) => !reuse?.coveredIds.includes(id))
+    : proposal.sourceIds;
+  const nameField = (
+    <EuiFieldText
+      compressed
+      value={name}
+      onChange={(event) => setName(event.target.value)}
+      aria-label="AI index name"
+      data-test-subj="proto11ProposalName"
+    />
+  );
   const listItems = [
-    {
-      title: 'Name',
-      description: (
-        <EuiFieldText
-          compressed
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          aria-label="AI index name"
-          data-test-subj="proto11ProposalName"
-        />
-      ),
-    },
+    reuse
+      ? {
+          title: 'AI index',
+          description: (
+            <div data-test-subj="proto11ProposalTarget">
+              <EuiRadio
+                id="proto11ProposalTargetAdd"
+                name="proto11ProposalTarget"
+                label={`Add to ${reuse.name}`}
+                checked={mode === 'add'}
+                onChange={() => setMode('add')}
+                data-test-subj="proto11ProposalTargetAdd"
+              />
+              <EuiText
+                size="s"
+                color="subdued"
+                css={css`
+                  padding-inline-start: calc(${euiTheme.size.base} + ${euiTheme.size.s});
+                `}
+              >
+                <p>
+                  <em>{reuse.because}</em>
+                </p>
+              </EuiText>
+              <EuiSpacer size="s" />
+              <EuiRadio
+                id="proto11ProposalTargetCreate"
+                name="proto11ProposalTarget"
+                label="Create a new AI index"
+                checked={mode === 'create'}
+                onChange={() => setMode('create')}
+                data-test-subj="proto11ProposalTargetCreate"
+              />
+              {mode === 'create' ? (
+                <>
+                  <EuiSpacer size="xs" />
+                  {nameField}
+                </>
+              ) : null}
+            </div>
+          ),
+        }
+      : {
+          title: 'Name',
+          description: nameField,
+        },
     {
       title: 'Automation',
       description: (
@@ -192,13 +248,21 @@ const ProposalCard = ({
       title: 'Sources',
       description: (
         <>
-          <div className="contextEnginePrototype__selectedSources">
-            {proposal.sourceIds.map((id) => (
-              <ProposalSourceChip key={id} id={id} found={proposal.foundIds.includes(id)} />
-            ))}
-          </div>
-          <EuiSpacer size="xs" />
-          <BecauseLine>{proposal.sourcesBecause}</BecauseLine>
+          {sourceIds.length === 0 ? (
+            <EuiText size="s" data-test-subj="proto11ProposalNoNewSources">
+              <p>No new sources needed</p>
+            </EuiText>
+          ) : (
+            <>
+              <div className="contextEnginePrototype__selectedSources">
+                {sourceIds.map((id) => (
+                  <ProposalSourceChip key={id} id={id} found={proposal.foundIds.includes(id)} />
+                ))}
+              </div>
+              <EuiSpacer size="xs" />
+              <BecauseLine>{proposal.sourcesBecause}</BecauseLine>
+            </>
+          )}
         </>
       ),
     },
@@ -272,7 +336,14 @@ const ProposalCard = ({
           </EuiFlexGroup>
         </EuiFlexItem>
         <EuiFlexItem grow={false}>
-          <EuiButton fill onClick={() => onCreate(name)} data-test-subj="proto11CreateAndRun">
+          <EuiButton
+            fill
+            onClick={() => {
+              if (adding && reuse) onAddTo(reuse.name);
+              else onCreate(name);
+            }}
+            data-test-subj="proto11CreateAndRun"
+          >
             Create and run
           </EuiButton>
         </EuiFlexItem>
@@ -589,12 +660,19 @@ const DataScope = ({
 const Composer = ({
   compact,
   takenNames,
+  namespaces,
+  forcedTarget,
   onCreateFromGoal,
+  onAddToIndex,
   onAskAgent,
 }: {
   compact: boolean;
   takenNames: string[];
+  namespaces: Namespace[];
+  /** When set, the proposal targets this AI index instead of searching for one. */
+  forcedTarget?: string;
   onCreateFromGoal: (options: Omit<CreateFromGoalOptions, 'takenNames'>) => void;
+  onAddToIndex: (targetName: string, proposal: Proto11Proposal) => void;
   onAskAgent: AskAgentAboutProposal;
 }) => {
   const [text, setText] = useState('');
@@ -741,8 +819,10 @@ const Composer = ({
       <ProposalCard
         key={`${proposal.path}-${proposal.name}-${proposal.sourceIds.join(',')}`}
         proposal={proposal}
+        reuse={findReuseTarget(proposal, namespaces, forcedTarget)}
         onChange={() => setProposal(null)}
         onAskAgent={(name) => onAskAgent(proposal, name)}
+        onAddTo={(targetName) => onAddToIndex(targetName, proposal)}
         onCreate={(name) =>
           onCreateFromGoal({
             goalId: proposal.goal,
@@ -828,6 +908,9 @@ const Composer = ({
   );
 };
 
+/** The landing composer, also opened from an index to propose an automation for it. */
+export const Proto11Composer = Composer;
+
 /** Faint texture behind the hero illustration, faded out towards the hero copy. */
 const HeroTexture = () => {
   const { euiTheme, colorMode } = useEuiTheme();
@@ -879,7 +962,9 @@ export const Proto11Landing = ({
   heroArt,
   indexGrid,
   takenNames,
+  namespaces,
   onCreateFromGoal,
+  onAddToIndex,
   onCreateEmpty,
   onExploreSample,
   onAskAgent,
@@ -888,7 +973,9 @@ export const Proto11Landing = ({
   heroArt: React.ReactNode;
   indexGrid: React.ReactNode;
   takenNames: string[];
+  namespaces: Namespace[];
   onCreateFromGoal: (options: Omit<CreateFromGoalOptions, 'takenNames'>) => void;
+  onAddToIndex: (targetName: string, proposal: Proto11Proposal) => void;
   onCreateEmpty: () => void;
   onExploreSample: ExploreSample;
   onAskAgent: AskAgentAboutProposal;
@@ -899,7 +986,9 @@ export const Proto11Landing = ({
         <Composer
           compact
           takenNames={takenNames}
+          namespaces={namespaces}
           onCreateFromGoal={onCreateFromGoal}
+          onAddToIndex={onAddToIndex}
           onAskAgent={onAskAgent}
         />
         <EuiSpacer size="xl" />
@@ -935,7 +1024,9 @@ export const Proto11Landing = ({
               <Composer
                 compact={false}
                 takenNames={takenNames}
+                namespaces={namespaces}
                 onCreateFromGoal={onCreateFromGoal}
+                onAddToIndex={onAddToIndex}
                 onAskAgent={onAskAgent}
               />
               <EuiSpacer size="m" />

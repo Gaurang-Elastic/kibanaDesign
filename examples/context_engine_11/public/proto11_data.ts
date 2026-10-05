@@ -25,6 +25,7 @@ import {
   type NamespaceSource,
 } from './namespace_data';
 import type {
+  Proto11AddonRun,
   Proto11ChatTurn,
   Proto11FixChat,
   Proto11GoalId,
@@ -1563,10 +1564,58 @@ const statusAfterRerun = (meta: Proto11Meta): Automation['runStatus'] => {
   return meta.phase === 'fullRun' ? 'running' : 'enabled';
 };
 
+/** Grows the added automation's sample without touching the index's own run. */
+const advanceAddon = (namespace: Namespace): Namespace => {
+  const meta = namespace.proto11;
+  const addon = meta?.addon;
+  if (!meta || !addon || addon.phase !== 'firstPass') return namespace;
+  const plan = planFor({
+    sourceIds: addon.sourceIds,
+    runTemplates: [addon.template],
+    sample: false,
+  });
+  const tick = addon.tick + 1;
+  const done = plan.sample.length === 0 || tick >= FIRST_PASS_TICKS;
+  const written = done
+    ? plan.sample.length
+    : Math.min(plan.sample.length, Math.round((plan.sample.length * tick) / FIRST_PASS_TICKS));
+  const nextAddon: Proto11AddonRun = {
+    ...addon,
+    tick: done ? 0 : tick,
+    written,
+    phase: done ? 'sampleReady' : 'firstPass',
+  };
+  const incoming = plan.sample.slice(0, written).map((ki) => toIndicator(ki));
+  const incomingIds = new Set(incoming.map((indicator) => indicator.id));
+  const indicators = [
+    ...namespace.indicators.filter((indicator) => !incomingIds.has(indicator.id)),
+    ...incoming,
+  ];
+  return {
+    ...namespace,
+    updated: 'just now',
+    indicators,
+    knowledge: statsFromIndicators(indicators),
+    automations: namespace.automations.map((automation) =>
+      automation.id === addon.automationId
+        ? {
+            ...automation,
+            producesCount: incoming.length,
+            runStatus: done ? 'sampleReady' : 'firstPass',
+            ...(done ? { hasRun: true, lastRunAt: 'just now' } : {}),
+          }
+        : automation
+    ),
+    proto11: { ...meta, addon: nextAddon },
+  };
+};
+
 /** One step of the simulated runs. Returns the same object when nothing changes. */
 export const advanceProto11 = (namespace: Namespace): Namespace => {
   const meta = namespace.proto11;
-  if (!meta || meta.sample) return namespace;
+  if (!meta) return namespace;
+  if (meta.addon?.phase === 'firstPass') return advanceAddon(namespace);
+  if (meta.sample) return namespace;
   let next = meta;
   const plan = planFor(meta);
 
@@ -1922,6 +1971,144 @@ export const proposeFromComposer = ({
   }
 
   return proposeFromData(sourceIds, takenNames);
+};
+
+const catalogSources = [...WEB_OPS_SOURCES, ...HIGHER_ED_SOURCES];
+
+const sourceIdsOf = (namespace: Namespace): Proto11SourceId[] => {
+  const fromNames = catalogSources
+    .filter((source) => namespace.sources.some((item) => item.name === source.name))
+    .map((source) => source.id);
+  return uniqueIds([...(namespace.proto11?.sourceIds ?? []), ...fromNames]);
+};
+
+const agentNamesOf = (namespace: Namespace): string[] => {
+  const names = [
+    ...(namespace.proto11?.connectedAgents ?? []).map((agent) => agent.name),
+    ...(namespace.proto11?.agent ? [namespace.proto11.agent] : []),
+    ...(namespace.traces ?? []).map((trace) => trace.value),
+  ];
+  return names.filter((name, index) => names.indexOf(name) === index);
+};
+
+/** An existing AI index a proposal can extend instead of creating another. */
+export interface ReuseMatch {
+  name: string;
+  /** Proposal sources this index already contains. */
+  coveredIds: Proto11SourceId[];
+  /** The attached agent, when this index already uses it. */
+  agent?: string;
+  because: string;
+}
+
+const reuseBecause = (coveredNames: string[], agent?: string): string => {
+  const covers = coveredNames.length > 0 ? `already covers ${joinList(coveredNames)}` : '';
+  const used = agent ? `is used by ${agent}` : '';
+  if (covers && used) return `${covers} and ${used}`;
+  return covers || used;
+};
+
+const reuseOf = (namespace: Namespace, proposal: Proto11Proposal): ReuseMatch => {
+  const coveredIds = proposal.sourceIds.filter((id) => sourceIdsOf(namespace).includes(id));
+  const agent = proposal.trace?.value;
+  const usesAgent = Boolean(agent && agentNamesOf(namespace).includes(agent));
+  return {
+    name: namespace.name,
+    coveredIds,
+    ...(usesAgent && agent ? { agent } : {}),
+    because:
+      reuseBecause(
+        coveredIds.map((id) => sourceDisplayName(id)),
+        usesAgent ? agent : undefined
+      ) || `you chose to add this to ${namespace.name}`,
+  };
+};
+
+/** The existing index a proposal should extend, or the named index when the overview targets itself. */
+export const findReuseTarget = (
+  proposal: Proto11Proposal,
+  namespaces: Namespace[],
+  forcedName?: string
+): ReuseMatch | undefined => {
+  if (forcedName) {
+    const forced = namespaces.find((namespace) => namespace.name === forcedName);
+    return forced ? reuseOf(forced, proposal) : undefined;
+  }
+  const ranked = namespaces
+    .filter((namespace) => !namespace.managed)
+    .map((namespace) => ({
+      match: reuseOf(namespace, proposal),
+      size: sourceIdsOf(namespace).length,
+    }))
+    .filter((item) => item.match.coveredIds.length > 0 || item.match.agent);
+  ranked.sort((a, b) => {
+    const score = (match: ReuseMatch) => match.coveredIds.length * 10 + (match.agent ? 5 : 0);
+    const diff = score(b.match) - score(a.match);
+    if (diff !== 0) return diff;
+    if (a.size !== b.size) return a.size - b.size;
+    return a.match.name.localeCompare(b.match.name);
+  });
+  return ranked[0]?.match;
+};
+
+/** Adds the proposal's new sources and automation, and starts that automation's sample pass. */
+export const addProposalToNamespace = (
+  namespace: Namespace,
+  proposal: Proto11Proposal
+): Namespace => {
+  const existingIds = sourceIdsOf(namespace);
+  const newIds = proposal.sourceIds.filter((id) => !existingIds.includes(id));
+  const template = goalById(proposal.goal).template;
+  const meta: Proto11Meta = namespace.proto11
+    ? { ...namespace.proto11, sourceIds: uniqueIds([...existingIds, ...proposal.sourceIds]) }
+    : {
+        ...freshMeta(proposal.goal, uniqueIds([...existingIds, ...proposal.sourceIds]), []),
+        phase: 'complete',
+      };
+  let automationId = `${namespace.name}-${template}`;
+  let suffix = 2;
+  while (namespace.automations.some((automation) => automation.id === automationId)) {
+    automationId = `${namespace.name}-${template}-${suffix}`;
+    suffix += 1;
+  }
+  const automation = {
+    ...buildAutomation({
+      namespaceName: namespace.name,
+      indexName: namespace.indexName,
+      template,
+      sourceIds: proposal.sourceIds,
+      agent: proposal.trace?.value ?? meta.agent,
+      derivation: `Chosen ${proposal.automationBecause}.`,
+      runStatus: 'firstPass',
+    }),
+    id: automationId,
+  };
+  const knownNames = new Set(namespace.sources.map((source) => source.name));
+  const traces =
+    proposal.trace && (namespace.traces?.length ?? 0) === 0 ? [proposal.trace] : namespace.traces;
+  return {
+    ...namespace,
+    updated: 'just now',
+    sources: [
+      ...namespace.sources,
+      ...newIds
+        .map((id) => toNamespaceSource(sourceById(id)))
+        .filter((source) => !knownNames.has(source.name)),
+    ],
+    traces,
+    automations: [...namespace.automations, automation],
+    proto11: {
+      ...meta,
+      addon: {
+        template,
+        sourceIds: proposal.sourceIds,
+        automationId,
+        tick: 0,
+        written: 0,
+        phase: 'firstPass',
+      },
+    },
+  };
 };
 
 export const namespaceSourceFor = (id: Proto11SourceId): NamespaceSource =>
