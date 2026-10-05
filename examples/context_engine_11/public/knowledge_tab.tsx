@@ -39,10 +39,16 @@ import {
   typeFilterLabel,
   typeLabel,
   type HydratedKnowledgeIndicator,
+  type KnowledgeIndicator,
   type KnowledgeType,
 } from './knowledge_indicators';
 import { backingIndexName, type Automation, type Namespace } from './namespace_data';
 import { indicatorSourceGroup } from './proto11_data';
+import {
+  KiDetailFlyout as Proto11KiDetailFlyout,
+  kiFeedbackLabel,
+  useKiFeedback,
+} from './proto11_ki_detail';
 
 const CHECK_TARGET = 3;
 
@@ -302,6 +308,68 @@ const KiDetailFlyout = ({
   );
 };
 
+const KiAccordionRow = ({
+  indicator,
+  proto11,
+  open,
+  onToggle,
+  onOpen,
+}: {
+  indicator: HydratedKnowledgeIndicator;
+  proto11: boolean;
+  open: boolean;
+  onToggle: (isOpen: boolean) => void;
+  onOpen: () => void;
+}) => {
+  const feedback = useKiFeedback(indicator.id);
+  return (
+    <EuiAccordion
+      id={`ki-json-${indicator.id}`}
+      className="contextEnginePrototype__kiAccordion"
+      arrowDisplay="left"
+      {...(proto11
+        ? {
+            'data-ki-row': indicator.id,
+            forceState: open ? ('open' as const) : ('closed' as const),
+            onToggle,
+          }
+        : {})}
+      buttonContent={
+        <span className="contextEnginePrototype__kiTabListMain">
+          <span className="contextEnginePrototype__kiTabListTitle">{indicator.title}</span>
+          <span className="contextEnginePrototype__kiTabListSub">{typeLabel(indicator.type)}</span>
+          {feedback ? (
+            <EuiBadge color="hollow" data-test-subj="proto11KiRowFeedback">
+              {kiFeedbackLabel(feedback)}
+            </EuiBadge>
+          ) : null}
+        </span>
+      }
+      paddingSize="m"
+    >
+      {proto11 ? (
+        <div data-test-subj="proto11KiRowPreview">
+          <EuiText size="s">
+            <p>{indicator.description || indicator.content.split('\n')[0]}</p>
+          </EuiText>
+          <EuiSpacer size="xs" />
+          <EuiText size="xs" color="subdued">
+            <p>{indicator.source}</p>
+          </EuiText>
+          <EuiSpacer size="s" />
+          <EuiLink onClick={onOpen} data-test-subj="proto11KiOpen">
+            Open
+          </EuiLink>
+        </div>
+      ) : (
+        <EuiCodeBlock language="json" fontSize="s" paddingSize="m" isCopyable overflowHeight={320}>
+          {JSON.stringify(toIndicatorDocument(indicator), null, 2)}
+        </EuiCodeBlock>
+      )}
+    </EuiAccordion>
+  );
+};
+
 export const KnowledgeTab = ({
   namespace,
   discoverHref,
@@ -311,6 +379,8 @@ export const KnowledgeTab = ({
   onCreateAutomation: _onCreateAutomation,
   onViewAutomation: _onViewAutomation,
   onReplaceIndicator,
+  onAskAboutIndicator,
+  onDeleteIndicator,
   sharedDestinationNote = false,
   groupedBySource = false,
   proto11,
@@ -323,6 +393,8 @@ export const KnowledgeTab = ({
   onCreateAutomation: () => void;
   onViewAutomation: () => void;
   onReplaceIndicator: (indicator: HydratedKnowledgeIndicator) => void;
+  onAskAboutIndicator?: (indicator: KnowledgeIndicator, message: string) => void;
+  onDeleteIndicator?: (indicator: KnowledgeIndicator) => void;
   sharedDestinationNote?: boolean;
   groupedBySource?: boolean;
   proto11?: Proto11KnowledgeProps;
@@ -341,7 +413,8 @@ export const KnowledgeTab = ({
   }, [namespace.name]);
 
   const hydrated = useMemo(
-    () => namespace.indicators.map((indicator) => hydrateIndicator(indicator, namespace.automations)),
+    () =>
+      namespace.indicators.map((indicator) => hydrateIndicator(indicator, namespace.automations)),
     [namespace.automations, namespace.indicators]
   );
   const typeCounts = useMemo(() => {
@@ -407,41 +480,20 @@ export const KnowledgeTab = ({
     if (isOpen && proto11 && !proto11.lookedAt.includes(id)) proto11.onLookedAt(id);
   };
 
-  const openFromCheck = (id: string) => {
-    setTypeFilter('all');
-    setRowOpen(id, true);
-    window.setTimeout(() => {
-      listRef.current
-        ?.querySelector(`[data-ki-row="${id}"]`)
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 50);
+  const openIndicator = (id: string) => {
+    if (proto11 && !proto11.lookedAt.includes(id)) proto11.onLookedAt(id);
+    setOpenId(id);
   };
 
   const renderRow = (indicator: HydratedKnowledgeIndicator) => (
-    <EuiAccordion
+    <KiAccordionRow
       key={indicator.id}
-      id={`ki-json-${indicator.id}`}
-      className="contextEnginePrototype__kiAccordion"
-      arrowDisplay="left"
-      {...(proto11
-        ? {
-            'data-ki-row': indicator.id,
-            forceState: openRows.includes(indicator.id) ? ('open' as const) : ('closed' as const),
-            onToggle: (isOpen: boolean) => setRowOpen(indicator.id, isOpen),
-          }
-        : {})}
-      buttonContent={
-        <span className="contextEnginePrototype__kiTabListMain">
-          <span className="contextEnginePrototype__kiTabListTitle">{indicator.title}</span>
-          <span className="contextEnginePrototype__kiTabListSub">{typeLabel(indicator.type)}</span>
-        </span>
-      }
-      paddingSize="m"
-    >
-      <EuiCodeBlock language="json" fontSize="s" paddingSize="m" isCopyable overflowHeight={320}>
-        {JSON.stringify(toIndicatorDocument(indicator), null, 2)}
-      </EuiCodeBlock>
-    </EuiAccordion>
+      indicator={indicator}
+      proto11={Boolean(proto11)}
+      open={openRows.includes(indicator.id)}
+      onToggle={(isOpen) => setRowOpen(indicator.id, isOpen)}
+      onOpen={() => openIndicator(indicator.id)}
+    />
   );
 
   const filteredGroups = allGroups
@@ -538,7 +590,7 @@ export const KnowledgeTab = ({
                       titleSize="xs"
                       title={pick.title}
                       description={group.name}
-                      onClick={() => openFromCheck(pick.id)}
+                      onClick={() => openIndicator(pick.id)}
                       footer={
                         <EuiFlexGroup gutterSize="xs" responsive={false} wrap>
                           <EuiFlexItem grow={false}>
@@ -627,6 +679,27 @@ export const KnowledgeTab = ({
               onOpenSources={openSources}
               onReplaceIndicator={onReplaceIndicator}
               setViewedVersion={setViewedVersion}
+            />
+          ) : null}
+          {proto11 && flyout && !KI_DETAIL_FLYOUT ? (
+            <Proto11KiDetailFlyout
+              indicator={flyout}
+              indicators={namespace.indicators}
+              sample={proto11.sample}
+              discoverHref={discoverHref}
+              automations={namespace.automations}
+              sources={namespace.sources}
+              agent={namespace.proto11?.agent}
+              onOpenAutomation={(automation) => {
+                closeFlyout();
+                onOpenAutomation(automation);
+              }}
+              onAskAgent={onAskAboutIndicator}
+              onDelete={(item) => {
+                onDeleteIndicator?.(item);
+                closeFlyout();
+              }}
+              onClose={closeFlyout}
             />
           ) : null}
         </EuiPanel>

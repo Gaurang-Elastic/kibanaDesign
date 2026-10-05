@@ -31,6 +31,15 @@ export interface ConnectedAgent {
   sample?: boolean;
 }
 
+/** Shown once, under the first-pass callout, until the user saves or dismisses it. */
+export interface Proto11ConnectGuide {
+  mode: 'agent' | 'outside';
+  /** Set when an agent was attached at creation. */
+  agentName?: string;
+  /** Two sentences, specific to this index. */
+  prompt: string;
+}
+
 export type Proto11RunStatus = 'firstPass' | 'sampleReady' | 'running' | 'enabled' | 'needsAgent';
 
 /** firstPass: building from a sample. sampleReady: waiting for Run on all data. */
@@ -74,6 +83,8 @@ export interface Proto11Meta {
   checkHidden: boolean;
   /** A later automation running its own sample pass on an index that already exists. */
   addon?: Proto11AddonRun;
+  /** Present only until the user saves or dismisses the creation connect guide. */
+  connectGuide?: Proto11ConnectGuide;
 }
 
 /** Sample pass for an automation added to an existing AI index. */

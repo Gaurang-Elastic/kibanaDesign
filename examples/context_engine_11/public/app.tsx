@@ -704,6 +704,16 @@ function ContextEngineApp({
     setUseInAgentNamespace(namespace);
   };
 
+  const removeKnowledgeIndicator = (namespaceName: string, id: string) => {
+    setNamespaces((current) =>
+      current.map((item) => {
+        if (item.name !== namespaceName) return item;
+        const indicators = item.indicators.filter((indicator) => indicator.id !== id);
+        return { ...item, indicators, knowledge: statsFromIndicators(indicators) };
+      })
+    );
+  };
+
   const replaceKnowledgeIndicator = (
     namespaceName: string,
     next: HydratedKnowledgeIndicator
@@ -1062,6 +1072,40 @@ function ContextEngineApp({
                   content: `Question with no match: ${unmatched}. AI index: ${namespace.displayName}.`,
                 },
                 description: unmatched,
+              },
+            ],
+          },
+        ],
+      });
+      return;
+    }
+    document
+      .querySelector<HTMLButtonElement>(
+        '[data-test-subj="AgentBuilderNavControlButton"], [data-test-subj="AgentBuilderNavControlButtonIcon"]'
+      )
+      ?.click();
+  };
+
+  const openKiChangeAgent = (namespace: Namespace, indicator: KnowledgeIndicator) => {
+    const message =
+      'This Knowledge Indicator is wrong or incomplete. Update the automation that wrote it.';
+    if (plugins.agentBuilder?.openChat) {
+      plugins.agentBuilder.openChat({
+        newConversation: true,
+        initialMessage: message,
+        autoSendInitialMessage: false,
+        attachments: [
+          {
+            type: 'group',
+            id: `ki-${indicator.id}`,
+            label: indicator.title,
+            items: [
+              {
+                type: 'text',
+                data: {
+                  content: `${indicator.title}\n${indicator.content}\nAI index: ${namespace.displayName}`,
+                },
+                description: indicator.title,
               },
             ],
           },
@@ -1714,6 +1758,13 @@ function ContextEngineApp({
               onCreateEmpty={openCreate}
               onExploreSample={trySample}
               onAskAgent={openProposalAgent}
+              discoverHref={coreStart.http.basePath.prepend('/app/discover')}
+              onAskAboutIndicator={(indicator) => {
+                const home =
+                  namespaces.find((item) => item.indicators.some((ki) => ki.id === indicator.id)) ??
+                  namespaces.find((item) => item.proto11?.sample);
+                if (home) openKiChangeAgent(home, indicator);
+              }}
             />
           </PageBody>
         </>
@@ -2350,6 +2401,26 @@ function ContextEngineApp({
                   onAdjust={goToAutomations}
                 />
               ) : null}
+              {meta?.connectGuide ? (
+                <Proto11ConnectedAgentsPanel
+                  namespaceName={namespace.name}
+                  agents={connectedAgents}
+                  editing={false}
+                  draft={agentsDraft}
+                  onDraftChange={setAgentsDraft}
+                  agentBuilderHref={coreStart.http.basePath.prepend('/app/agent_builder')}
+                  guide={meta.connectGuide}
+                  onSaveGuide={(agentName) =>
+                    updateProto11Meta(namespace.name, {
+                      connectedAgents: [{ name: agentName }],
+                      connectGuide: undefined,
+                    })
+                  }
+                  onDismissGuide={() =>
+                    updateProto11Meta(namespace.name, { connectGuide: undefined })
+                  }
+                />
+              ) : null}
               {namespace.sources.length === 0 && !readyCalloutDismissed[namespace.name] ? (
                 <ReadyCallout
                   onDismiss={() =>
@@ -2923,7 +2994,7 @@ function ContextEngineApp({
                   ) : null}
                 </EuiPanel>
               )}
-              {meta ? (
+              {meta && !meta.connectGuide ? (
                 <Proto11ConnectedAgentsPanel
                   namespaceName={namespace.name}
                   agents={connectedAgents}
@@ -2951,6 +3022,10 @@ function ContextEngineApp({
                 }
               }}
               onReplaceIndicator={(next) => replaceKnowledgeIndicator(namespace.name, next)}
+              onAskAboutIndicator={(indicator) => openKiChangeAgent(namespace, indicator)}
+              onDeleteIndicator={(indicator) =>
+                removeKnowledgeIndicator(namespace.name, indicator.id)
+              }
               sharedDestinationNote={flags.sharedDestinationKis}
               groupedBySource={proto11On}
               proto11={
@@ -2966,7 +3041,17 @@ function ContextEngineApp({
                         }),
                       onHideCheck: () => updateProto11Meta(namespace.name, { checkHidden: true }),
                       testQuestion: (
-                        <Proto11TestQuestion key={namespace.name} namespace={namespace} />
+                        <Proto11TestQuestion
+                          key={namespace.name}
+                          namespace={namespace}
+                          discoverHref={coreStart.http.basePath.prepend('/app/discover')}
+                          onAskAboutIndicator={(indicator) =>
+                            openKiChangeAgent(namespace, indicator)
+                          }
+                          onDeleteIndicator={(indicator) =>
+                            removeKnowledgeIndicator(namespace.name, indicator.id)
+                          }
+                        />
                       ),
                     }
                   : undefined
@@ -2975,7 +3060,12 @@ function ContextEngineApp({
           ) : effectiveTab === 'usage' ? (
             <Proto11UsageTab
               namespace={namespace}
+              discoverHref={coreStart.http.basePath.prepend('/app/discover')}
               onProposeFix={(unmatched) => openUnmatchedQuestion(namespace, unmatched)}
+              onAskAboutIndicator={(indicator) => openKiChangeAgent(namespace, indicator)}
+              onDeleteIndicator={(indicator) =>
+                removeKnowledgeIndicator(namespace.name, indicator.id)
+              }
             />
           ) : null}
         </PageBody>

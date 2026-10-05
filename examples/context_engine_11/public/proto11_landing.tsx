@@ -64,6 +64,7 @@ import {
 } from './proto11_data';
 import { Proto11SampleStrip, SampleMenuButton, type ExploreSample } from './proto11_sample_panel';
 import type { Proto11SourceId } from './proto11_types';
+import type { KnowledgeIndicator } from './knowledge_indicators';
 import type { Namespace } from './namespace_data';
 import { TraceRow } from './traces_panel';
 import { TABLE_SPARKLES_TYPE } from './register_table_sparkles';
@@ -829,6 +830,11 @@ const Composer = ({
             name,
             sourceIds: proposal.sourceIds,
             ...(proposal.trace ? { trace: proposal.trace } : {}),
+            connectFrom: {
+              path: proposal.path,
+              ...(proposal.question ? { question: proposal.question } : {}),
+              ...(proposal.trace ? { agentName: proposal.trace.value } : {}),
+            },
           })
         }
       />
@@ -968,6 +974,8 @@ export const Proto11Landing = ({
   onCreateEmpty,
   onExploreSample,
   onAskAgent,
+  discoverHref,
+  onAskAboutIndicator,
 }: {
   variant: 'hero' | 'compact';
   heroArt: React.ReactNode;
@@ -979,6 +987,8 @@ export const Proto11Landing = ({
   onCreateEmpty: () => void;
   onExploreSample: ExploreSample;
   onAskAgent: AskAgentAboutProposal;
+  discoverHref: string;
+  onAskAboutIndicator: (indicator: KnowledgeIndicator, message: string) => void;
 }) => {
   if (variant === 'compact') {
     return (
@@ -1052,7 +1062,11 @@ export const Proto11Landing = ({
             </div>
           </div>
         </EuiPanel>
-        <Proto11SampleStrip onExploreSample={onExploreSample} />
+        <Proto11SampleStrip
+          onExploreSample={onExploreSample}
+          discoverHref={discoverHref}
+          onAskAboutIndicator={onAskAboutIndicator}
+        />
       </EuiPanel>
       <EuiSpacer size="xl" />
       {indexGrid}

@@ -33,7 +33,9 @@ import {
   sampleIndicator,
   type SampleDemo,
 } from './proto11_data';
-import { ComparisonBlock, KiJsonFlyout, KiPreviewRow } from './proto11_ki_preview';
+import type { KnowledgeIndicator } from './knowledge_indicators';
+import { ComparisonBlock, KiPreviewRow } from './proto11_ki_preview';
+import { KiDetailFlyout } from './proto11_ki_detail';
 import type { Proto11SampleScenario } from './proto11_types';
 
 /** Ask, first card, second card, third card, comparison. About four seconds with the slide-ins. */
@@ -214,7 +216,15 @@ const DemoRun = ({
 };
 
 /** Footer band of the landing hero: the sample pipeline, with the live demo on request. */
-export const Proto11SampleStrip = ({ onExploreSample }: { onExploreSample: ExploreSample }) => {
+export const Proto11SampleStrip = ({
+  onExploreSample,
+  discoverHref,
+  onAskAboutIndicator,
+}: {
+  onExploreSample: ExploreSample;
+  discoverHref: string;
+  onAskAboutIndicator: (indicator: KnowledgeIndicator, message: string) => void;
+}) => {
   const { euiTheme } = useEuiTheme();
   const [expanded, setExpanded] = useState(false);
   const [openPopover, setOpenPopover] = useState<PipelineId | 'sample' | null>(null);
@@ -400,10 +410,13 @@ export const Proto11SampleStrip = ({ onExploreSample }: { onExploreSample: Explo
         </>
       ) : null}
       {open ? (
-        <KiJsonFlyout
+        <KiDetailFlyout
           indicator={open.indicator}
-          sourceName={open.sourceName}
+          indicators={[]}
           sample
+          discoverHref={discoverHref}
+          resolveIndicator={(id) => sampleIndicator(id)?.indicator}
+          onAskAgent={onAskAboutIndicator}
           onClose={() => setOpenId(null)}
         />
       ) : null}

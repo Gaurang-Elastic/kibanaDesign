@@ -36,9 +36,14 @@ import {
 } from '@elastic/eui';
 import type { EuiBasicTableColumn } from '@elastic/eui';
 
-import { indicatorSourceLabel, typeLabel, type KnowledgeType } from './knowledge_indicators';
+import {
+  indicatorSourceLabel,
+  typeLabel,
+  type KnowledgeIndicator,
+  type KnowledgeType,
+} from './knowledge_indicators';
 import type { Namespace } from './namespace_data';
-import { KiJsonFlyout } from './proto11_ki_preview';
+import { KiDetailFlyout } from './proto11_ki_detail';
 import {
   DEFAULT_USAGE_PERIOD,
   HIT_RATE_GOAL,
@@ -219,9 +224,15 @@ interface MissRow {
 export const Proto11UsageTab = ({
   namespace,
   onProposeFix,
+  discoverHref,
+  onAskAboutIndicator,
+  onDeleteIndicator,
 }: {
   namespace: Namespace;
   onProposeFix: (question: string) => void;
+  discoverHref: string;
+  onAskAboutIndicator: (indicator: KnowledgeIndicator, message: string) => void;
+  onDeleteIndicator: (indicator: KnowledgeIndicator) => void;
 }) => {
   const { euiTheme, colorMode } = useEuiTheme();
   const [period, setPeriod] = useState<UsagePeriod>(DEFAULT_USAGE_PERIOD);
@@ -423,10 +434,19 @@ export const Proto11UsageTab = ({
         <p>{MEASURED_LINE}</p>
       </EuiText>
       {openIndicator ? (
-        <KiJsonFlyout
+        <KiDetailFlyout
           indicator={openIndicator}
-          sourceName={indicatorSourceLabel(openIndicator)}
+          indicators={namespace.indicators}
           sample={Boolean(namespace.proto11?.sample)}
+          discoverHref={discoverHref}
+          automations={namespace.automations}
+          sources={namespace.sources}
+          agent={namespace.proto11?.agent}
+          onAskAgent={onAskAboutIndicator}
+          onDelete={(item) => {
+            onDeleteIndicator(item);
+            setOpenId(null);
+          }}
           onClose={() => setOpenId(null)}
         />
       ) : null}

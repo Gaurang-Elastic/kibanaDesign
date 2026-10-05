@@ -27,6 +27,7 @@ import {
 import type {
   Proto11AddonRun,
   Proto11ChatTurn,
+  Proto11ConnectGuide,
   Proto11FixChat,
   Proto11GoalId,
   Proto11Meta,
@@ -1269,7 +1270,38 @@ export interface CreateFromGoalOptions {
   intent?: string;
   /** Words from the description that triggered a second Learn from traces automation. */
   struggleWords?: string[];
+  /** Set by Create and run so the overview opens on the connect guide. */
+  connectFrom?: {
+    path: Proto11Path;
+    question?: string;
+    agentName?: string;
+  };
 }
+
+const connectGuideFor = (
+  indexName: string,
+  sourceIds: Proto11SourceId[],
+  from: { question?: string; agentName?: string }
+): Proto11ConnectGuide => {
+  const sources = joinList(sourceIds.map((id) => sourceDisplayName(id)));
+  const failed = from.agentName
+    ? traceQuestionsFor(from.agentName)
+        .filter((item) => item.failures !== undefined)
+        .map((item) => item.topic)
+    : [];
+  const topics = failed.length > 0 ? joinList(failed) : sources;
+  const first = from.question
+    ? `Before answering "${from.question.trim()}", retrieve relevant Knowledge Indicators from the AI index ${indexName} and prefer them over scanning ${sources}.`
+    : `Before answering questions about ${topics}, retrieve relevant Knowledge Indicators from the AI index ${indexName} and prefer them over scanning ${sources}.`;
+  const second = from.agentName
+    ? `${from.agentName} missed these on the raw data, so use this index as soon as the first pass finishes.`
+    : `Open ${sources} only when this index has nothing that answers the question.`;
+  return {
+    mode: from.agentName ? 'agent' : 'outside',
+    ...(from.agentName ? { agentName: from.agentName } : {}),
+    prompt: `${first} ${second}`,
+  };
+};
 
 /** A working AI index straight from a goal: sources chosen, automation running its first pass. */
 export const createProto11Namespace = ({
@@ -1280,6 +1312,7 @@ export const createProto11Namespace = ({
   trace,
   intent,
   struggleWords,
+  connectFrom,
 }: CreateFromGoalOptions): Namespace => {
   const goal = goalById(goalId);
   const chosen = sourceIds && sourceIds.length > 0 ? sourceIds : goal.defaultSources;
@@ -1328,7 +1361,10 @@ export const createProto11Namespace = ({
     indicators: [],
     knowledge: statsFromIndicators([]),
     tryQuestions: [],
-    proto11: freshMeta(goalId, chosen, runTemplates, agent),
+    proto11: {
+      ...freshMeta(goalId, chosen, runTemplates, agent),
+      ...(connectFrom ? { connectGuide: connectGuideFor(name, chosen, connectFrom) } : {}),
+    },
   };
 };
 
@@ -1770,6 +1806,8 @@ export interface Proto11Proposal {
   /** Sources the question path matched, shown with a found badge. */
   foundIds: Proto11SourceId[];
   trace?: IndexTrace;
+  /** The question that produced this proposal, when the path started from one. */
+  question?: string;
 }
 
 /** Plain-text proposal, attached when asking Elastic AI Agent to adjust it. */
@@ -1885,6 +1923,7 @@ export const proposeFromQuestion = (text: string, takenNames: string[]): Proto11
       sourceIds: goalById('indices').defaultSources,
       sourcesBecause: 'because nothing in the question matched a source, these are the defaults',
       foundIds: [],
+      question: text.trim(),
     };
   }
 
@@ -1908,6 +1947,7 @@ export const proposeFromQuestion = (text: string, takenNames: string[]): Proto11
       matches.map((match) => `${sourceDisplayName(match.id)} matched ${quoted(match.words)}`)
     )}`,
     foundIds: sourceIds,
+    question: text.trim(),
   };
 };
 

@@ -20,6 +20,7 @@ import {
   EuiTitle,
 } from '@elastic/eui';
 
+import type { KnowledgeIndicator } from './knowledge_indicators';
 import type { Namespace } from './namespace_data';
 import {
   indicatorSourceGroup,
@@ -27,7 +28,8 @@ import {
   testQuestionExamples,
   type TestQuestionResult,
 } from './proto11_data';
-import { ComparisonBlock, KiJsonFlyout, KiPreviewCard } from './proto11_ki_preview';
+import { KiDetailFlyout } from './proto11_ki_detail';
+import { ComparisonBlock, KiPreviewCard } from './proto11_ki_preview';
 
 const ESTIMATE_NOTE =
   'Estimated from a dry run against this AI index. Measured numbers appear in Usage once your agent is connected.';
@@ -36,7 +38,17 @@ const SAMPLE_NOTE = 'Sample run on sample data.';
 const formatCount = (value: number) => value.toLocaleString('en-US');
 
 /** Scripted comparison of an agent answering with and without this AI index. */
-export const Proto11TestQuestion = ({ namespace }: { namespace: Namespace }) => {
+export const Proto11TestQuestion = ({
+  namespace,
+  discoverHref,
+  onAskAboutIndicator,
+  onDeleteIndicator,
+}: {
+  namespace: Namespace;
+  discoverHref: string;
+  onAskAboutIndicator: (indicator: KnowledgeIndicator, message: string) => void;
+  onDeleteIndicator: (indicator: KnowledgeIndicator) => void;
+}) => {
   const [question, setQuestion] = useState('');
   const [result, setResult] = useState<TestQuestionResult | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -224,10 +236,19 @@ export const Proto11TestQuestion = ({ namespace }: { namespace: Namespace }) => 
         </>
       ) : null}
       {openIndicator ? (
-        <KiJsonFlyout
+        <KiDetailFlyout
           indicator={openIndicator}
-          sourceName={sourceNameOf(openIndicator.id)}
+          indicators={namespace.indicators}
           sample={sample}
+          discoverHref={discoverHref}
+          automations={namespace.automations}
+          sources={namespace.sources}
+          agent={namespace.proto11?.agent}
+          onAskAgent={onAskAboutIndicator}
+          onDelete={(item) => {
+            onDeleteIndicator(item);
+            setOpenId(null);
+          }}
           onClose={() => setOpenId(null)}
         />
       ) : null}
