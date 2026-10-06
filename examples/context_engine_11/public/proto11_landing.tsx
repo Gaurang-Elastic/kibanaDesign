@@ -46,8 +46,8 @@ import {
 
 import { MEMORY_HELPER, SHOW_MEMORY_TOGGLE } from './demo_flags';
 import {
-  EXAMPLE_QUESTIONS,
   GENAI_TRACE_OPTIONS,
+  PROBLEM_CHIPS,
   TEMPLATES,
   WEB_OPS_SOURCES,
   findReuseTarget,
@@ -55,8 +55,8 @@ import {
   namespaceSourceFor,
   pickerAgents,
   proposeFromComposer,
+  proposeFromIndex,
   type ReuseMatch,
-  traceQuestionsFor,
   type ComposerInput,
   type PickerAgent,
   type CreateFromGoalOptions,
@@ -687,7 +687,6 @@ const Composer = ({
 
   const hasText = text.trim().length > 0;
   const canPropose = hasText || agent !== null || pickedIds.length > 0;
-  const traceQuestions = agent ? traceQuestionsFor(agent.name) : [];
   const showChips = !compact || focused || hasText;
 
   const togglePicked = (id: Proto11SourceId, checked: boolean) =>
@@ -785,29 +784,17 @@ const Composer = ({
     </EuiButton>
   );
 
-  const suggestions =
-    traceQuestions.length > 0
-      ? traceQuestions.map((item) => ({
-          question: item.question,
-          label: (
-            <>
-              {item.question} <EuiTextColor color="subdued">{item.badge}</EuiTextColor>
-            </>
-          ),
-        }))
-      : EXAMPLE_QUESTIONS.map((question) => ({ question, label: question }));
-
   const chips = (
     <EuiFlexGroup gutterSize="s" responsive={false} wrap data-test-subj="proto11Suggestions">
-      {suggestions.map(({ question, label }) => (
-        <EuiFlexItem grow={false} key={question}>
+      {PROBLEM_CHIPS.map((chip) => (
+        <EuiFlexItem grow={false} key={chip.sentence}>
           <EuiBadge
             color="hollow"
-            onClick={() => applyQuestion(question)}
-            onClickAriaLabel={`Use the question ${question}`}
+            onClick={() => applyQuestion(chip.sentence)}
+            onClickAriaLabel={`Use the question ${chip.sentence}`}
             data-test-subj="proto11ComposerExample"
           >
-            {label}
+            {chip.sentence}
           </EuiBadge>
         </EuiFlexItem>
       ))}
@@ -916,6 +903,76 @@ const Composer = ({
 
 /** The landing composer, also opened from an index to propose an automation for it. */
 export const Proto11Composer = Composer;
+
+/** Inline proposal above Automations. Built from the description and sources, with no question. */
+export const Proto11IndexProposal = ({
+  namespace,
+  onCreateAndRun,
+}: {
+  namespace: Namespace;
+  onCreateAndRun: (proposal: Proto11Proposal) => void;
+}) => {
+  const proposal = proposeFromIndex(namespace);
+  const template = TEMPLATES[goalById(proposal.goal).template];
+  return (
+    <EuiPanel
+      hasBorder
+      paddingSize="l"
+      className="contextEnginePrototype__proto11Enter"
+      data-test-subj="proto11IndexProposal"
+    >
+      <EuiDescriptionList
+        type="column"
+        columnWidths={[1, 4]}
+        listItems={[
+          {
+            title: 'Automation',
+            description: (
+              <>
+                <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                  <EuiFlexItem grow={false}>
+                    <EuiIcon type="bolt" size="m" aria-hidden={true} />
+                  </EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    <EuiText size="s">
+                      <strong>{template.title}</strong>
+                    </EuiText>
+                  </EuiFlexItem>
+                </EuiFlexGroup>
+                <EuiText size="s" color="subdued">
+                  <p>{template.description}</p>
+                </EuiText>
+                <div data-test-subj="proto11IndexProposalBecause">
+                  <BecauseLine>{proposal.automationBecause}</BecauseLine>
+                </div>
+              </>
+            ),
+          },
+          {
+            title: 'Sources',
+            description: (
+              <EuiText size="s" data-test-subj="proto11IndexProposalSources">
+                <p>Uses the sources on this index</p>
+              </EuiText>
+            ),
+          },
+        ]}
+      />
+      <EuiSpacer size="l" />
+      <EuiFlexGroup justifyContent="flexEnd" responsive={false}>
+        <EuiFlexItem grow={false}>
+          <EuiButton
+            fill
+            onClick={() => onCreateAndRun(proposal)}
+            data-test-subj="proto11IndexProposalRun"
+          >
+            Create and run
+          </EuiButton>
+        </EuiFlexItem>
+      </EuiFlexGroup>
+    </EuiPanel>
+  );
+};
 
 /** Faint texture behind the hero illustration, faded out towards the hero copy. */
 const HeroTexture = () => {

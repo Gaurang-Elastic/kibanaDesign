@@ -7,17 +7,35 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
+/*
+ * Copyright Elasticsearch B.V. and/or licensed to Elasticsearch B.V. under one
+ * or more contributor license agreements. Licensed under the "Elastic License
+ * 2.0", the "GNU Affero General Public License v3.0 only", and the "Server Side
+ * Public License, v 1"; you may not use this file except in compliance with, at
+ * your election, the "Elastic License 2.0", the "GNU Affero General Public
+ * License v3.0 only", or the "Server Side Public License, v 1".
+ */
+
 import React from 'react';
-import { css } from '@emotion/react';
-import { EuiBadge, EuiText, useEuiTheme } from '@elastic/eui';
-import type { EuiThemeComputed } from '@elastic/eui';
+import { EuiBadge } from '@elastic/eui';
 
-import { typeLabel, type KnowledgeIndicator, type KnowledgeType } from './knowledge_indicators';
+import { typeLabel, type KnowledgeType } from './knowledge_indicators';
 
-/** The four Knowledge Indicator types that carry a vis colour. */
+/** Knowledge Context produced. */
+export const KNOWLEDGE_BLUE = '#0B64DD';
+
+/** The agent. */
+export const AGENT_TEAL = '#48EFCF';
+
+/** Teal used for text and 1px lines. The fill stays #48EFCF. */
+export const AGENT_TEAL_INK = '#0E8C76';
+
+/** The four product types. Shape distinguishes them; colour does not. */
 export const KI_VIZ_TYPES = ['index_metadata', 'document', 'unit_profile', 'query_guide'] as const;
 
 export type KiVizType = (typeof KI_VIZ_TYPES)[number];
+
+export type KiShape = 'circle' | 'square' | 'diamond' | 'triangle';
 
 export const isKiVizType = (type: KnowledgeType): type is KiVizType =>
   (KI_VIZ_TYPES as readonly KnowledgeType[]).includes(type);
@@ -29,87 +47,105 @@ const SHORT_LABEL: Record<KiVizType, string> = {
   query_guide: 'query guide',
 };
 
-/** Vis colour for a Knowledge Indicator type. Types outside the four stay ink. */
-export const kiVizColor = (type: KnowledgeType, theme: EuiThemeComputed): string => {
+/** Light mode, low count to high: pale blue up to brand blue. */
+const LIGHT_BLUE_RAMP = ['#E8F1FF', '#BFD6F7', '#85B1EE', '#3D84E3', '#0B64DD'] as const;
+
+/**
+ * Dark mode inverts that ramp into navy. Low counts stay dark; the top step is still brand blue.
+ */
+const DARK_BLUE_RAMP = ['#0E2344', '#14315C', '#1A4684', '#1E5CB0', '#0B64DD'] as const;
+
+export type ColorMode = 'LIGHT' | 'DARK';
+
+const rampIndex = (count: number) => Math.min(4, Math.floor(Math.log2(Math.max(1, count))));
+
+/** Blue ramp step for a positive count. Empty counts have no knowledge colour. */
+export const knowledgeBlueForCount = (count: number, colorMode: ColorMode): string | null => {
+  if (count <= 0) return null;
+  const ramp = colorMode === 'DARK' ? DARK_BLUE_RAMP : LIGHT_BLUE_RAMP;
+  return ramp[rampIndex(count)];
+};
+
+/** Ink that stays readable on a ramp cell. Dark mode uses the light ink on every step. */
+export const rampInk = (count: number, colorMode: ColorMode, lightInk: string): string => {
+  if (count <= 0) return lightInk;
+  if (colorMode === 'DARK') return '#FFFFFF';
+  return rampIndex(count) >= 3 ? '#FFFFFF' : lightInk;
+};
+
+export const kiTypeShape = (type: KnowledgeType): KiShape => {
   switch (type) {
-    case 'index_metadata':
-      return theme.colors.vis.euiColorVis0;
     case 'document':
-      return theme.colors.vis.euiColorVis1;
-    case 'query_guide':
-      return theme.colors.vis.euiColorVis2;
+      return 'square';
     case 'unit_profile':
-      return theme.colors.vis.euiColorVis3;
+      return 'diamond';
+    case 'query_guide':
+      return 'triangle';
     default:
-      return theme.colors.text;
+      return 'circle';
   }
 };
 
 export const kiTypeShort = (type: KnowledgeType): string =>
   isKiVizType(type) ? SHORT_LABEL[type] : type.replace(/_/g, ' ');
 
-/** Hollow type badge: type colour for the text and the border. */
-export const KiTypeBadge = ({ type }: { type: KnowledgeType }) => {
-  const { euiTheme } = useEuiTheme();
-  const tone = kiVizColor(type, euiTheme);
-  return (
-    <EuiBadge color="hollow" style={{ color: tone, boxShadow: `inset 0 0 0 1px ${tone}` }}>
-      {typeLabel(type)}
-    </EuiBadge>
-  );
+/** Knowledge node. The shape is the type; the fill is knowledge blue unless a caller overrides it. */
+export const KiNodeShape = ({
+  type,
+  cx,
+  cy,
+  r,
+  fill,
+  stroke = 'none',
+  strokeWidth = 0,
+}: {
+  type: KnowledgeType;
+  cx: number;
+  cy: number;
+  r: number;
+  fill: string;
+  stroke?: string;
+  strokeWidth?: number;
+}) => {
+  const shape = kiTypeShape(type);
+  if (shape === 'square') {
+    return (
+      <rect
+        x={cx - r}
+        y={cy - r}
+        width={r * 2}
+        height={r * 2}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+      />
+    );
+  }
+  if (shape === 'diamond') {
+    return (
+      <polygon
+        points={`${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}`}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+      />
+    );
+  }
+  if (shape === 'triangle') {
+    const h = r * 1.15;
+    return (
+      <polygon
+        points={`${cx},${cy - h} ${cx + h},${cy + h * 0.75} ${cx - h},${cy + h * 0.75}`}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+      />
+    );
+  }
+  return <circle cx={cx} cy={cy} r={r} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />;
 };
 
-const countsFor = (indicators: KnowledgeIndicator[]) => {
-  const counts = new Map<KnowledgeType, number>();
-  indicators.forEach((indicator) => {
-    counts.set(indicator.type, (counts.get(indicator.type) ?? 0) + 1);
-  });
-  const ordered: KnowledgeType[] = [
-    ...KI_VIZ_TYPES.filter((item) => (counts.get(item) ?? 0) > 0),
-    ...[...counts.keys()].filter((item) => !isKiVizType(item)),
-  ];
-  return ordered.map((item) => ({ type: item, count: counts.get(item) ?? 0 }));
-};
-
-/** Segmented type bar and muted legend for an AI index card. */
-export const KiTypeStrip = ({ indicators }: { indicators: KnowledgeIndicator[] }) => {
-  const { euiTheme } = useEuiTheme();
-  const parts = countsFor(indicators);
-  const total = indicators.length;
-  return (
-    <div data-test-subj="proto11TypeStrip">
-      <div
-        css={css`
-          display: flex;
-          height: 6px;
-          overflow: hidden;
-          border-radius: 3px;
-          background: ${total === 0 ? euiTheme.colors.lightestShade : 'transparent'};
-        `}
-      >
-        {parts.map(({ type, count }) => (
-          <span
-            key={type}
-            css={css`
-              display: block;
-              height: 6px;
-              width: ${(count / Math.max(total, 1)) * 100}%;
-              background: ${kiVizColor(type, euiTheme)};
-            `}
-          />
-        ))}
-      </div>
-      <EuiText size="xs" color="subdued">
-        <p
-          css={css`
-            margin: 4px 0 0;
-          `}
-        >
-          {total === 0
-            ? 'No Knowledge Indicators yet'
-            : parts.map(({ type, count }) => `${kiTypeShort(type)} ${count}`).join(' · ')}
-        </p>
-      </EuiText>
-    </div>
-  );
-};
+/** Hollow type badge. Type is never a colour. */
+export const KiTypeBadge = ({ type }: { type: KnowledgeType }) => (
+  <EuiBadge color="hollow">{typeLabel(type)}</EuiBadge>
+);

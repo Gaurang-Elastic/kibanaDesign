@@ -9,10 +9,19 @@
 
 import React, { useState } from 'react';
 import { css } from '@emotion/react';
-import { EuiIcon, EuiText, shade, tint, transparentize, useEuiTheme } from '@elastic/eui';
+import { EuiIcon, EuiText, transparentize, useEuiTheme } from '@elastic/eui';
 
 import type { KnowledgeType } from './knowledge_indicators';
-import { KI_VIZ_TYPES, kiTypeShort, kiVizColor, type KiVizType } from './proto11_ki_colors';
+import {
+  AGENT_TEAL,
+  AGENT_TEAL_INK,
+  KI_VIZ_TYPES,
+  KNOWLEDGE_BLUE,
+  kiTypeShort,
+  knowledgeBlueForCount,
+  rampInk,
+  type KiVizType,
+} from './proto11_ki_colors';
 
 export interface KiModeSource {
   name: string;
@@ -40,7 +49,7 @@ export const Proto11Coverage = ({
   onlyType?: KiVizType;
   onCell: (source: string, type: KiVizType) => void;
 }) => {
-  const { euiTheme } = useEuiTheme();
+  const { euiTheme, colorMode } = useEuiTheme();
   const columns = onlyType ? [onlyType] : [...KI_VIZ_TYPES];
   const rows = tracesRow ? [...sources, tracesRow] : sources;
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
@@ -58,13 +67,7 @@ export const Proto11Coverage = ({
         <span />
         {columns.map((type) => (
           <EuiText key={type} size="xs" textAlign="center">
-            <span
-              css={css`
-                color: ${kiVizColor(type, euiTheme)};
-              `}
-            >
-              {kiTypeShort(type)}
-            </span>
+            <span>{kiTypeShort(type)}</span>
           </EuiText>
         ))}
         {rows.map((source) => {
@@ -94,8 +97,7 @@ export const Proto11Coverage = ({
               </EuiText>
               {columns.map((type, index) => {
                 const count = counts[index];
-                const color = kiVizColor(type, euiTheme);
-                const gapCell = empty && index === 0;
+                const fill = knowledgeBlueForCount(count, colorMode);
                 return (
                   <button
                     key={type}
@@ -115,17 +117,17 @@ export const Proto11Coverage = ({
                     onMouseLeave={() => setTip(null)}
                     css={css`
                       min-height: 36px;
-                      border: ${gapCell
-                        ? `1px dashed ${euiTheme.colors.borderBaseWarning}`
-                        : '1px solid transparent'};
+                      border: 1px solid transparent;
                       border-radius: 4px;
-                      background: ${count > 0 ? tint(color, 0.72) : euiTheme.colors.lightestShade};
-                      color: ${gapCell ? euiTheme.colors.textWarning : shade(color, 0.45)};
+                      background: ${fill ?? euiTheme.colors.lightestShade};
+                      color: ${fill
+                        ? rampInk(count, colorMode, euiTheme.colors.text)
+                        : euiTheme.colors.text};
                       font-weight: 600;
                       cursor: pointer;
                     `}
                   >
-                    {count > 0 || gapCell ? count : ''}
+                    {count > 0 ? count : ''}
                   </button>
                 );
               })}
@@ -311,7 +313,7 @@ export const Proto11Flow = ({
         x2: xType,
         y2,
         h2,
-        color: kiVizColor(type, euiTheme),
+        color: KNOWLEDGE_BLUE,
         tip: `${count} ${kiTypeShort(type)} from ${source.name}`,
       });
     });
@@ -348,7 +350,7 @@ export const Proto11Flow = ({
           x2: xAgent,
           y2,
           h2,
-          color: kiVizColor(type, euiTheme),
+          color: AGENT_TEAL,
           tip: `${kiTypeShort(type)} to ${agent}: ${label}`,
         });
       });
@@ -423,21 +425,27 @@ export const Proto11Flow = ({
         {middle.map((node) => {
           const type = node.key as KiVizType;
           return (
-            <g key={node.key} onClick={() => onType(type)} style={{ cursor: 'pointer' }}>
+            <g
+              key={node.key}
+              data-test-subj="proto11KiFlowType"
+              data-ki-type={type}
+              onClick={() => onType(type)}
+              style={{ cursor: 'pointer' }}
+            >
               <rect
                 x={xType}
                 y={node.y}
                 width={typeW}
                 height={node.h}
                 rx={4}
-                fill={transparentize(kiVizColor(type, euiTheme), 0.75)}
-                stroke={kiVizColor(type, euiTheme)}
+                fill={euiTheme.colors.lightestShade}
+                stroke={euiTheme.colors.borderBaseSubdued}
               />
               <text
                 x={xType + 8}
                 y={node.y + node.h / 2 + 4}
                 fontSize={11}
-                fill={kiVizColor(type, euiTheme)}
+                fill={euiTheme.colors.text}
               >
                 {node.label}
               </text>
@@ -445,15 +453,16 @@ export const Proto11Flow = ({
           );
         })}
         {right.map((node) => (
-          <g key={node.key}>
+          <g key={node.key} data-test-subj="proto11KiFlowAgent">
             <rect
               x={xAgent}
               y={node.y}
               width={agentW}
               height={node.h}
               rx={4}
-              fill={euiTheme.colors.lightestShade}
-              stroke={euiTheme.colors.borderBaseSubdued}
+              fill={AGENT_TEAL}
+              stroke={AGENT_TEAL_INK}
+              strokeWidth={1}
             />
             <foreignObject x={xAgent + 6} y={node.y} width={agentW - 12} height={node.h}>
               <div
@@ -462,7 +471,7 @@ export const Proto11Flow = ({
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
-                  color: euiTheme.colors.text,
+                  color: AGENT_TEAL_INK,
                   fontSize: 11,
                 }}
               >

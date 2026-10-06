@@ -72,7 +72,8 @@ export interface Automation {
 }
 
 export const automationMetaLine = (automation: Automation) => {
-  const triggers = automation.triggerCount === 1 ? '1 trigger' : `${automation.triggerCount} triggers`;
+  const triggers =
+    automation.triggerCount === 1 ? '1 trigger' : `${automation.triggerCount} triggers`;
   const steps = automation.stepCount === 1 ? '1 step' : `${automation.stepCount} steps`;
   return `${triggers} · ${steps}`;
 };
@@ -234,7 +235,7 @@ export const supportTriageNamespace: Namespace = {
       hasRun: true,
       triggerCount: 1,
       stepCount: 3,
-      scheduleLabel: 'Runs every hour',
+      scheduleLabel: 'Scheduled to run every 5 minutes',
       addedBy: 'you',
       lastRunAt: '6 hours ago',
       description: 'Extracts refund and SLA policies from support tickets and internal docs.',
@@ -364,7 +365,7 @@ export const elasticNamespace: Namespace = {
       hasRun: true,
       triggerCount: 1,
       stepCount: 2,
-      scheduleLabel: 'Runs every hour',
+      scheduleLabel: 'Scheduled to run every 5 minutes',
       addedBy: 'Elastic',
       lastRunAt: '2 hours ago',
       description: 'Extracts product surface facts from saved Kibana dashboards.',
@@ -395,7 +396,7 @@ export const elasticNamespace: Namespace = {
       hasRun: true,
       triggerCount: 1,
       stepCount: 2,
-      scheduleLabel: 'Runs every 30 minutes',
+      scheduleLabel: 'Runs daily at 02:00',
       addedBy: 'Elastic',
       lastRunAt: '2 hours ago',
       description: 'Keeps alert routing preferences current from alert rules.',

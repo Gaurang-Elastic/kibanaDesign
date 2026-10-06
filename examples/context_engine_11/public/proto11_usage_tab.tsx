@@ -26,12 +26,11 @@ import {
   EuiFlexItem,
   EuiLink,
   EuiPanel,
-  EuiSelect,
   EuiSpacer,
+  EuiSuperSelect,
   EuiStat,
   EuiText,
   EuiTitle,
-  euiPaletteColorBlind,
   useEuiTheme,
 } from '@elastic/eui';
 import type { EuiBasicTableColumn } from '@elastic/eui';
@@ -44,6 +43,7 @@ import {
 } from './knowledge_indicators';
 import type { Namespace } from './namespace_data';
 import { KiDetailFlyout } from './proto11_ki_detail';
+import { KNOWLEDGE_BLUE } from './proto11_ki_colors';
 import {
   DEFAULT_USAGE_PERIOD,
   HIT_RATE_GOAL,
@@ -242,7 +242,7 @@ export const Proto11UsageTab = ({
 
   const days = filterUsageDays(series.days, period);
   const stats = summarizeUsage(days);
-  const [hitColor] = euiPaletteColorBlind();
+  const hitColor = KNOWLEDGE_BLUE;
   const targetColor = euiTheme.colors.mediumShade;
   const hitPoints = days
     .filter((day) => day.questions > 0)
@@ -299,17 +299,28 @@ export const Proto11UsageTab = ({
 
   return (
     <div className="contextEnginePrototype__panels" data-test-subj="contextEngineUsage">
-      <div className="contextEnginePrototype__usagePeriod">
-        <EuiSelect
-          compressed
-          className="contextEnginePrototype__usagePeriodSelect"
-          aria-label="Time period"
-          data-test-subj="contextEngineUsagePeriod"
-          options={USAGE_PERIODS.map((item) => ({ value: item.value, text: item.label }))}
-          value={period}
-          onChange={(event) => setPeriod(event.target.value as UsagePeriod)}
-        />
-      </div>
+      <EuiFlexGroup
+        className="contextEnginePrototype__usagePeriod"
+        justifyContent="flexEnd"
+        gutterSize="none"
+        responsive={false}
+      >
+        <EuiFlexItem grow={false}>
+          <EuiSuperSelect<UsagePeriod>
+            compressed
+            fullWidth={false}
+            className="contextEnginePrototype__usagePeriodSelect"
+            aria-label="Time period"
+            data-test-subj="contextEngineUsagePeriod"
+            options={USAGE_PERIODS.map((item) => ({
+              value: item.value,
+              inputDisplay: item.label,
+            }))}
+            valueOfSelected={period}
+            onChange={setPeriod}
+          />
+        </EuiFlexItem>
+      </EuiFlexGroup>
       <UsageStatsRow stats={stats} />
       <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__panel">
         <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">

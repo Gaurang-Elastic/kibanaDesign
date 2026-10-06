@@ -7,7 +7,7 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   EuiAccordion,
   EuiBadge,
@@ -56,6 +56,110 @@ const CHECK_TARGET = 3;
 const kiViewByIndex = new Map<string, 'list' | 'map'>();
 
 const viewForIndex = (name: string): 'list' | 'map' => kiViewByIndex.get(name) ?? 'list';
+
+const relativeUpdated = (iso: string | null | undefined) => {
+  if (!iso) return '';
+  const elapsed = Date.now() - new Date(iso).getTime();
+  const minutes = Math.round(elapsed / 60000);
+  if (minutes < 60) return minutes <= 1 ? 'just now' : `${minutes} minutes ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return days === 1 ? '1 day ago' : `${days} days ago`;
+  const weeks = Math.round(days / 7);
+  return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
+};
+
+const automationForCard = (indicator: HydratedKnowledgeIndicator, automations: Automation[]) => {
+  const uri = indicator.governance.provenance.created_by.uri;
+  if (uri.startsWith('workflow://')) {
+    const slug = uri.slice('workflow://'.length);
+    const match = automations.find((automation) => slugify(automation.title) === slug);
+    if (match) return match.title;
+  }
+  return indicator.extractedBy;
+};
+
+const provenanceLine = (indicator: HydratedKnowledgeIndicator, namespace: Namespace) => {
+  const source = indicatorSourceGroup(indicator, namespace.sources, namespace.proto11?.agent).name;
+  const automation = automationForCard(indicator, namespace.automations);
+  const updated = relativeUpdated(indicator.updated_at);
+  return [
+    source ? `From ${source}` : '',
+    automation ? `via ${automation}` : '',
+    updated ? `updated ${updated}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+};
+
+/** Three lines of content, then the rest behind Show more. */
+const CARD_LINE_LIMIT = 3;
+const CARD_CHAR_LIMIT = 180;
+
+const KiListCard = ({
+  indicator,
+  namespace,
+  onOpen,
+}: {
+  indicator: HydratedKnowledgeIndicator;
+  namespace: Namespace;
+  onOpen: () => void;
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const content = indicator.content || '';
+  const expandable =
+    content.split('\n').length > CARD_LINE_LIMIT || content.length > CARD_CHAR_LIMIT;
+
+  return (
+    <EuiPanel
+      hasBorder
+      paddingSize="m"
+      className="contextEnginePrototype__kiCard"
+      data-test-subj="proto11KiCard"
+    >
+      <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+        <EuiFlexItem grow={false}>
+          <KiTypeBadge type={indicator.type} />
+        </EuiFlexItem>
+        <EuiFlexItem>
+          <button
+            type="button"
+            className="contextEnginePrototype__kiCardTitle"
+            onClick={onOpen}
+            data-test-subj="proto11KiOpen"
+          >
+            {indicator.title}
+          </button>
+        </EuiFlexItem>
+      </EuiFlexGroup>
+      <EuiSpacer size="s" />
+      <EuiText size="s">
+        <p
+          className={`contextEnginePrototype__kiCardBody${
+            expandable && !expanded ? ' contextEnginePrototype__kiCardBody--clamp' : ''
+          }`}
+        >
+          {content}
+        </p>
+      </EuiText>
+      {expandable ? (
+        <EuiButtonEmpty
+          size="xs"
+          flush="left"
+          onClick={() => setExpanded((current) => !current)}
+          data-test-subj="proto11KiCardMore"
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </EuiButtonEmpty>
+      ) : null}
+      <EuiSpacer size="s" />
+      <EuiText size="xs" color="subdued">
+        <p data-test-subj="proto11KiCardProvenance">{provenanceLine(indicator, namespace)}</p>
+      </EuiText>
+    </EuiPanel>
+  );
+};
 
 export interface Proto11KnowledgeProps {
   sample: boolean;
@@ -407,7 +511,12 @@ export const KnowledgeTab = ({
   proto11?: Proto11KnowledgeProps;
 }) => {
   const [typeFilter, setTypeFilter] = useState<KnowledgeType | 'all'>('all');
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const [kiView, setKiView] = useState<'list' | 'map'>(() => viewForIndex(namespace.name));
+  const [modeGroup, setModeGroup] = useState<React.ReactNode>(null);
+  const onModeGroup = useCallback((group: React.ReactNode) => {
+    setModeGroup(group);
+  }, []);
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewedVersion, setViewedVersion] = useState<number | null>(null);
   const [openRows, setOpenRows] = useState<string[]>([]);
@@ -415,6 +524,7 @@ export const KnowledgeTab = ({
 
   useEffect(() => {
     setTypeFilter('all');
+    setSourceFilter(null);
     setOpenId(null);
     setViewedVersion(null);
     setOpenRows([]);
@@ -436,6 +546,14 @@ export const KnowledgeTab = ({
 
   const filtered = hydrated.filter((indicator) => {
     if (typeFilter !== 'all' && indicator.type !== typeFilter) return false;
+    if (sourceFilter) {
+      const source = indicatorSourceGroup(
+        indicator,
+        namespace.sources,
+        namespace.proto11?.agent
+      ).name;
+      if (source !== sourceFilter) return false;
+    }
     return true;
   });
 
@@ -494,16 +612,31 @@ export const KnowledgeTab = ({
     setOpenId(id);
   };
 
-  const renderRow = (indicator: HydratedKnowledgeIndicator) => (
-    <KiAccordionRow
-      key={indicator.id}
-      indicator={indicator}
-      proto11={Boolean(proto11)}
-      open={openRows.includes(indicator.id)}
-      onToggle={(isOpen) => setRowOpen(indicator.id, isOpen)}
-      onOpen={() => openIndicator(indicator.id)}
-    />
-  );
+  const applyListFilter = (filter: { source: string | null; type: KnowledgeType | 'all' }) => {
+    setSourceFilter(filter.source);
+    setTypeFilter(filter.type);
+    kiViewByIndex.set(namespace.name, 'list');
+    setKiView('list');
+  };
+
+  const renderRow = (indicator: HydratedKnowledgeIndicator) =>
+    proto11 ? (
+      <KiListCard
+        key={indicator.id}
+        indicator={indicator}
+        namespace={namespace}
+        onOpen={() => openIndicator(indicator.id)}
+      />
+    ) : (
+      <KiAccordionRow
+        key={indicator.id}
+        indicator={indicator}
+        proto11={false}
+        open={openRows.includes(indicator.id)}
+        onToggle={(isOpen) => setRowOpen(indicator.id, isOpen)}
+        onOpen={() => openIndicator(indicator.id)}
+      />
+    );
 
   const filteredGroups = allGroups
     .map((group) => ({
@@ -511,6 +644,26 @@ export const KnowledgeTab = ({
       items: group.items.filter((indicator) => filtered.includes(indicator)),
     }))
     .filter((group) => group.items.length > 0);
+
+  const viewToggle = proto11 ? (
+    <EuiButtonGroup
+      legend="Knowledge Indicator view"
+      type="single"
+      color="text"
+      buttonSize="compressed"
+      options={[
+        { id: 'list', label: 'List', 'data-test-subj': 'proto11KiViewList' },
+        { id: 'map', label: 'Map', 'data-test-subj': 'proto11KiViewMap' },
+      ]}
+      idSelected={kiView}
+      onChange={(id) => {
+        const next = id as 'list' | 'map';
+        kiViewByIndex.set(namespace.name, next);
+        setKiView(next);
+      }}
+      data-test-subj="proto11KiView"
+    />
+  ) : null;
 
   const renderList = () => {
     if (filtered.length === 0) {
@@ -537,7 +690,15 @@ export const KnowledgeTab = ({
         }
         paddingSize="none"
       >
-        <div className="contextEnginePrototype__kiGroupBody">{group.items.map(renderRow)}</div>
+        <div
+          className={
+            proto11
+              ? 'contextEnginePrototype__kiGroupBody contextEnginePrototype__kiCardList'
+              : 'contextEnginePrototype__kiGroupBody'
+          }
+        >
+          {group.items.map(renderRow)}
+        </div>
       </EuiAccordion>
     ));
   };
@@ -662,46 +823,82 @@ export const KnowledgeTab = ({
                 </EuiText>
               ) : null}
               <div className="contextEnginePrototype__kiToolbar">
-                <EuiButtonGroup
-                  legend="Filter by type"
-                  type="single"
-                  color="text"
-                  buttonSize="compressed"
-                  options={typeGroupOptions}
-                  idSelected={typeFilter}
-                  onChange={(id) => setTypeFilter(id as KnowledgeType | 'all')}
-                />
-                {proto11 ? (
-                  <EuiButtonGroup
-                    legend="Knowledge Indicator view"
-                    type="single"
-                    color="text"
-                    buttonSize="compressed"
-                    options={[
-                      { id: 'list', label: 'List', 'data-test-subj': 'proto11KiViewList' },
-                      { id: 'map', label: 'Map', 'data-test-subj': 'proto11KiViewMap' },
-                    ]}
-                    idSelected={kiView}
-                    onChange={(id) => {
-                      const next = id as 'list' | 'map';
-                      kiViewByIndex.set(namespace.name, next);
-                      setKiView(next);
-                    }}
-                    data-test-subj="proto11KiView"
-                  />
-                ) : null}
+                <div>
+                  {proto11 && kiView === 'map' ? (
+                    modeGroup
+                  ) : (
+                    <EuiButtonGroup
+                      legend="Filter by type"
+                      type="single"
+                      color="text"
+                      buttonSize="compressed"
+                      options={typeGroupOptions}
+                      idSelected={typeFilter}
+                      onChange={(id) => setTypeFilter(id as KnowledgeType | 'all')}
+                    />
+                  )}
+                </div>
+                {viewToggle}
               </div>
+              {proto11 && kiView === 'list' && (sourceFilter || typeFilter !== 'all') ? (
+                <EuiFlexGroup
+                  className="contextEnginePrototype__kiFilterChips"
+                  gutterSize="s"
+                  alignItems="center"
+                  responsive={false}
+                  wrap
+                  data-test-subj="proto11KiFilterChips"
+                >
+                  {sourceFilter ? (
+                    <EuiFlexItem grow={false}>
+                      <EuiBadge
+                        color="hollow"
+                        iconType="cross"
+                        iconSide="right"
+                        iconOnClick={() => setSourceFilter(null)}
+                        iconOnClickAriaLabel={`Remove ${sourceFilter} filter`}
+                        data-test-subj="proto11KiFilterChip-source"
+                      >
+                        {sourceFilter}
+                      </EuiBadge>
+                    </EuiFlexItem>
+                  ) : null}
+                  {typeFilter !== 'all' ? (
+                    <EuiFlexItem grow={false}>
+                      <EuiBadge
+                        color="hollow"
+                        iconType="cross"
+                        iconSide="right"
+                        iconOnClick={() => setTypeFilter('all')}
+                        iconOnClickAriaLabel={`Remove ${typeFilterLabel(typeFilter)} filter`}
+                        data-test-subj="proto11KiFilterChip-type"
+                      >
+                        {typeFilterLabel(typeFilter)}
+                      </EuiBadge>
+                    </EuiFlexItem>
+                  ) : null}
+                </EuiFlexGroup>
+              ) : null}
               {proto11 && kiView === 'map' ? (
                 <Proto11KiMap
                   namespace={namespace}
-                  indicators={filtered}
+                  indicators={hydrated}
                   allIndicators={hydrated}
                   selectedId={openId}
                   onSelect={openIndicator}
                   onClear={closeFlyout}
+                  onFilterList={applyListFilter}
+                  onModeGroup={onModeGroup}
                 />
               ) : (
-                <div className="contextEnginePrototype__kiTabList" ref={listRef}>
+                <div
+                  className={
+                    proto11
+                      ? 'contextEnginePrototype__kiCardList'
+                      : 'contextEnginePrototype__kiTabList'
+                  }
+                  ref={listRef}
+                >
                   {renderList()}
                 </div>
               )}

@@ -37,7 +37,7 @@ import {
 } from '@elastic/eui';
 
 import type { Namespace } from './namespace_data';
-import { kiVizColor } from './proto11_ki_colors';
+import { KNOWLEDGE_BLUE } from './proto11_ki_colors';
 import {
   TEMPLATES,
   currentReasoningLine,
@@ -61,7 +61,7 @@ const FirstPassDotGrid = ({ meta }: { meta: Proto11Meta }) => {
         `}
       >
         {dots.map((dot) => {
-          const fill = dot.rejected ? euiTheme.colors.warning : kiVizColor(dot.type, euiTheme);
+          const fill = dot.rejected ? euiTheme.colors.warning : KNOWLEDGE_BLUE;
           return (
             <span
               key={dot.id}

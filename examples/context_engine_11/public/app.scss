@@ -660,7 +660,6 @@ html {
 }
 
 .contextEnginePrototype__usagePeriod {
-  display: flex;
   justify-content: flex-end;
 }
 
@@ -1002,11 +1001,49 @@ html {
 }
 
 .contextEnginePrototype__kiToolbar {
-  align-items: flex-start;
+  align-items: center;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 12px;
   justify-content: space-between;
+
+  > :last-child {
+    flex-shrink: 0;
+  }
+}
+
+.contextEnginePrototype__kiFilterChips {
+  margin-top: 12px;
+}
+
+.contextEnginePrototype__kiCardList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.contextEnginePrototype__kiCardTitle {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0;
+  text-align: left;
+}
+
+.contextEnginePrototype__kiCardBody {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.contextEnginePrototype__kiCardBody--clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 .contextEnginePrototype__kiTabList {

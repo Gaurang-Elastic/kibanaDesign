@@ -258,26 +258,6 @@ export const statsFromIndicators = (indicators: KnowledgeIndicator[]): Knowledge
   return knowledge;
 };
 
-export const typeBadgeColor = (
-  type: KnowledgeType
-): 'success' | 'primary' | 'warning' | 'accent' | 'default' => {
-  switch (type) {
-    case 'fact':
-      return 'success';
-    case 'playbook':
-    case 'workflow':
-      return 'primary';
-    case 'policy':
-      return 'warning';
-    case 'faq':
-      return 'accent';
-    case 'index_metadata':
-    case 'glossary':
-    default:
-      return 'default';
-  }
-};
-
 /** Title-case type for accordion sublabels. */
 export const typeLabel = (type: KnowledgeType) => {
   if (type === 'faq') return 'FAQ';

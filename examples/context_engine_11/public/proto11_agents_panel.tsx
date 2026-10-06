@@ -8,6 +8,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { css } from '@emotion/react';
 import {
   EuiBadge,
   EuiButton,
@@ -28,13 +29,26 @@ import {
   EuiText,
   EuiTitle,
   EuiToolTip,
+  transparentize,
 } from '@elastic/eui';
 
 import { AGENT_BUILDER_AGENTS } from './proto11_data';
+import { AGENT_TEAL, AGENT_TEAL_INK } from './proto11_ki_colors';
 import type { ConnectedAgent, Proto11ConnectGuide } from './proto11_types';
 import { TRACES_DOCS_HREF } from './traces_panel';
 
 type OutsideTab = 'mcp' | 'api' | 'plugin';
+
+const agentRowCss = css`
+  border-left: 3px solid ${AGENT_TEAL};
+  background: ${transparentize(AGENT_TEAL, 0.16)};
+  padding-left: 8px;
+`;
+
+const agentIconCss = css`
+  color: ${AGENT_TEAL_INK};
+  display: inline-flex;
+`;
 
 const OUTSIDE_TABS: Array<{ id: OutsideTab; label: string }> = [
   { id: 'mcp', label: 'MCP' },
@@ -103,8 +117,14 @@ const AgentRow = ({
   agentBuilderHref: string;
   onRemove?: () => void;
 }) => (
-  <div className="contextEnginePrototype__row" data-test-subj="proto11ConnectedAgentRow">
-    <EuiIcon type="productAgent" size="m" aria-hidden={true} />
+  <div
+    className="contextEnginePrototype__row"
+    css={agentRowCss}
+    data-test-subj="proto11ConnectedAgentRow"
+  >
+    <span css={agentIconCss}>
+      <EuiIcon type="productAgent" size="m" aria-hidden={true} />
+    </span>
     <div className="contextEnginePrototype__rowMain">
       <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
         <EuiFlexItem grow={false}>
@@ -171,8 +191,14 @@ const PromptBlock = ({ prompt }: { prompt: string }) => (
 );
 
 const PendingAgentRow = ({ name }: { name: string }) => (
-  <div className="contextEnginePrototype__row" data-test-subj="proto11ConnectPendingRow">
-    <EuiIcon type="productAgent" size="m" aria-hidden={true} />
+  <div
+    className="contextEnginePrototype__row"
+    css={agentRowCss}
+    data-test-subj="proto11ConnectPendingRow"
+  >
+    <span css={agentIconCss}>
+      <EuiIcon type="productAgent" size="m" aria-hidden={true} />
+    </span>
     <div className="contextEnginePrototype__rowMain">
       <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
         <EuiFlexItem grow={false}>

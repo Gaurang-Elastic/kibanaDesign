@@ -1,6 +1,17 @@
 # Restart notes: Context Engine protos on Kibana 9.6
 
-Saved 2026-10-02. Protos 7, 8, 9, 10, and 11 run together from this worktree on current Kibana main. The August worktree stays frozen.
+Saved 2026-10-06, before a Cursor restart. Protos 7, 8, 9, 10, and 11 run together from this worktree on current Kibana main. The August worktree stays frozen.
+
+## Last session (2026-10-06)
+
+Cursor terminals live under `/Users/gaurang/.cursor/projects/Users-gaurang-Documents-CursorDesign/terminals`. Two were still marked running. Their processes were already gone (no listeners on `9222`, `5622`, or `5623`), so start both again after Cursor restarts. The base path from that Kibana process was `gqt`. A new start will mint a new base path.
+
+| Terminal | Title | Command |
+|---|---|---|
+| `716152.txt` | Restart isolated Elasticsearch on 9222 | `node scripts/es snapshot --license trial -E http.port=9222 -E transport.port=9322 -E discovery.type=single-node -E cluster.name=kibana-ce11` |
+| `716155.txt` | Register plugins and start Kibana with all five | `node scripts/kibana --dev` with `--plugin-path` for `context_engine_7` through `context_engine_11`, `--port=5623 --dev.basePathProxyTarget=5622` |
+
+Last open URL: `http://localhost:5623/gqt/app/contextEngineExample11`
 
 After restart, tell the agent: **restart the Context Engine 9.6 prototype terminals**
 

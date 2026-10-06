@@ -7,7 +7,7 @@
  * License v3.0 only", or the "Server Side Public License, v 1".
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { css } from '@emotion/react';
 import {
   EuiBadge,
@@ -19,18 +19,23 @@ import {
   EuiIcon,
   EuiSpacer,
   EuiText,
-  shade,
   useEuiTheme,
 } from '@elastic/eui';
 
 import {
-  KNOWLEDGE_TYPE_ORDER,
   typeLabel,
   type HydratedKnowledgeIndicator,
   type KnowledgeType,
 } from './knowledge_indicators';
 import type { Namespace } from './namespace_data';
-import { KI_VIZ_TYPES, isKiVizType, kiVizColor } from './proto11_ki_colors';
+import {
+  KI_VIZ_TYPES,
+  KiNodeShape,
+  KNOWLEDGE_BLUE,
+  kiTypeShape,
+  knowledgeBlueForCount,
+  rampInk,
+} from './proto11_ki_colors';
 import { indicatorSourceGroup, sampleScenarioOf } from './proto11_data';
 import { Proto11Coverage, Proto11Flow, type KiModeSource } from './proto11_ki_modes';
 import { indicatorRetrievals } from './proto11_usage';
@@ -324,19 +329,6 @@ const layoutGraph = (
   };
 };
 
-const measuredSum = (ids: string[], retrievals: Map<string, number> | null) => {
-  if (!retrievals) return undefined;
-  let sum = 0;
-  let any = false;
-  ids.forEach((id) => {
-    const value = retrievals.get(id);
-    if (value === undefined) return;
-    any = true;
-    sum += value;
-  });
-  return any ? sum : undefined;
-};
-
 /** Lineage map for one AI index: coverage, graph, flow and treemap. */
 export const Proto11KiMap = ({
   namespace,
@@ -345,17 +337,23 @@ export const Proto11KiMap = ({
   selectedId,
   onSelect,
   onClear,
+  onFilterList,
+  onModeGroup,
 }: {
   namespace: Namespace;
-  /** Knowledge Indicators that pass the type filter. */
+  /** Knowledge Indicators drawn on the map. The list type filter does not apply here. */
   indicators: HydratedKnowledgeIndicator[];
   /** Every Knowledge Indicator on the index, used to tell a real gap from a filter. */
   allIndicators: HydratedKnowledgeIndicator[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onClear: () => void;
+  /** Coverage cell, treemap tile, or Flow type: filter the List and leave the map. */
+  onFilterList?: (filter: { source: string | null; type: KnowledgeType | 'all' }) => void;
+  /** Mode group for the shared toolbar, left of List | Map. */
+  onModeGroup?: (group: React.ReactNode) => void;
 }) => {
-  const { euiTheme } = useEuiTheme();
+  const { euiTheme, colorMode } = useEuiTheme();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(880);
   const [drill, setDrill] = useState<Drill | null>(null);
@@ -368,12 +366,14 @@ export const Proto11KiMap = ({
   const panRef = useRef({ active: false, x: 0, y: 0, ox: 0, oy: 0, moved: false });
 
   const retrievals = useMemo(() => indicatorRetrievals(namespace), [namespace]);
-  const colorFor = (type: KnowledgeType) => kiVizColor(type, euiTheme);
 
-  const rememberMode = (next: MapMode) => {
-    modeByIndex.set(namespace.name, next);
-    setModeChoice(next);
-  };
+  const rememberMode = useCallback(
+    (next: MapMode) => {
+      modeByIndex.set(namespace.name, next);
+      setModeChoice(next);
+    },
+    [namespace.name]
+  );
 
   useEffect(() => {
     const element = wrapRef.current;
@@ -445,6 +445,43 @@ export const Proto11KiMap = ({
       ? 'coverage'
       : modeChoice;
 
+  useLayoutEffect(() => {
+    onModeGroup?.(
+      <EuiButtonGroup
+        legend="Map layout"
+        type="single"
+        color="text"
+        buttonSize="compressed"
+        options={[
+          { id: 'coverage', label: 'Coverage', 'data-test-subj': 'proto11KiMapCoverage' },
+          {
+            id: 'graph',
+            label: 'Graph',
+            isDisabled: graphDisabled,
+            toolTipContent: graphDisabled ? GRAPH_LIMIT_TIP : undefined,
+            'data-test-subj': 'proto11KiMapGraph',
+          },
+          {
+            id: 'flow',
+            label: 'Flow',
+            isDisabled: flowDisabled,
+            toolTipContent: flowDisabled ? GRAPH_LIMIT_TIP : undefined,
+            'data-test-subj': 'proto11KiMapFlow',
+          },
+          { id: 'treemap', label: 'Treemap', 'data-test-subj': 'proto11KiMapTreemap' },
+        ]}
+        idSelected={mode}
+        onChange={(id) => {
+          const next = id as MapMode;
+          if (next === 'graph' && graphDisabled) return;
+          if (next === 'flow' && flowDisabled) return;
+          rememberMode(next);
+        }}
+      />
+    );
+    return () => onModeGroup?.(null);
+  }, [flowDisabled, graphDisabled, mode, onModeGroup, rememberMode]);
+
   useEffect(() => {
     setPan({ x: 0, y: 0 });
   }, [drill, mode]);
@@ -454,14 +491,9 @@ export const Proto11KiMap = ({
     [mode, retrievals, sources, width]
   );
 
-  const presentTypes = [
-    ...KI_VIZ_TYPES,
-    ...KNOWLEDGE_TYPE_ORDER.filter(
-      (type) =>
-        !isKiVizType(type) &&
-        sources.some((source) => source.kis.some((indicator) => indicator.type === type))
-    ),
-  ];
+  const presentShapes = KI_VIZ_TYPES.filter((type) =>
+    sources.some((source) => source.kis.some((indicator) => indicator.type === type))
+  );
 
   const focus = useMemo(() => {
     if (!layout) return null;
@@ -519,29 +551,14 @@ export const Proto11KiMap = ({
     panRef.current.active = false;
   };
 
-  const shaded = retrievals !== null && mode === 'treemap';
-  const sourceCounts = sources.map((source) => ({
-    source,
-    amount: measuredSum(
-      source.kis.map((indicator) => indicator.id),
-      retrievals
-    ),
-  }));
-  let maxAmount = 0;
-  sourceCounts.forEach((item) => {
-    if (item.amount !== undefined && item.amount > maxAmount) maxAmount = item.amount;
-  });
-  const showShade = shaded && maxAmount > 0;
+  const fillFor = (count: number) =>
+    knowledgeBlueForCount(count, colorMode) ?? euiTheme.colors.lightestShade;
 
-  const fillFor = (type: KnowledgeType, amount: number | undefined) => {
-    const base = colorFor(type);
-    if (!showShade || amount === undefined || maxAmount <= 0) return base;
-    return shade(base, 0.15 + 0.4 * (amount / maxAmount));
-  };
-
-  const canvasHeight = mode === 'graph' ? layout?.height ?? 520 : 520;
   const gaps = sources.filter((source) => source.gap);
-  const treemapHeight = gaps.length > 0 ? canvasHeight - 56 : canvasHeight;
+  const TREEMAP_MAX_HEIGHT = 160;
+  const treemapHeight = gaps.length > 0 ? TREEMAP_MAX_HEIGHT - 48 : TREEMAP_MAX_HEIGHT;
+  const canvasHeight =
+    mode === 'graph' ? layout?.height ?? 520 : mode === 'treemap' ? TREEMAP_MAX_HEIGHT : 520;
 
   const crumbs = drill
     ? [
@@ -574,74 +591,27 @@ export const Proto11KiMap = ({
 
   return (
     <div data-test-subj="proto11KiMap">
-      <EuiFlexGroup
-        alignItems="center"
-        justifyContent="spaceBetween"
-        gutterSize="m"
-        responsive={false}
-        wrap
-      >
+      <EuiSpacer size="m" />
+      <EuiFlexGroup justifyContent="flexEnd" alignItems="center" gutterSize="s" responsive={false}>
         <EuiFlexItem grow={false}>
-          <EuiButtonGroup
-            legend="Map layout"
-            type="single"
-            color="text"
-            buttonSize="compressed"
-            options={[
-              { id: 'coverage', label: 'Coverage', 'data-test-subj': 'proto11KiMapCoverage' },
-              {
-                id: 'graph',
-                label: 'Graph',
-                isDisabled: graphDisabled,
-                toolTipContent: graphDisabled ? GRAPH_LIMIT_TIP : undefined,
-                'data-test-subj': 'proto11KiMapGraph',
-              },
-              {
-                id: 'flow',
-                label: 'Flow',
-                isDisabled: flowDisabled,
-                toolTipContent: flowDisabled ? GRAPH_LIMIT_TIP : undefined,
-                'data-test-subj': 'proto11KiMapFlow',
-              },
-              { id: 'treemap', label: 'Treemap', 'data-test-subj': 'proto11KiMapTreemap' },
-            ]}
-            idSelected={mode}
-            onChange={(id) => {
-              const next = id as MapMode;
-              if (next === 'graph' && graphDisabled) return;
-              if (next === 'flow' && flowDisabled) return;
-              rememberMode(next);
-            }}
-          />
+          <EuiText size="xs" color="subdued" textAlign="right">
+            <p data-test-subj="proto11KiMapCount">
+              {countLabel(allIndicators.length, 'Knowledge Indicator', 'Knowledge Indicators')},{' '}
+              {countLabel(namespace.sources.length, 'source', 'sources')},{' '}
+              {countLabel(
+                namespace.proto11?.connectedAgents?.length ?? 0,
+                'connected agent',
+                'connected agents'
+              )}
+            </p>
+          </EuiText>
         </EuiFlexItem>
-        <EuiFlexItem grow={false}>
-          <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-            {namespace.proto11?.sample ? (
-              <EuiFlexItem grow={false}>
-                <EuiBadge color="hollow">Sample</EuiBadge>
-              </EuiFlexItem>
-            ) : null}
-            {mode === 'graph' ? (
-              <EuiFlexItem grow={false}>
-                <EuiButtonEmpty size="xs" onClick={fit} data-test-subj="proto11KiMapFit">
-                  Fit
-                </EuiButtonEmpty>
-              </EuiFlexItem>
-            ) : null}
-          </EuiFlexGroup>
-        </EuiFlexItem>
+        {namespace.proto11?.sample ? (
+          <EuiFlexItem grow={false}>
+            <EuiBadge color="hollow">Sample</EuiBadge>
+          </EuiFlexItem>
+        ) : null}
       </EuiFlexGroup>
-      <EuiText size="xs" color="subdued" textAlign="right">
-        <p data-test-subj="proto11KiMapCount">
-          {countLabel(allIndicators.length, 'Knowledge Indicator', 'Knowledge Indicators')},{' '}
-          {countLabel(namespace.sources.length, 'source', 'sources')},{' '}
-          {countLabel(
-            namespace.proto11?.connectedAgents?.length ?? 0,
-            'connected agent',
-            'connected agents'
-          )}
-        </p>
-      </EuiText>
       {crumbs.length > 0 ? (
         <>
           <EuiSpacer size="s" />
@@ -679,26 +649,32 @@ export const Proto11KiMap = ({
                 onlyType={
                   drill?.type && isKiVizType(drill.type) && !drill.source ? drill.type : undefined
                 }
-                onCell={(source, type) => {
-                  const count = baseSources
-                    .find((item) => item.name === source)
-                    ?.kis.filter((indicator) => indicator.type === type).length;
-                  setDrill({ source, type });
-                  if ((count ?? 0) <= GRAPH_KI_LIMIT) rememberMode('graph');
-                }}
+                onCell={(source, type) => onFilterList?.({ source, type })}
               />
             ) : (
               <Proto11Flow
                 sources={flowSources}
                 agents={(namespace.proto11?.connectedAgents ?? []).map((agent) => agent.name)}
                 retrievals={retrievals}
-                onType={(type) => {
-                  setDrill({ type });
-                  rememberMode('coverage');
-                }}
+                onType={(type) => onFilterList?.({ source: null, type })}
               />
             )}
           </div>
+        ) : null}
+        {mode === 'graph' ? (
+          <EuiButtonEmpty
+            size="xs"
+            onClick={fit}
+            data-test-subj="proto11KiMapFit"
+            css={css`
+              position: absolute;
+              top: 8px;
+              right: 8px;
+              z-index: 2;
+            `}
+          >
+            Fit
+          </EuiButtonEmpty>
         ) : null}
         {mode === 'graph' || mode === 'treemap' ? (
           <svg
@@ -734,12 +710,8 @@ export const Proto11KiMap = ({
                         y1={from.y}
                         x2={to.x}
                         y2={to.y}
-                        stroke={
-                          edge.kind === 'related'
-                            ? euiTheme.colors.mediumShade
-                            : euiTheme.colors.text
-                        }
-                        strokeWidth={edge.kind === 'related' ? 1 : 1.25}
+                        stroke={euiTheme.colors.lightShade}
+                        strokeWidth={1}
                         strokeDasharray={edge.kind === 'related' ? '4 3' : undefined}
                         opacity={dim ? 0.12 : edge.kind === 'related' ? 0.75 : 0.85}
                       />
@@ -848,6 +820,7 @@ export const Proto11KiMap = ({
                         aria-label={indicator.title}
                         data-test-subj="proto11KiMapNode"
                         data-ki-id={indicator.id}
+                        data-ki-shape={kiTypeShape(indicator.type)}
                         opacity={dim ? 0.15 : 1}
                         style={{ cursor: 'pointer' }}
                         onClick={(event) => {
@@ -874,12 +847,13 @@ export const Proto11KiMap = ({
                         }
                         onMouseLeave={() => setTip(null)}
                       >
-                        <circle
+                        <KiNodeShape
+                          type={indicator.type}
                           cx={node.x}
                           cy={node.y}
                           r={node.r}
-                          fill={colorFor(indicator.type)}
-                          stroke={selected ? euiTheme.colors.primary : 'transparent'}
+                          fill={KNOWLEDGE_BLUE}
+                          stroke={selected ? euiTheme.colors.emptyShade : 'transparent'}
                           strokeWidth={selected ? 2 : 0}
                         />
                       </g>
@@ -893,25 +867,13 @@ export const Proto11KiMap = ({
                 width={width}
                 height={treemapHeight}
                 drill={drill}
-                retrievals={retrievals}
+                colorMode={colorMode}
                 fillFor={fillFor}
                 border={euiTheme.colors.emptyShade}
                 text={euiTheme.colors.text}
                 subdued={euiTheme.colors.subduedText}
-                hollow={euiTheme.colors.borderBaseSubdued}
-                onDrillSource={(name) => {
-                  const count = baseSources.find((source) => source.name === name)?.kis.length ?? 0;
-                  setDrill({ source: name });
-                  if (count <= GRAPH_KI_LIMIT) rememberMode('graph');
-                }}
-                onDrillType={(name, type) => {
-                  const count =
-                    baseSources
-                      .find((source) => source.name === name)
-                      ?.kis.filter((indicator) => indicator.type === type).length ?? 0;
-                  setDrill({ source: name, type });
-                  if (count <= GRAPH_KI_LIMIT) rememberMode('graph');
-                }}
+                gapStroke={euiTheme.colors.warning}
+                onDrillType={(name, type) => onFilterList?.({ source: name, type })}
                 onTip={showTip}
                 onTipEnd={() => setTip(null)}
               />
@@ -923,19 +885,19 @@ export const Proto11KiMap = ({
         <div data-test-subj="proto11KiMapLegend">
           <EuiSpacer size="s" />
           <EuiFlexGroup gutterSize="m" alignItems="center" responsive={false} wrap>
-            {presentTypes.map((type) => (
+            {presentShapes.map((type) => (
               <EuiFlexItem grow={false} key={type}>
-                <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+                <EuiFlexGroup
+                  gutterSize="xs"
+                  alignItems="center"
+                  responsive={false}
+                  data-test-subj="proto11KiShapeLegend"
+                  data-ki-shape={kiTypeShape(type)}
+                >
                   <EuiFlexItem grow={false}>
-                    <span
-                      css={css`
-                        display: inline-block;
-                        width: 10px;
-                        height: 10px;
-                        border-radius: 10px;
-                        background: ${colorFor(type)};
-                      `}
-                    />
+                    <svg width={14} height={14} aria-hidden={true}>
+                      <KiNodeShape type={type} cx={7} cy={7} r={5} fill={KNOWLEDGE_BLUE} />
+                    </svg>
                   </EuiFlexItem>
                   <EuiFlexItem grow={false}>
                     <EuiText size="xs">
@@ -951,14 +913,14 @@ export const Proto11KiMap = ({
                   <LegendLine
                     label="Derived from a source"
                     dashed={false}
-                    color={euiTheme.colors.text}
+                    color={euiTheme.colors.lightShade}
                   />
                 </EuiFlexItem>
                 <EuiFlexItem grow={false}>
                   <LegendLine
                     label="Related Knowledge Indicator"
                     dashed
-                    color={euiTheme.colors.mediumShade}
+                    color={euiTheme.colors.lightShade}
                   />
                 </EuiFlexItem>
               </>
@@ -967,13 +929,6 @@ export const Proto11KiMap = ({
               <EuiFlexItem grow={false}>
                 <EuiText size="xs" color="subdued">
                   <span>Size: retrievals in the selected period</span>
-                </EuiText>
-              </EuiFlexItem>
-            ) : null}
-            {showShade ? (
-              <EuiFlexItem grow={false}>
-                <EuiText size="xs" color="subdued">
-                  <span>Shade: retrievals in the selected period</span>
                 </EuiText>
               </EuiFlexItem>
             ) : null}
@@ -1043,13 +998,12 @@ const Treemap = ({
   width,
   height,
   drill,
-  retrievals,
+  colorMode,
   fillFor,
   border,
   text,
   subdued,
-  hollow,
-  onDrillSource,
+  gapStroke,
   onDrillType,
   onTip,
   onTipEnd,
@@ -1058,13 +1012,12 @@ const Treemap = ({
   width: number;
   height: number;
   drill: Drill | null;
-  retrievals: Map<string, number> | null;
-  fillFor: (type: KnowledgeType, amount: number | undefined) => string;
+  colorMode: 'LIGHT' | 'DARK';
+  fillFor: (count: number) => string;
   border: string;
   text: string;
   subdued: string;
-  hollow: string;
-  onDrillSource: (name: string) => void;
+  gapStroke: string;
   onDrillType: (name: string, type: KnowledgeType) => void;
   onTip: (event: React.MouseEvent, title: string, lines: string[]) => void;
   onTipEnd: () => void;
@@ -1104,25 +1057,23 @@ const Treemap = ({
             {typeBoxes.map((typeBox) => {
               const type = typeBox.key as KnowledgeType;
               const list = byType.get(type) ?? [];
-              const amount = measuredSum(
-                list.map((indicator) => indicator.id),
-                retrievals
-              );
               const showLabel = typeBox.w > 72 && typeBox.h > 28;
+              const ink = rampInk(list.length, colorMode, text);
+              const subInk = ink === '#FFFFFF' ? 'rgba(255,255,255,0.78)' : subdued;
+              const mark = typeBox.w > 28 && typeBox.h > 22;
+              const textX = typeBox.x + (mark ? 22 : 8);
               return (
-                <g key={`${source.name}-${type}`}>
+                <g key={`${source.name}-${type}`} data-ki-shape={kiTypeShape(type)}>
                   <rect
                     x={typeBox.x}
                     y={typeBox.y}
                     width={Math.max(0, typeBox.w)}
                     height={Math.max(0, typeBox.h)}
-                    fill={fillFor(type, amount)}
+                    fill={fillFor(list.length)}
                     stroke={border}
                     strokeWidth={2}
                     style={{ cursor: 'pointer' }}
-                    onClick={() =>
-                      typeDrill ? onDrillType(source.name, type) : onDrillSource(source.name)
-                    }
+                    onClick={() => onDrillType(source.name, type)}
                     onMouseEnter={(event) =>
                       onTip(event, source.name, [
                         `${typeLabel(type)}: ${countLabel(
@@ -1143,8 +1094,17 @@ const Treemap = ({
                     }
                     onMouseLeave={onTipEnd}
                   />
+                  {mark ? (
+                    <KiNodeShape
+                      type={type}
+                      cx={typeBox.x + 12}
+                      cy={typeBox.y + 14}
+                      r={5}
+                      fill={ink}
+                    />
+                  ) : null}
                   {showLabel ? (
-                    <text x={typeBox.x + 8} y={typeBox.y + 16} fontSize={12} fill={text}>
+                    <text x={textX} y={typeBox.y + 16} fontSize={12} fill={ink}>
                       {truncate(
                         typeDrill ? typeLabel(type) : source.name,
                         Math.floor(typeBox.w / 7)
@@ -1152,7 +1112,7 @@ const Treemap = ({
                     </text>
                   ) : null}
                   {showLabel && typeBox.h > 36 ? (
-                    <text x={typeBox.x + 8} y={typeBox.y + 32} fontSize={11} fill={subdued}>
+                    <text x={textX} y={typeBox.y + 32} fontSize={11} fill={subInk}>
                       {typeDrill
                         ? countLabel(list.length, 'Knowledge Indicator', 'Knowledge Indicators')
                         : typeLabel(type)}
@@ -1176,8 +1136,9 @@ const Treemap = ({
               width={Math.max(0, band - 6)}
               height={40}
               fill="transparent"
-              stroke={hollow}
+              stroke={gapStroke}
               strokeWidth={1.5}
+              strokeDasharray="4 3"
             />
             <text x={x + 8} y={y + 18} fontSize={11} fill={text}>
               {truncate(source.name, 32)}

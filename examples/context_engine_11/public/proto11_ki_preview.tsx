@@ -29,7 +29,7 @@ import {
 } from '@elastic/eui';
 
 import { toIndicatorDocument, type KnowledgeIndicator } from './knowledge_indicators';
-import { KiTypeBadge } from './proto11_ki_colors';
+import { AGENT_TEAL, AGENT_TEAL_INK, KiTypeBadge, KNOWLEDGE_BLUE } from './proto11_ki_colors';
 import { comparisonHeadline, type TokenComparison } from './proto11_data';
 
 /** Small clickable KI card: title, hollow type badge, source in muted text. */
@@ -104,24 +104,21 @@ export const KiPreviewRow = ({
 );
 
 /**
- * Elastic brand teal, used deliberately to match the hero illustration.
- * This is the only non-token colour in the plugin's TypeScript; the older
- * stylesheet rules in app.scss carry their own literal fallbacks.
+ * With Context is knowledge blue. Without Context is the agent teal.
+ * The retry step stays a warning.
  */
-const BRAND_TEAL = '#48EFCF';
-
 const WITH_STEPS = [
-  { label: 'retrieve', tone: 'primary' },
+  { label: 'retrieve', tone: 'knowledge' },
   { label: 'answer', tone: 'neutral' },
 ] as const;
 
 const WITHOUT_STEPS = [
-  { label: 'list indices', tone: 'neutral' },
-  { label: 'read mapping', tone: 'neutral' },
-  { label: 'sample documents', tone: 'neutral' },
-  { label: 'write query', tone: 'neutral' },
+  { label: 'list indices', tone: 'agent' },
+  { label: 'read mapping', tone: 'agent' },
+  { label: 'sample documents', tone: 'agent' },
+  { label: 'write query', tone: 'agent' },
   { label: 'retry after field error', tone: 'warning' },
-  { label: 'answer', tone: 'neutral' },
+  { label: 'answer', tone: 'agent' },
 ] as const;
 
 /** Retrieve and answer beside the dry-run steps, above the token bars. */
@@ -156,14 +153,18 @@ const ComparisonSteps = () => {
           </EuiText>
           {row.steps.map((step) => {
             const background =
-              step.tone === 'primary'
-                ? transparentize(euiTheme.colors.primary, 0.75)
+              step.tone === 'knowledge'
+                ? KNOWLEDGE_BLUE
+                : step.tone === 'agent'
+                ? AGENT_TEAL
                 : step.tone === 'warning'
                 ? transparentize(euiTheme.colors.warning, 0.75)
                 : euiTheme.colors.lightestShade;
             const color =
-              step.tone === 'primary'
-                ? euiTheme.colors.textPrimary
+              step.tone === 'knowledge'
+                ? '#FFFFFF'
+                : step.tone === 'agent'
+                ? AGENT_TEAL_INK
                 : step.tone === 'warning'
                 ? euiTheme.colors.textWarning
                 : euiTheme.colors.text;
@@ -224,7 +225,7 @@ export const ComparisonBlock = ({
   </div>
 );
 
-/** With and Without Context bars on one scale: blue fill over a teal track, Without Context full. */
+/** With Context is a short blue bar. Without Context is a full teal bar. */
 const ComparisonBars = ({
   comparison: { withContext, withoutContext },
 }: {
@@ -258,14 +259,14 @@ const ComparisonBars = ({
             css={css`
               height: ${euiTheme.size.xs};
               border-radius: ${euiTheme.size.xxs};
-              background: ${BRAND_TEAL};
+              background: ${euiTheme.colors.lightestShade};
               overflow: hidden;
             `}
           >
             <div
               css={css`
                 height: 100%;
-                background: ${euiTheme.colors.primary};
+                background: ${label === 'With Context' ? KNOWLEDGE_BLUE : AGENT_TEAL};
               `}
               style={{ width: `${share * 100}%` }}
             />

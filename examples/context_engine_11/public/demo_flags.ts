@@ -46,17 +46,21 @@ export const WIZARD_ENABLED = false;
 /** Setup step rail. Default off; the build's next step is the self-closing callout. */
 export const STEP_RAIL_ENABLED = false;
 
+/** Usage tab and the Overview Summary card. On in this proto, shown only as On + Usage. */
+export const USAGE_ENABLED = true;
+
 /** Storage key for the Proto 11 switcher. Off when nothing is stored. */
 export const PROTO11_SETUP = 'contextEngineExample11.PROTO11_SETUP';
 
-/** Off renders v2.4. On is Proto 11. Memory adds the Memories exploration. */
-export type Proto11Mode = 'off' | 'on' | 'memory';
+/** Off renders v2.4. On is Proto 11. Memory and Usage are separate explorations. */
+export type Proto11Mode = 'off' | 'on' | 'memory' | 'usage';
 
 const loadProto11Mode = (): Proto11Mode => {
   if (typeof window === 'undefined') return 'off';
   try {
     const stored = window.localStorage.getItem(PROTO11_SETUP);
     if (stored === 'on' || stored === 'memory') return stored;
+    if (stored === 'usage' && USAGE_ENABLED) return stored;
     return 'off';
   } catch {
     return 'off';
@@ -71,6 +75,8 @@ export interface DemoFlags {
   proto11Setup: boolean;
   /** On + Memory. Shows the Memories tab where the memory switch is on. */
   proto11Memory: boolean;
+  /** On + Usage. Shows the Usage tab and the Overview Summary card. */
+  proto11Usage: boolean;
   skillUnavailable: boolean;
   nextRunEmpty: boolean;
   sharedDestinationKis: boolean;
@@ -83,6 +89,7 @@ export const demoFlags$ = new BehaviorSubject<DemoFlags>({
   catalogState: 'working',
   proto11Setup: initialProto11Mode !== 'off',
   proto11Memory: initialProto11Mode === 'memory',
+  proto11Usage: initialProto11Mode === 'usage',
   skillUnavailable: false,
   nextRunEmpty: false,
   sharedDestinationKis: false,
@@ -102,7 +109,11 @@ export const setDemoProto11Mode = (mode: Proto11Mode) => {
   } catch {
     // Private mode. The switcher still works for this mount.
   }
-  patch({ proto11Setup: mode !== 'off', proto11Memory: mode === 'memory' });
+  patch({
+    proto11Setup: mode !== 'off',
+    proto11Memory: mode === 'memory',
+    proto11Usage: mode === 'usage',
+  });
 };
 export const setDemoProto11Setup = (proto11Setup: boolean) => {
   setDemoProto11Mode(proto11Setup ? 'on' : 'off');

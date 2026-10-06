@@ -28,6 +28,7 @@ import {
   EuiCodeBlock,
   EuiFieldSearch,
   EuiFieldText,
+  EuiFilterButton,
   EuiFlexGrid,
   EuiFlexGroup,
   EuiFlexItem,
@@ -48,6 +49,7 @@ import {
   EuiSpacer,
   EuiSuperSelect,
   EuiSwitch,
+  EuiTablePagination,
   EuiText,
   EuiTextArea,
   EuiTitle,
@@ -75,6 +77,7 @@ import {
   OVERVIEW_STATS_ENABLED,
   SHOW_MEMORY_TOGGLE,
   TRY_QUESTION_ENABLED,
+  USAGE_ENABLED,
   demoFlags$,
   setDemoCatalogState,
   setDemoProto11Mode,
@@ -91,6 +94,7 @@ import {
   indicatorSourceGroup,
   proposalSummary,
   proto11AddedLine,
+  TEMPLATES,
   proto11StatusPill,
   sampleNameFor,
   sampleScenarioOf,
@@ -105,6 +109,7 @@ import { Proto11ConnectedAgentsPanel } from './proto11_agents_panel';
 import {
   Proto11Composer,
   Proto11HeroArt,
+  Proto11IndexProposal,
   Proto11Landing,
   type AskAgentAboutProposal,
 } from './proto11_landing';
@@ -129,10 +134,9 @@ import {
   statsFromIndicators,
   type HydratedKnowledgeIndicator,
   type KnowledgeIndicator,
-  type KnowledgeType,
 } from './knowledge_indicators';
 import { KnowledgeTab } from './knowledge_tab';
-import { KiTypeBadge, KiTypeStrip } from './proto11_ki_colors';
+import { KiTypeBadge, KI_VIZ_TYPES } from './proto11_ki_colors';
 import {
   automationAddedLine,
   automationMetaLine,
@@ -145,6 +149,7 @@ import {
   workflowYamlFor,
   type Automation,
   type AutomationStep,
+  type IndexOwner,
   type IndexTrace,
   type Namespace,
   type NamespaceSource,
@@ -284,7 +289,7 @@ const draftAutomation = (namespace: Namespace): Automation => {
       hasRun: false,
       triggerCount: 1,
       stepCount: 4,
-      scheduleLabel: 'Runs every hour',
+      scheduleLabel: 'Runs daily at 02:00',
       addedBy: 'you',
       lastRunAt: null,
       description: `Syncs Gmail messages into ${namespace.displayName} as Knowledge Indicators.`,
@@ -327,7 +332,7 @@ const draftAutomation = (namespace: Namespace): Automation => {
     hasRun: false,
     triggerCount: 1,
     stepCount: 2,
-    scheduleLabel: 'Runs every hour',
+    scheduleLabel: 'Scheduled to run every 5 minutes',
     addedBy: 'you',
     lastRunAt: null,
     description: `Reads attached sources and writes Knowledge Indicators into ${namespace.displayName}.`,
@@ -382,38 +387,45 @@ const sampleIndicatorsFor = (namespace: Namespace): KnowledgeIndicator[] => {
   };
   return [
     {
-      id: `${namespace.name}-sample-policy`,
+      id: `${namespace.name}-sample-overview`,
       '@timestamp': SAMPLE_TIMESTAMP,
-      type: 'policy',
-      title: `Policy extracted from ${second}`,
-      description: `A policy the agent can cite from ${second}.`,
-      content: namespace.intent || `Follow the written policy in ${second}.`,
-      updated_at: SAMPLE_TIMESTAMP,
-      references: [{ uri: `source://${slugify(second)}`, relation: 'derived_from' }],
-      governance: crawled,
-    },
-    {
-      id: `${namespace.name}-sample-playbook`,
-      '@timestamp': SAMPLE_TIMESTAMP,
-      type: 'playbook',
-      title: `Playbook extracted from ${first}`,
-      description: `Steps distilled from ${first}.`,
-      content: [
-        'Confirm the incoming request.',
-        `Look up the matching fact from ${second}.`,
-        'Reply with the cited policy.',
-      ].join('\n'),
+      type: 'index_metadata',
+      title: `Index overview for ${first}`,
+      description: `Fields and shape of ${first}.`,
+      content: `Use ${first} for questions about this source. The primary time field and the entities the questions name are listed here.`,
       updated_at: SAMPLE_TIMESTAMP,
       references: [{ uri: `source://${slugify(first)}`, relation: 'derived_from' }],
       governance: crawled,
     },
     {
-      id: `${namespace.name}-sample-fact`,
+      id: `${namespace.name}-sample-document`,
       '@timestamp': SAMPLE_TIMESTAMP,
-      type: 'fact',
-      title: `Fact extracted from ${first}`,
-      description: `A concrete fact from ${first}.`,
-      content: `The primary fact agents should lead with from ${first}.`,
+      type: 'document',
+      title: `Document from ${second}`,
+      description: `A page distilled from ${second}.`,
+      content: namespace.intent || `A document pulled from ${second}.`,
+      updated_at: SAMPLE_TIMESTAMP,
+      references: [{ uri: `source://${slugify(second)}`, relation: 'derived_from' }],
+      governance: crawled,
+    },
+    {
+      id: `${namespace.name}-sample-profile`,
+      '@timestamp': SAMPLE_TIMESTAMP,
+      type: 'unit_profile',
+      title: `Profile from ${first}`,
+      description: `The unit this index is about in ${first}.`,
+      content: `The profile agents should lead with from ${first}.`,
+      updated_at: SAMPLE_TIMESTAMP,
+      references: [{ uri: `source://${slugify(first)}`, relation: 'derived_from' }],
+      governance: crawled,
+    },
+    {
+      id: `${namespace.name}-sample-query`,
+      '@timestamp': SAMPLE_TIMESTAMP,
+      type: 'query_guide',
+      title: `How to query ${first}`,
+      description: `A verified way to ask ${first}.`,
+      content: `Filter ${first} on the fields in the overview, then group by the entity the question names.`,
       updated_at: SAMPLE_TIMESTAMP,
       references: [{ uri: `source://${slugify(first)}`, relation: 'derived_from' }],
       governance: crawled,
@@ -561,15 +573,23 @@ const DisabledReason = ({ children }: { children: React.ReactNode }) => (
 function ContextEngineApp({
   coreStart,
   plugins,
+  history,
 }: {
   coreStart: CoreStart;
   plugins: AppPluginStartDependencies;
+  history: AppMountParameters['history'];
 }) {
   const [screen, setScreen] = useState<Screen>('index');
   const [namespaces, setNamespaces] = useState<Namespace[]>(() => initialNamespaces());
   const [activeName, setActiveName] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>('overview');
   const [namespaceQuery, setNamespaceQuery] = useState('');
+  const [ownerFilter, setOwnerFilter] = useState<'all' | IndexOwner>('all');
+  const [ownerFilterOpen, setOwnerFilterOpen] = useState(false);
+  const [indexPage, setIndexPage] = useState(0);
+  const [indexPageSize, setIndexPageSize] = useState(10);
+  const [createEmpty, setCreateEmpty] = useState(false);
+  const skipRouteSync = useRef(false);
   const [flags, setFlags] = useState(demoFlags$.value);
 
   const [createName, setCreateName] = useState('');
@@ -816,6 +836,9 @@ function ContextEngineApp({
   }, [visibleNamespaces, namespaceQuery]);
 
   const goLanding = () => {
+    if (history.location.pathname === '/create') {
+      history.push('/');
+    }
     setScreen('index');
     setActiveName(null);
     setDetailTab('overview');
@@ -941,16 +964,33 @@ function ContextEngineApp({
     coreStart.notifications.toasts.addSuccess('Sample data removed');
   };
 
-  const openCreate = () => {
+  const openComposerPage = () => {
+    setCreateEmpty(false);
+    setScreen('create');
+    if (history.location.pathname !== '/create' || history.location.search) {
+      history.push('/create');
+    }
+  };
+
+  const openNameForm = () => {
     setCreateName('');
     setCreateIntent('');
     setCreateMemoryEnabled(true);
     setSourcesDraft(emptySourcesDraft());
     setCreateTraces([]);
+    setCreateEmpty(true);
     setScreen('create');
+    const next = proto11On ? '/create?empty=1' : '/create';
+    if (`${history.location.pathname}${history.location.search}` !== next) {
+      history.push(next);
+    }
   };
 
   const openDetail = (namespace: Namespace, tab: DetailTab = 'overview') => {
+    if (history.location.pathname === '/create') {
+      skipRouteSync.current = true;
+      history.replace('/');
+    }
     setActiveName(namespace.name);
     setDetailTab(tab);
     setQuestion('');
@@ -965,6 +1005,27 @@ function ContextEngineApp({
     setAutomationProposalOpen(false);
     setScreen('detail');
   };
+
+  useEffect(() => {
+    const applyRoute = (pathname: string, search: string) => {
+      if (skipRouteSync.current) {
+        skipRouteSync.current = false;
+        return;
+      }
+      if (pathname === '/create') {
+        setCreateEmpty(!proto11On || new URLSearchParams(search).get('empty') === '1');
+        setScreen('create');
+        return;
+      }
+      setScreen((current) => (current === 'create' ? 'index' : current));
+    };
+    applyRoute(history.location.pathname, history.location.search);
+    return history.listen((location) => applyRoute(location.pathname, location.search));
+  }, [history, proto11On]);
+
+  useEffect(() => {
+    setIndexPage(0);
+  }, [namespaceQuery, ownerFilter, indexPageSize]);
 
   const createDisabledReason = !createName.trim()
     ? 'Enter a name to create'
@@ -1373,11 +1434,28 @@ function ContextEngineApp({
     primaryActionItem: {
       id: 'create-ai-index',
       label: 'Create AI index',
-      iconType: 'plusInCircle',
-      run: openCreate,
+      iconType: 'plusCircle',
+      run: proto11On ? openComposerPage : openNameForm,
       testId: 'contextEngineCreateAiIndex',
     },
   };
+
+  const exploreSampleItem = {
+    id: 'explore-sample',
+    label: 'Explore a sample AI index',
+    iconType: 'flask' as const,
+    overflow: true,
+    testId: 'proto11HeaderSample',
+    items: SAMPLE_MENU.map(({ scenario, label }) => ({
+      id: `sample-${scenario}`,
+      label,
+      run: () => trySample(scenario),
+      testId: `proto11HeaderSample-${scenario}`,
+    })),
+  };
+
+  const proto11Menu = (withSample: boolean): AppHeaderMenu =>
+    withSample ? { ...createIndexMenu, items: [exploreSampleItem] } : createIndexMenu;
 
   const renderCatalogActions = (namespace: Namespace) => {
     const suggestReason = suggestDisabledReason();
@@ -1606,8 +1684,6 @@ function ContextEngineApp({
           <EuiText size="xs" color="subdued" className="contextEnginePrototype__cardDesc">
             <p>{namespace.intent || 'No description set.'}</p>
           </EuiText>
-          <EuiSpacer size="s" />
-          <KiTypeStrip indicators={namespace.indicators} />
           {pills ? (
             <>
               <EuiSpacer size="s" />
@@ -1678,8 +1754,6 @@ function ContextEngineApp({
             <EuiText size="xs" color="subdued">
               <p>{namespace.intent || 'No description set.'}</p>
             </EuiText>
-            <EuiSpacer size="xs" />
-            <KiTypeStrip indicators={namespace.indicators} />
           </EuiFlexItem>
           <EuiFlexItem grow={false}>
             <EuiText size="s">
@@ -1743,67 +1817,135 @@ function ContextEngineApp({
 
     if (proto11On) {
       const own = visibleNamespaces.filter((item) => !item.managed);
-      const proto11Menu: AppHeaderMenu =
-        own.length === 0
-          ? createIndexMenu
-          : {
-              ...createIndexMenu,
-              items: [
-                {
-                  id: 'explore-sample',
-                  label: 'Explore a sample AI index',
-                  iconType: 'flask',
-                  overflow: true,
-                  testId: 'proto11HeaderSample',
-                  items: SAMPLE_MENU.map(({ scenario, label }) => ({
-                    id: `sample-${scenario}`,
-                    label,
-                    run: () => trySample(scenario),
-                    testId: `proto11HeaderSample-${scenario}`,
-                  })),
-                },
-              ],
-            };
+      const catalogNamespaces = filteredNamespaces.filter(
+        (item) => ownerFilter === 'all' || item.owner === ownerFilter
+      );
+      const pageCount = Math.max(1, Math.ceil(catalogNamespaces.length / indexPageSize));
+      const safePage = Math.min(indexPage, pageCount - 1);
+      const pageItems = catalogNamespaces.slice(
+        safePage * indexPageSize,
+        (safePage + 1) * indexPageSize
+      );
+      const catalogCountLabel =
+        catalogNamespaces.length === 1 ? '1 AI index' : `${catalogNamespaces.length} AI indexes`;
       return (
         <>
           <PageHeader
             title="Context"
-            menu={proto11Menu}
+            menu={proto11Menu(own.length > 0)}
             badges={proto11HeaderBadges}
-            sectionClassName="contextEnginePrototype__headerSection--quietCreate"
           />
           <PageBody>
-            <Proto11Landing
-              key={own.length === 0 ? 'hero' : 'compact'}
-              variant={own.length === 0 ? 'hero' : 'compact'}
-              heroArt={<Proto11HeroArt />}
-              indexGrid={
-                own.length === 0 ? (
-                  managed ? (
-                    renderProto11ManagedRow(managed)
-                  ) : null
+            {own.length === 0 ? (
+              <Proto11Landing
+                key="hero"
+                variant="hero"
+                heroArt={<Proto11HeroArt />}
+                indexGrid={managed ? renderProto11ManagedRow(managed) : null}
+                takenNames={namespaces.map((item) => item.name)}
+                namespaces={namespaces}
+                onCreateFromGoal={createFromGoal}
+                onAddToIndex={addProposalToIndex}
+                onCreateEmpty={openNameForm}
+                onExploreSample={trySample}
+                onAskAgent={openProposalAgent}
+                discoverHref={coreStart.http.basePath.prepend('/app/discover')}
+                onAskAboutIndicator={(indicator) => {
+                  const home =
+                    namespaces.find((item) =>
+                      item.indicators.some((ki) => ki.id === indicator.id)
+                    ) ?? namespaces.find((item) => item.proto11?.sample);
+                  if (home) openKiChangeAgent(home, indicator);
+                }}
+              />
+            ) : (
+              <div data-test-subj="proto11Catalog">
+                <EuiFlexGroup gutterSize="m" alignItems="center" responsive={false}>
+                  <EuiFlexItem>
+                    <EuiFieldSearch
+                      compressed
+                      fullWidth
+                      placeholder="Search AI indexes"
+                      value={namespaceQuery}
+                      onChange={(event) => setNamespaceQuery(event.target.value)}
+                      aria-label="Search AI indexes"
+                      data-test-subj="proto11IndexSearch"
+                    />
+                  </EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    <EuiPopover
+                      button={
+                        <EuiFilterButton
+                          iconType="arrowDown"
+                          iconSide="right"
+                          hasActiveFilters={ownerFilter !== 'all'}
+                          isSelected={ownerFilterOpen}
+                          onClick={() => setOwnerFilterOpen((open) => !open)}
+                          data-test-subj="proto11OwnerFilter"
+                        >
+                          Owner
+                        </EuiFilterButton>
+                      }
+                      isOpen={ownerFilterOpen}
+                      closePopover={() => setOwnerFilterOpen(false)}
+                      panelPaddingSize="none"
+                      anchorPosition="downRight"
+                    >
+                      <EuiContextMenuPanel
+                        size="s"
+                        items={(
+                          [
+                            ['all', 'All'],
+                            ['you', 'You'],
+                            ['elastic', 'Elastic'],
+                          ] as const
+                        ).map(([value, label]) => (
+                          <EuiContextMenuItem
+                            key={value}
+                            icon={ownerFilter === value ? 'check' : undefined}
+                            onClick={() => {
+                              setOwnerFilter(value);
+                              setOwnerFilterOpen(false);
+                            }}
+                            data-test-subj={`proto11OwnerFilter-${value}`}
+                          >
+                            {label}
+                          </EuiContextMenuItem>
+                        ))}
+                      />
+                    </EuiPopover>
+                  </EuiFlexItem>
+                </EuiFlexGroup>
+                <EuiSpacer size="s" />
+                <EuiText size="s" color="subdued">
+                  <p data-test-subj="proto11IndexCount">{catalogCountLabel}</p>
+                </EuiText>
+                <EuiSpacer size="m" />
+                {pageItems.length === 0 ? (
+                  <EuiText size="s" color="subdued">
+                    <p>No AI indexes match your search.</p>
+                  </EuiText>
                 ) : (
                   <EuiFlexGrid columns={3} gutterSize="l" data-test-subj="proto11IndexGrid">
-                    {managed ? renderCatalogItem(managed, 'card', true) : null}
-                    {own.map((namespace) => renderCatalogItem(namespace, 'card'))}
+                    {pageItems.map((namespace) =>
+                      renderCatalogItem(namespace, 'card', Boolean(namespace.managed))
+                    )}
                   </EuiFlexGrid>
-                )
-              }
-              takenNames={namespaces.map((item) => item.name)}
-              namespaces={namespaces}
-              onCreateFromGoal={createFromGoal}
-              onAddToIndex={addProposalToIndex}
-              onCreateEmpty={openCreate}
-              onExploreSample={trySample}
-              onAskAgent={openProposalAgent}
-              discoverHref={coreStart.http.basePath.prepend('/app/discover')}
-              onAskAboutIndicator={(indicator) => {
-                const home =
-                  namespaces.find((item) => item.indicators.some((ki) => ki.id === indicator.id)) ??
-                  namespaces.find((item) => item.proto11?.sample);
-                if (home) openKiChangeAgent(home, indicator);
-              }}
-            />
+                )}
+                <EuiSpacer size="m" />
+                <div data-test-subj="proto11IndexPagination">
+                  <EuiTablePagination
+                    aria-label="AI indexes pagination"
+                    pageCount={pageCount}
+                    activePage={safePage}
+                    onChangePage={setIndexPage}
+                    itemsPerPage={indexPageSize}
+                    onChangeItemsPerPage={setIndexPageSize}
+                    itemsPerPageOptions={[10, 25, 50]}
+                  />
+                </div>
+              </div>
+            )}
           </PageBody>
         </>
       );
@@ -1859,7 +2001,7 @@ function ContextEngineApp({
                       wrap
                     >
                       <EuiFlexItem grow={false}>
-                        <EuiButton fill iconType="plusInCircle" onClick={openCreate}>
+                        <EuiButton fill iconType="plusInCircle" onClick={openNameForm}>
                           Create AI index
                         </EuiButton>
                       </EuiFlexItem>
@@ -1927,15 +2069,42 @@ function ContextEngineApp({
     );
   };
 
-  const renderCreate = () => (
+  const renderCreate = () => {
+    const showComposer = proto11On && !createEmpty;
+    return (
       <>
         <PageHeader
           title="Create AI index"
           back={headerBack(CONTEXT_APP_HREF, 'Context', goLanding)}
-          metadata={headerMeta(CREATE_DESCRIPTION)}
+          metadata={showComposer ? undefined : headerMeta(CREATE_DESCRIPTION)}
+          menu={proto11On ? proto11Menu(true) : undefined}
           badges={proto11HeaderBadges}
+          sectionClassName={
+            showComposer ? 'contextEnginePrototype__headerSection--quietCreate' : undefined
+          }
         />
         <PageBody>
+          {showComposer ? (
+            <div className="contextEnginePrototype__create" data-test-subj="proto11CreatePage">
+              <Proto11Composer
+                compact={false}
+                takenNames={namespaces.map((item) => item.name)}
+                namespaces={namespaces}
+                onCreateFromGoal={createFromGoal}
+                onAddToIndex={addProposalToIndex}
+                onAskAgent={openProposalAgent}
+              />
+              <EuiText size="s">
+                <EuiLink
+                  color="subdued"
+                  onClick={openNameForm}
+                  data-test-subj="proto11CreateEmptyInstead"
+                >
+                  Create an empty AI index instead
+                </EuiLink>
+              </EuiText>
+            </div>
+          ) : (
           <div className="contextEnginePrototype__create">
             <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__panel">
               <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
@@ -2017,9 +2186,11 @@ function ContextEngineApp({
               </EuiFlexItem>
             </EuiFlexGroup>
           </div>
+          )}
         </PageBody>
       </>
     );
+  };
 
   const renderDetail = (namespace: Namespace) => {
     const state = indexState(namespace);
@@ -2058,7 +2229,12 @@ function ContextEngineApp({
           )
         : []
     );
-    const showUsageTab = proto11On && Boolean(meta) && usageTabVisible(namespace);
+    const showUsageTab =
+      USAGE_ENABLED &&
+      flags.proto11Usage &&
+      proto11On &&
+      Boolean(meta) &&
+      usageTabVisible(namespace);
     const effectiveTab: DetailTab =
       (hideKnowledgeTab && detailTab === 'knowledge') ||
       (!showUsageTab && detailTab === 'usage') ||
@@ -2318,43 +2494,64 @@ function ContextEngineApp({
       >
         <EuiContextMenuPanel
           size="s"
-          items={[
-            <EuiContextMenuItem
-              key="create-workflow"
-              icon="workflowsApp"
-              href={workflowsHref}
-              target="_blank"
-              onClick={() => setAutomationsAddOpen(false)}
-            >
-              Create workflow
-            </EuiContextMenuItem>,
-            <EuiContextMenuItem
-              key="use-ai-agent"
-              icon="productAgent"
-              disabled={Boolean(suggestReason)}
-              onClick={() => {
-                setAutomationsAddOpen(false);
-                openAgent(namespace, 'suggest');
-              }}
-            >
-              Use AI Agent
-            </EuiContextMenuItem>,
-            ...(proto11On
+          items={
+            proto11On
               ? [
                   <EuiContextMenuItem
-                    key="propose-from-question"
-                    icon="questionInCircle"
+                    key="propose-automation"
+                    icon="bolt"
                     onClick={() => {
                       setAutomationsAddOpen(false);
                       setAutomationProposalOpen(true);
                     }}
-                    data-test-subj="proto11ProposeFromQuestion"
+                    data-test-subj="proto11ProposeAutomation"
                   >
-                    Propose from a question
+                    Propose automation
+                  </EuiContextMenuItem>,
+                  <EuiContextMenuItem
+                    key="use-ai-agent"
+                    icon="productAgent"
+                    disabled={Boolean(suggestReason)}
+                    onClick={() => {
+                      setAutomationsAddOpen(false);
+                      openAgent(namespace, 'suggest');
+                    }}
+                  >
+                    Use AI Agent
+                  </EuiContextMenuItem>,
+                  <EuiContextMenuItem
+                    key="create-workflow"
+                    icon="workflowsApp"
+                    href={workflowsHref}
+                    target="_blank"
+                    onClick={() => setAutomationsAddOpen(false)}
+                  >
+                    Create workflow
                   </EuiContextMenuItem>,
                 ]
-              : []),
-          ]}
+              : [
+                  <EuiContextMenuItem
+                    key="create-workflow"
+                    icon="workflowsApp"
+                    href={workflowsHref}
+                    target="_blank"
+                    onClick={() => setAutomationsAddOpen(false)}
+                  >
+                    Create workflow
+                  </EuiContextMenuItem>,
+                  <EuiContextMenuItem
+                    key="use-ai-agent"
+                    icon="productAgent"
+                    disabled={Boolean(suggestReason)}
+                    onClick={() => {
+                      setAutomationsAddOpen(false);
+                      openAgent(namespace, 'suggest');
+                    }}
+                  >
+                    Use AI Agent
+                  </EuiContextMenuItem>,
+                ]
+          }
         />
       </EuiPopover>
     );
@@ -2551,7 +2748,7 @@ function ContextEngineApp({
                   </EuiFlexGroup>
                 </EuiPanel>
               ) : null}
-              {proto11On && meta ? (
+              {USAGE_ENABLED && flags.proto11Usage && proto11On && meta ? (
                 <Proto11UsageSummary
                   namespace={namespace}
                   onViewUsage={() => setDetailTab('usage')}
@@ -2789,14 +2986,12 @@ function ContextEngineApp({
               </EuiPanel>
               {automationProposalOpen && proto11On ? (
                 <div ref={proposalComposerRef} data-test-subj="proto11AutomationComposer">
-                  <Proto11Composer
-                    compact={false}
-                    takenNames={namespaces.map((item) => item.name)}
-                    namespaces={namespaces}
-                    forcedTarget={namespace.name}
-                    onCreateFromGoal={createFromGoal}
-                    onAddToIndex={addProposalToIndex}
-                    onAskAgent={openProposalAgent}
+                  <Proto11IndexProposal
+                    namespace={namespace}
+                    onCreateAndRun={(proposal) => {
+                      addProposalToIndex(namespace.name, proposal);
+                      setAutomationProposalOpen(false);
+                    }}
                   />
                   <EuiSpacer size="l" />
                 </div>
@@ -3004,6 +3199,19 @@ function ContextEngineApp({
                               : automationAddedLine(automation)}
                           </p>
                         </EuiText>
+                        {proto11On ? (
+                          <EuiText
+                            size="xs"
+                            color="subdued"
+                            data-test-subj="proto11AutomationSchedule"
+                          >
+                            <p>
+                              {automation.templateId
+                                ? TEMPLATES[automation.templateId].scheduleLabel
+                                : automation.scheduleLabel}
+                            </p>
+                          </EuiText>
+                        ) : null}
                         {meta && automation.templateId === meta.runTemplates[0] ? (
                           <Proto11RejectedNotice
                             meta={meta}
@@ -3294,8 +3502,7 @@ function ContextEngineApp({
                     </p>
                   </EuiText>
                   <EuiSpacer size="s" />
-                  {(['playbook', 'policy', 'faq', 'glossary', 'fact'] as KnowledgeType[]).map(
-                    (type) => {
+                  {KI_VIZ_TYPES.map((type) => {
                     const example = agent.created.find((item) => item.type === type);
                     if (!example) return null;
                     return (
@@ -3578,11 +3785,20 @@ function ContextEngineApp({
               { value: 'off', text: 'Off' },
               { value: 'on', text: 'On' },
               { value: 'memory', text: 'On + Memory' },
+              ...(USAGE_ENABLED ? [{ value: 'usage', text: 'On + Usage' }] : []),
             ]}
-            value={flags.proto11Memory ? 'memory' : flags.proto11Setup ? 'on' : 'off'}
+            value={
+              flags.proto11Usage
+                ? 'usage'
+                : flags.proto11Memory
+                  ? 'memory'
+                  : flags.proto11Setup
+                    ? 'on'
+                    : 'off'
+            }
             onChange={(event) => {
               const mode = event.target.value;
-              if (mode === 'off' || mode === 'on' || mode === 'memory') {
+              if (mode === 'off' || mode === 'on' || mode === 'memory' || mode === 'usage') {
                 setDemoProto11Mode(mode);
               }
             }}
@@ -3749,10 +3965,10 @@ function ContextEngineApp({
 export const renderApp = (
   coreStart: CoreStart,
   plugins: AppPluginStartDependencies,
-  { element }: Pick<AppMountParameters, 'element' | 'history'>
+  { element, history }: Pick<AppMountParameters, 'element' | 'history'>
 ) => {
   ReactDOM.render(
-    <ContextEngineApp coreStart={coreStart} plugins={plugins} />,
+    <ContextEngineApp coreStart={coreStart} plugins={plugins} history={history} />,
     element
   );
   return () => ReactDOM.unmountComponentAtNode(element);

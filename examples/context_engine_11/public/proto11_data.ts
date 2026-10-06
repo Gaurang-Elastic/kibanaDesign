@@ -55,6 +55,8 @@ interface WebOpsSource {
   summary: string;
   /** Regex sources. The first one that matches is quoted back in "because" sentences. */
   keywords: string[];
+  /** Index fields that still have no guide. Document connectors omit this. */
+  fields?: number;
 }
 
 export const WEB_OPS_SOURCES: WebOpsSource[] = [
@@ -64,6 +66,7 @@ export const WEB_OPS_SOURCES: WebOpsSource[] = [
     kind: 'Index',
     summary: 'HTTP access logs from the public edge',
     keywords: ['nginx', 'access', 'http', 'traffic', 'latenc\\w*', 'checkout', '5xx', 'duration'],
+    fields: 42,
   },
   {
     id: 'nginx-error',
@@ -71,6 +74,7 @@ export const WEB_OPS_SOURCES: WebOpsSource[] = [
     kind: 'Index',
     summary: 'nginx error log lines',
     keywords: ['nginx', 'errors?', 'outages?'],
+    fields: 18,
   },
   {
     id: 'cpu',
@@ -78,6 +82,7 @@ export const WEB_OPS_SOURCES: WebOpsSource[] = [
     kind: 'Index',
     summary: 'Host CPU metrics, every 10s',
     keywords: ['cpu', 'host\\w*', 'metrics?', 'saturat\\w*'],
+    fields: 90,
   },
   {
     id: 'runbooks',
@@ -92,6 +97,7 @@ export const WEB_OPS_SOURCES: WebOpsSource[] = [
     kind: 'Index',
     summary: 'Container stdout and stderr',
     keywords: ['kubernetes', 'k8s', 'containers?', 'pods?'],
+    fields: 27,
   },
 ];
 
@@ -106,6 +112,7 @@ const HIGHER_ED_SOURCES: WebOpsSource[] = [
     kind: 'Index',
     summary: 'Cohort outcomes by programme, about 2,400 documents',
     keywords: ['enrol\\w*', 'graduat\\w*', 'retention', 'cohorts?', 'programmes?', 'outcomes?'],
+    fields: 40,
   },
   {
     id: 'tuition',
@@ -113,6 +120,7 @@ const HIGHER_ED_SOURCES: WebOpsSource[] = [
     kind: 'Index',
     summary: 'Tuition and mandatory fees by academic year, about 1,800 documents',
     keywords: ['tuition', 'fees?', 'costs?', 'prices?'],
+    fields: 28,
   },
   {
     id: 'peers',
@@ -120,6 +128,7 @@ const HIGHER_ED_SOURCES: WebOpsSource[] = [
     kind: 'Index',
     summary: 'Published rates and tuition for peer universities, about 2,800 documents',
     keywords: ['peers?', 'compar\\w*', 'institutions?', 'universit\\w*'],
+    fields: 22,
   },
 ];
 
@@ -170,7 +179,7 @@ export const TEMPLATES: Record<Proto11TemplateId, TemplateDef> = {
   overview: {
     title: 'Index overview',
     description: 'An overview, field guides and verified example queries for each index.',
-    scheduleLabel: 'Runs daily',
+    scheduleLabel: 'Scheduled to run every 5 minutes',
     steps: (reads) => [
       {
         name: 'read_mappings',
@@ -189,7 +198,7 @@ export const TEMPLATES: Record<Proto11TemplateId, TemplateDef> = {
   xsource: {
     title: 'Cross-source map',
     description: 'Which source answers which kind of question, and the fields that join them.',
-    scheduleLabel: 'Runs weekly',
+    scheduleLabel: 'Runs daily at 02:00',
     steps: (reads) => [
       {
         name: 'compare_fields',
@@ -207,7 +216,7 @@ export const TEMPLATES: Record<Proto11TemplateId, TemplateDef> = {
     title: 'Document digest',
     description:
       'One Knowledge Indicator per runbook: when it applies, the steps, and who owns it.',
-    scheduleLabel: 'Runs daily',
+    scheduleLabel: 'Runs daily at 02:00',
     steps: (reads) => [
       { name: 'read_pages', explanation: `Reads pages from ${joinList(reads)}.` },
       {
@@ -219,7 +228,7 @@ export const TEMPLATES: Record<Proto11TemplateId, TemplateDef> = {
   profiles: {
     title: 'Entity profiles',
     description: 'A profile per service: traffic, error baseline, owning team, related hosts.',
-    scheduleLabel: 'Runs daily',
+    scheduleLabel: 'Runs daily at 02:00',
     steps: (reads) => [
       {
         name: 'find_services',
@@ -235,7 +244,7 @@ export const TEMPLATES: Record<Proto11TemplateId, TemplateDef> = {
     title: 'Learn from traces',
     description:
       'Finds questions your agent got wrong in its traces and writes Knowledge Indicators that answer them.',
-    scheduleLabel: 'Runs hourly',
+    scheduleLabel: 'Runs when traces arrive',
     steps: (reads) => [
       { name: 'read_traces', explanation: `Reads recent traces from ${joinList(reads)}.` },
       {
@@ -2200,6 +2209,25 @@ export const proposeFromComposer = ({
   const trace = agent ? { trace: { value: agent.name, type: agent.traceType } } : {};
 
   if (text.trim()) {
+    const problem = problemFor(text);
+    if (problem) {
+      const ids = sourceIds.length > 0 ? sourceIds : [...problem.defaultSources];
+      const hasIndex = ids.some((id) => sourceById(id).kind === 'Index');
+      return {
+        path: 'question',
+        goal: hasIndex ? 'indices' : 'docs',
+        name: uniqueName(problem.baseName, takenNames),
+        automationBecause: `because you said ${problem.said}, and ${gapsLine(ids)}`,
+        sourceIds: ids,
+        sourcesBecause:
+          sourceIds.length > 0
+            ? `because you attached ${joinList(sourceIds.map(sourceDisplayName))}`
+            : `because ${gapsLine(ids)}`,
+        foundIds: [],
+        question: text.trim(),
+        ...trace,
+      };
+    }
     const base = proposeFromQuestion(text, takenNames);
     if (sourceIds.length === 0) return { ...base, ...trace };
     if (base.foundIds.length === 0) {
@@ -2250,6 +2278,47 @@ const sourceIdsOf = (namespace: Namespace): Proto11SourceId[] => {
     .filter((source) => namespace.sources.some((item) => item.name === source.name))
     .map((source) => source.id);
   return uniqueIds([...(namespace.proto11?.sourceIds ?? []), ...fromNames]);
+};
+
+const sourceKindClause = (ids: Proto11SourceId[]): string => {
+  const indices = ids.filter((id) => sourceById(id).kind === 'Index').length;
+  const connectors = ids.length - indices;
+  if (ids.length === 0) return 'no sources are attached yet';
+  if (connectors === 0 && indices === 1) return 'the source is an index';
+  if (connectors === 0 && indices === 2) return 'both sources are indices';
+  if (connectors === 0) return 'all sources are indices';
+  if (indices === 0 && connectors === 1) return 'the source is a document connector';
+  if (indices === 0) return 'the sources are document connectors';
+  return `the sources are ${kindPhrase(ids)}`;
+};
+
+const mentionedWords = (text: string, ids: Proto11SourceId[]): string[] => {
+  const words: string[] = [];
+  ids.forEach((id) => {
+    const word = matchedWords(text, sourceById(id).keywords)[0];
+    if (word && !words.some((item) => item.toLowerCase() === word.toLowerCase())) words.push(word);
+  });
+  return words;
+};
+
+/** Proposal for an existing index, from its description and sources. No question. */
+export const proposeFromIndex = (namespace: Namespace): Proto11Proposal => {
+  const sourceIds = sourceIdsOf(namespace);
+  const words = mentionedWords(namespace.intent, sourceIds);
+  const clause = sourceKindClause(sourceIds);
+  const hasIndex = sourceIds.some((id) => sourceById(id).kind === 'Index');
+  return {
+    path: 'data',
+    goal: sourceIds.length === 0 || hasIndex ? 'indices' : 'docs',
+    name: namespace.name,
+    automationBecause:
+      words.length > 0
+        ? `because the description mentions ${joinList(words)}, and ${clause}`
+        : `because the description does not name a source, and ${clause}`,
+    sourceIds,
+    sourcesBecause: 'Uses the sources on this index',
+    foundIds: [],
+  };
 };
 
 const agentNamesOf = (namespace: Namespace): string[] => {
@@ -2444,6 +2513,47 @@ export const EXAMPLE_QUESTIONS = [
   'What does event.duration mean in nginx logs?',
   'Who owns the payments runbook?',
 ];
+
+/** Generic problems. The same three chips on the landing, the create page, and the compact bar. */
+export const PROBLEM_CHIPS: ReadonlyArray<{
+  sentence: string;
+  said: string;
+  baseName: string;
+  defaultSources: Proto11SourceId[];
+}> = [
+  {
+    sentence: 'My agent spends too long searching the data',
+    said: 'the agent spends too long searching',
+    baseName: 'web-ops-search',
+    defaultSources: ['cpu'],
+  },
+  {
+    sentence: 'My agent has to reason over complex documents',
+    said: 'the agent has to reason over complex documents',
+    baseName: 'web-ops-documents',
+    defaultSources: ['runbooks'],
+  },
+  {
+    sentence: 'My agent needs several data sources it does not understand',
+    said: 'the agent needs several data sources it does not understand',
+    baseName: 'web-ops-sources',
+    defaultSources: ['nginx-access', 'cpu'],
+  },
+];
+
+const problemFor = (text: string) =>
+  PROBLEM_CHIPS.find((chip) => chip.sentence.toLowerCase() === text.trim().toLowerCase());
+
+const sourceGap = (id: Proto11SourceId): string => {
+  const source = sourceById(id);
+  if (source.kind === 'Index' && source.fields) {
+    return `${source.name} has ${source.fields} fields with no guide yet`;
+  }
+  if (source.kind === 'Index') return `${source.name} has no field guide yet`;
+  return `${source.name} has no digest yet`;
+};
+
+const gapsLine = (ids: Proto11SourceId[]) => joinList(ids.map(sourceGap));
 
 export const SAMPLE_COUNTS = {
   sources: WEB_OPS_SOURCES.length,
