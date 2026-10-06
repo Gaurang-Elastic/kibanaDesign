@@ -11,7 +11,7 @@ import React, { useEffect, useState } from 'react';
 import { css } from '@emotion/react';
 import {
   EuiBadge,
-  EuiButton,
+  EuiButtonEmpty,
   EuiContextMenu,
   EuiFlexGroup,
   EuiFlexItem,
@@ -21,6 +21,7 @@ import {
   EuiPopover,
   EuiSpacer,
   EuiText,
+  EuiTitle,
   useEuiTheme,
 } from '@elastic/eui';
 
@@ -100,47 +101,57 @@ const PipelinePopoverBody = ({ id }: { id: PipelineId }) => {
   );
 };
 
-export const SAMPLE_MENU: ReadonlyArray<{ scenario: Proto11SampleScenario; label: string }> = [
-  { scenario: 'web-ops', label: 'Web operations' },
-  { scenario: 'higher-ed', label: 'Higher education' },
+export const SAMPLE_QUESTION_LABEL = 'See a sample question answered';
+
+export const SAMPLE_QUESTION_HIDE_LABEL = 'Hide';
+
+export const OPEN_SAMPLE_ITEMS: ReadonlyArray<{
+  scenario: Proto11SampleScenario;
+  label: string;
+}> = [
+  { scenario: 'web-ops', label: 'Open the web operations sample' },
+  { scenario: 'higher-ed', label: 'Open the higher education sample' },
 ];
 
-/** Secondary button that opens the sample dataset menu. */
-export const SampleMenuButton = ({
-  onExploreSample,
-}: {
-  onExploreSample: (scenario: Proto11SampleScenario) => void;
-}) => {
+const BAND_SAMPLE_LINKS: ReadonlyArray<{ scenario: Proto11SampleScenario; label: string }> = [
+  { scenario: 'web-ops', label: 'Web operations sample' },
+  { scenario: 'higher-ed', label: 'Higher education sample' },
+];
+
+/** Dropdown for the two sample AI indexes on the band. */
+const ExploreSampleMenu = ({ onExploreSample }: { onExploreSample: ExploreSample }) => {
   const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
   return (
     <EuiPopover
       button={
-        <EuiButton
-          size="s"
-          color="text"
-          iconType="chevronSingleDown"
+        <EuiButtonEmpty
+          size="xs"
+          flush="both"
+          iconType="arrowDown"
           iconSide="right"
           onClick={() => setOpen((isOpen) => !isOpen)}
-          data-test-subj="proto11TrySample"
+          data-test-subj="proto11ExploreSample"
         >
-          Explore a sample AI index
-        </EuiButton>
+          Explore sample AI index
+        </EuiButtonEmpty>
       }
-      aria-label="Sample AI indices"
+      aria-label="Explore sample AI index"
       isOpen={open}
-      closePopover={() => setOpen(false)}
+      closePopover={close}
       panelPaddingSize="none"
-      anchorPosition="downLeft"
+      anchorPosition="downRight"
     >
       <EuiContextMenu
+        size="s"
         initialPanelId={0}
         panels={[
           {
             id: 0,
-            items: SAMPLE_MENU.map(({ scenario, label }) => ({
+            items: BAND_SAMPLE_LINKS.map(({ scenario, label }) => ({
               name: label,
               onClick: () => {
-                setOpen(false);
+                close();
                 onExploreSample(scenario);
               },
               'data-test-subj': `proto11Sample-${scenario}`,
@@ -161,24 +172,19 @@ const DemoRun = ({
   stage: number;
   onOpenIndicator: (id: string) => void;
 }) => {
-  const { euiTheme } = useEuiTheme();
   const cards = demo.kiIds.slice(0, Math.max(0, stage - 1));
-  // Puts the headline text on the same line as the first Knowledge Indicator row's title.
-  const compareCss = css`
-    padding-top: calc(${euiTheme.size.xs} + ${euiTheme.size.xxs});
-  `;
+  if (cards.length === 0) {
+    return <div className="contextEnginePrototype__proto11DemoRun" aria-live="polite" />;
+  }
   return (
     <div className="contextEnginePrototype__proto11DemoRun" aria-live="polite">
-      {cards.length > 0 ? (
-        <div className="contextEnginePrototype__proto11Enter">
-          <EuiText size="xs">
-            <strong>Context returns</strong>
-          </EuiText>
-        </div>
-      ) : null}
-      {cards.length > 0 ? (
-        <EuiFlexGroup gutterSize="xl" alignItems="flexStart">
-          <EuiFlexItem>
+      <EuiFlexGroup gutterSize="xl" alignItems="flexStart">
+        <EuiFlexItem>
+          <div className="contextEnginePrototype__proto11Enter">
+            <EuiTitle size="xs" data-test-subj="proto11SampleReturns">
+              <h4>Context returns</h4>
+            </EuiTitle>
+            <EuiSpacer size="m" />
             <div className="contextEnginePrototype__proto11DemoRun">
               {cards.map((id) => {
                 const found = sampleIndicator(id);
@@ -194,23 +200,22 @@ const DemoRun = ({
                 );
               })}
             </div>
-          </EuiFlexItem>
-          <EuiFlexItem>
-            {stage >= STAGE_DELAYS_MS.length ? (
-              <div
-                className="contextEnginePrototype__proto11Enter"
-                data-test-subj="proto11SampleCompare"
-                css={compareCss}
-              >
-                <ComparisonBlock
-                  comparison={demo}
-                  note="Sample run on sample data. Your numbers will differ."
-                />
-              </div>
-            ) : null}
-          </EuiFlexItem>
-        </EuiFlexGroup>
-      ) : null}
+          </div>
+        </EuiFlexItem>
+        <EuiFlexItem>
+          {stage >= STAGE_DELAYS_MS.length ? (
+            <div
+              className="contextEnginePrototype__proto11Enter"
+              data-test-subj="proto11SampleCompare"
+            >
+              <ComparisonBlock
+                comparison={demo}
+                note="Sample run on sample data. Your numbers will differ."
+              />
+            </div>
+          ) : null}
+        </EuiFlexItem>
+      </EuiFlexGroup>
     </div>
   );
 };
@@ -220,13 +225,16 @@ export const Proto11SampleStrip = ({
   onExploreSample,
   discoverHref,
   onAskAboutIndicator,
+  expanded,
+  onExpandedChange,
 }: {
   onExploreSample: ExploreSample;
   discoverHref: string;
   onAskAboutIndicator: (indicator: KnowledgeIndicator, message: string) => void;
+  expanded: boolean;
+  onExpandedChange: (next: boolean) => void;
 }) => {
   const { euiTheme } = useEuiTheme();
-  const [expanded, setExpanded] = useState(false);
   const [openPopover, setOpenPopover] = useState<PipelineId | 'sample' | null>(null);
   const [demoIndex, setDemoIndex] = useState(0);
   const [stage, setStage] = useState(0);
@@ -374,13 +382,33 @@ export const Proto11SampleStrip = ({
         ))}
         <EuiFlexItem />
         <EuiFlexItem grow={false}>
-          <EuiLink
-            onClick={() => setExpanded((isExpanded) => !isExpanded)}
-            aria-expanded={expanded}
-            data-test-subj="proto11SampleStripToggle"
+          <EuiFlexGroup
+            gutterSize="s"
+            alignItems="center"
+            responsive={false}
+            data-test-subj="proto11SampleBandActions"
           >
-            {expanded ? 'Hide' : 'See a sample question answered'}
-          </EuiLink>
+            <EuiFlexItem grow={false}>
+              <EuiText size="xs" color="subdued">
+                <EuiLink
+                  color="subdued"
+                  onClick={() => onExpandedChange(!expanded)}
+                  aria-expanded={expanded}
+                  data-test-subj="proto11SampleStripToggle"
+                >
+                  {expanded ? SAMPLE_QUESTION_HIDE_LABEL : SAMPLE_QUESTION_LABEL}
+                </EuiLink>
+              </EuiText>
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <EuiText size="xs" color="subdued">
+                <span aria-hidden="true">·</span>
+              </EuiText>
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <ExploreSampleMenu onExploreSample={onExploreSample} />
+            </EuiFlexItem>
+          </EuiFlexGroup>
         </EuiFlexItem>
       </EuiFlexGroup>
       {expanded ? (

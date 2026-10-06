@@ -135,9 +135,9 @@ const ComparisonSteps = () => {
           key={row.label}
           css={css`
             display: flex;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
             margin-bottom: 6px;
           `}
         >
@@ -174,12 +174,14 @@ const ComparisonSteps = () => {
                 css={css`
                   display: inline-flex;
                   align-items: center;
+                  flex: none;
                   height: 18px;
-                  padding: 0 8px;
+                  padding: 0 3px;
                   border-radius: 2px;
                   background: ${background};
                   color: ${color};
-                  font-size: 11px;
+                  font-size: 10px;
+                  white-space: nowrap;
                 `}
               >
                 {step.label}

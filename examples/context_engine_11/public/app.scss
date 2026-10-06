@@ -850,6 +850,12 @@ html {
   }
 }
 
+.contextEnginePrototype__row--inlineBadge {
+  .contextEnginePrototype__rowMain {
+    flex: 0 1 auto;
+  }
+}
+
 .contextEnginePrototype__row--clickable {
   cursor: pointer;
 

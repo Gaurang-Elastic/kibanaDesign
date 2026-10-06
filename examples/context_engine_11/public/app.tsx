@@ -113,7 +113,12 @@ import {
   Proto11Landing,
   type AskAgentAboutProposal,
 } from './proto11_landing';
-import { SAMPLE_MENU } from './proto11_sample_panel';
+import {
+  OPEN_SAMPLE_ITEMS,
+  Proto11SampleStrip,
+  SAMPLE_QUESTION_HIDE_LABEL,
+  SAMPLE_QUESTION_LABEL,
+} from './proto11_sample_panel';
 import {
   Proto11FixFlyout,
   Proto11RejectedNotice,
@@ -589,6 +594,9 @@ function ContextEngineApp({
   const [indexPage, setIndexPage] = useState(0);
   const [indexPageSize, setIndexPageSize] = useState(10);
   const [createEmpty, setCreateEmpty] = useState(false);
+  const [createProposalOpen, setCreateProposalOpen] = useState(false);
+  const [sampleDemoOpen, setSampleDemoOpen] = useState(false);
+  const [sampleBandPresent, setSampleBandPresent] = useState(false);
   const skipRouteSync = useRef(false);
   const [flags, setFlags] = useState(demoFlags$.value);
 
@@ -932,6 +940,16 @@ function ContextEngineApp({
     openDetail(updated);
   };
 
+  const seeSampleQuestion = () => {
+    if (screen === 'index' && sampleDemoOpen) {
+      setSampleDemoOpen(false);
+      return;
+    }
+    setSampleBandPresent(true);
+    setSampleDemoOpen(true);
+    if (screen !== 'index') goLanding();
+  };
+
   const trySample = (scenario: Proto11SampleScenario, tab: DetailTab = 'overview') => {
     const existing = namespaces.find((item) => sampleScenarioOf(item) === scenario);
     if (existing) {
@@ -1215,6 +1233,13 @@ function ContextEngineApp({
       ?.click();
   };
 
+  const askAboutSampleIndicator = (indicator: KnowledgeIndicator) => {
+    const home =
+      namespaces.find((item) => item.indicators.some((ki) => ki.id === indicator.id)) ??
+      namespaces.find((item) => item.proto11?.sample);
+    if (home) openKiChangeAgent(home, indicator);
+  };
+
   const openProposalAgent: AskAgentAboutProposal = (proposal, name) => {
     if (plugins.agentBuilder?.openChat) {
       plugins.agentBuilder.openChat({
@@ -1441,17 +1466,28 @@ function ContextEngineApp({
   };
 
   const exploreSampleItem = {
-    id: 'explore-sample',
-    label: 'Explore a sample AI index',
+    id: 'try-sample',
+    label: 'Try a sample',
     iconType: 'flask' as const,
     overflow: true,
     testId: 'proto11HeaderSample',
-    items: SAMPLE_MENU.map(({ scenario, label }) => ({
-      id: `sample-${scenario}`,
-      label,
-      run: () => trySample(scenario),
-      testId: `proto11HeaderSample-${scenario}`,
-    })),
+    items: [
+      {
+        id: 'sample-question',
+        label:
+          screen === 'index' && sampleDemoOpen
+            ? SAMPLE_QUESTION_HIDE_LABEL
+            : SAMPLE_QUESTION_LABEL,
+        run: seeSampleQuestion,
+        testId: 'proto11HeaderSample-question',
+      },
+      ...OPEN_SAMPLE_ITEMS.map(({ scenario, label }) => ({
+        id: `sample-${scenario}`,
+        label,
+        run: () => trySample(scenario),
+        testId: `proto11HeaderSample-${scenario}`,
+      })),
+    ],
   };
 
   const proto11Menu = (withSample: boolean): AppHeaderMenu =>
@@ -1850,16 +1886,24 @@ function ContextEngineApp({
                 onExploreSample={trySample}
                 onAskAgent={openProposalAgent}
                 discoverHref={coreStart.http.basePath.prepend('/app/discover')}
-                onAskAboutIndicator={(indicator) => {
-                  const home =
-                    namespaces.find((item) =>
-                      item.indicators.some((ki) => ki.id === indicator.id)
-                    ) ?? namespaces.find((item) => item.proto11?.sample);
-                  if (home) openKiChangeAgent(home, indicator);
-                }}
+                onAskAboutIndicator={askAboutSampleIndicator}
+                sampleDemoOpen={sampleDemoOpen}
+                onSampleDemoOpenChange={setSampleDemoOpen}
               />
             ) : (
               <div data-test-subj="proto11Catalog">
+                {sampleBandPresent ? (
+                  <>
+                    <Proto11SampleStrip
+                      expanded={sampleDemoOpen}
+                      onExpandedChange={setSampleDemoOpen}
+                      onExploreSample={trySample}
+                      discoverHref={coreStart.http.basePath.prepend('/app/discover')}
+                      onAskAboutIndicator={askAboutSampleIndicator}
+                    />
+                    <EuiSpacer size="l" />
+                  </>
+                ) : null}
                 <EuiFlexGroup gutterSize="m" alignItems="center" responsive={false}>
                   <EuiFlexItem>
                     <EuiFieldSearch
@@ -2077,7 +2121,7 @@ function ContextEngineApp({
           title="Create AI index"
           back={headerBack(CONTEXT_APP_HREF, 'Context', goLanding)}
           metadata={showComposer ? undefined : headerMeta(CREATE_DESCRIPTION)}
-          menu={proto11On ? proto11Menu(true) : undefined}
+          menu={proto11On ? proto11Menu(!createProposalOpen) : undefined}
           badges={proto11HeaderBadges}
           sectionClassName={
             showComposer ? 'contextEnginePrototype__headerSection--quietCreate' : undefined
@@ -2093,16 +2137,19 @@ function ContextEngineApp({
                 onCreateFromGoal={createFromGoal}
                 onAddToIndex={addProposalToIndex}
                 onAskAgent={openProposalAgent}
+                onProposalChange={setCreateProposalOpen}
               />
-              <EuiText size="s">
-                <EuiLink
-                  color="subdued"
-                  onClick={openNameForm}
-                  data-test-subj="proto11CreateEmptyInstead"
-                >
-                  Create an empty AI index instead
-                </EuiLink>
-              </EuiText>
+              {createProposalOpen ? null : (
+                <EuiText size="s">
+                  <EuiLink
+                    color="subdued"
+                    onClick={openNameForm}
+                    data-test-subj="proto11CreateEmptyInstead"
+                  >
+                    Create an empty AI index instead
+                  </EuiLink>
+                </EuiText>
+              )}
             </div>
           ) : (
           <div className="contextEnginePrototype__create">

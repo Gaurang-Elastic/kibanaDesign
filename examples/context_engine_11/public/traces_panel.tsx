@@ -72,9 +72,22 @@ const DisabledReason = ({ children }: { children: React.ReactNode }) => (
   </EuiText>
 );
 
-export const TraceRow = ({ trace }: { trace: IndexTrace }) => (
-  <div className="contextEnginePrototype__row">
-    <EuiIcon type={traceTypeIcon(trace.type)} size="m" />
+export const TraceRow = ({
+  trace,
+  badgePlacement = 'end',
+}: {
+  trace: IndexTrace;
+  /** `inline` keeps the badge next to the name. `end` pins it to the row's far side. */
+  badgePlacement?: 'end' | 'inline';
+}) => (
+  <div
+    className={
+      badgePlacement === 'inline'
+        ? 'contextEnginePrototype__row contextEnginePrototype__row--inlineBadge'
+        : 'contextEnginePrototype__row'
+    }
+  >
+    <EuiIcon type={traceTypeIcon(trace.type)} size="m" aria-hidden={true} />
     <div className="contextEnginePrototype__rowMain">
       <EuiText size="s">
         <strong>{trace.value}</strong>
