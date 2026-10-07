@@ -76,6 +76,10 @@ export interface Proto11Meta {
   written: { sample: number; full: number; fixed: number };
   fix: Proto11FixState;
   fixTick: number;
+  /** Automation whose card opened the fix. Absent until Fix is clicked. */
+  fixAutomationId?: string;
+  /** Produces count on that card when the re-run started, so the saved ones add to it. */
+  fixProducesBase?: number;
   /** Lives on the meta so the run can post to it while the panel is closed. */
   fixChat?: Proto11FixChat;
   /** KI ids opened from the Knowledge Indicators tab. */

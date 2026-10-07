@@ -86,7 +86,7 @@ export interface DemoFlags {
 }
 
 export const demoFlags$ = new BehaviorSubject<DemoFlags>({
-  catalogState: 'working',
+  catalogState: 'empty',
   proto11Setup: initialProto11Mode !== 'off',
   proto11Memory: initialProto11Mode === 'memory',
   proto11Usage: initialProto11Mode === 'usage',

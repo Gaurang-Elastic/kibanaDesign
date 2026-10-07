@@ -15,7 +15,6 @@ import {
   EuiContextMenu,
   EuiFlexGroup,
   EuiFlexItem,
-  EuiIcon,
   EuiLink,
   EuiPanel,
   EuiPopover,
@@ -25,15 +24,7 @@ import {
   useEuiTheme,
 } from '@elastic/eui';
 
-import {
-  SAMPLE_COUNTS,
-  SAMPLE_DEMOS,
-  SAMPLE_INDEX_NAME,
-  TEMPLATES,
-  WEB_OPS_SOURCES,
-  sampleIndicator,
-  type SampleDemo,
-} from './proto11_data';
+import { SAMPLE_DEMOS, sampleIndicator, type SampleDemo } from './proto11_data';
 import type { KnowledgeIndicator } from './knowledge_indicators';
 import { ComparisonBlock, KiPreviewRow } from './proto11_ki_preview';
 import { KiDetailFlyout } from './proto11_ki_detail';
@@ -42,64 +33,11 @@ import type { Proto11SampleScenario } from './proto11_types';
 /** Ask, first card, second card, third card, comparison. About four seconds with the slide-ins. */
 const STAGE_DELAYS_MS = [0, 800, 1500, 2200, 3200];
 
-type PipelineId = 'sources' | 'automations' | 'indicators' | 'agent';
-
-const PIPELINE: Array<{ id: PipelineId; icon: string; label: string; count?: number }> = [
-  { id: 'sources', icon: 'database', label: 'Sources', count: SAMPLE_COUNTS.sources },
-  { id: 'automations', icon: 'bolt', label: 'Automations', count: SAMPLE_COUNTS.automations },
-  {
-    id: 'indicators',
-    icon: 'tableSparkles',
-    label: 'Knowledge Indicators',
-    count: SAMPLE_COUNTS.indicators,
-  },
-  { id: 'agent', icon: 'productAgent', label: 'Agent' },
-];
-
-const SAMPLE_AGENT_NAME = 'web-ops-assistant';
-
 /** Opens a sample AI index, on the Knowledge Indicators tab when asked. */
 export type ExploreSample = (
   scenario: Proto11SampleScenario,
   tab?: 'overview' | 'knowledge'
 ) => void;
-
-const PipelinePopoverBody = ({ id }: { id: PipelineId }) => {
-  if (id === 'sources') {
-    return (
-      <EuiFlexGroup direction="column" gutterSize="s" responsive={false}>
-        {WEB_OPS_SOURCES.map((source) => (
-          <EuiFlexItem key={source.id}>
-            <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-              <EuiFlexItem>
-                <EuiText size="xs">{source.name}</EuiText>
-              </EuiFlexItem>
-              <EuiFlexItem grow={false}>
-                <EuiBadge color="hollow">{source.kind}</EuiBadge>
-              </EuiFlexItem>
-            </EuiFlexGroup>
-          </EuiFlexItem>
-        ))}
-      </EuiFlexGroup>
-    );
-  }
-  if (id === 'automations') {
-    return (
-      <EuiFlexGroup direction="column" gutterSize="s" responsive={false}>
-        {[TEMPLATES.overview.title, TEMPLATES.digest.title].map((title) => (
-          <EuiFlexItem key={title}>
-            <EuiText size="xs">{title}</EuiText>
-          </EuiFlexItem>
-        ))}
-      </EuiFlexGroup>
-    );
-  }
-  return (
-    <EuiText size="xs">
-      <p>{SAMPLE_AGENT_NAME}, sample agent, no retrievals recorded</p>
-    </EuiText>
-  );
-};
 
 export const SAMPLE_QUESTION_LABEL = 'See a sample question answered';
 
@@ -114,8 +52,8 @@ export const OPEN_SAMPLE_ITEMS: ReadonlyArray<{
 ];
 
 const BAND_SAMPLE_LINKS: ReadonlyArray<{ scenario: Proto11SampleScenario; label: string }> = [
-  { scenario: 'web-ops', label: 'Web operations sample' },
-  { scenario: 'higher-ed', label: 'Higher education sample' },
+  { scenario: 'web-ops', label: 'Web operations' },
+  { scenario: 'higher-ed', label: 'Higher education' },
 ];
 
 /** Dropdown for the two sample AI indexes on the band. */
@@ -127,8 +65,9 @@ const ExploreSampleMenu = ({ onExploreSample }: { onExploreSample: ExploreSample
       button={
         <EuiButtonEmpty
           size="xs"
+          color="text"
           flush="both"
-          iconType="arrowDown"
+          iconType="chevronSingleDown"
           iconSide="right"
           onClick={() => setOpen((isOpen) => !isOpen)}
           data-test-subj="proto11ExploreSample"
@@ -208,10 +147,7 @@ const DemoRun = ({
               className="contextEnginePrototype__proto11Enter"
               data-test-subj="proto11SampleCompare"
             >
-              <ComparisonBlock
-                comparison={demo}
-                note="Sample run on sample data. Your numbers will differ."
-              />
+              <ComparisonBlock comparison={demo} sample />
             </div>
           ) : null}
         </EuiFlexItem>
@@ -235,7 +171,6 @@ export const Proto11SampleStrip = ({
   onExpandedChange: (next: boolean) => void;
 }) => {
   const { euiTheme } = useEuiTheme();
-  const [openPopover, setOpenPopover] = useState<PipelineId | 'sample' | null>(null);
   const [demoIndex, setDemoIndex] = useState(0);
   const [stage, setStage] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -263,124 +198,16 @@ export const Proto11SampleStrip = ({
       `}
       data-test-subj="proto11SampleStrip"
     >
-      <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
-        <EuiFlexItem grow={false}>
-          <EuiPopover
-            button={
-              <EuiBadge
-                color="hollow"
-                onClick={() => setOpenPopover(openPopover === 'sample' ? null : 'sample')}
-                onClickAriaLabel="Show where the sample comes from"
-                data-test-subj="proto11SamplePipeline-sample"
-              >
-                Sample
-              </EuiBadge>
-            }
-            aria-label="Sample source"
-            isOpen={openPopover === 'sample'}
-            closePopover={() => setOpenPopover(null)}
-            panelPaddingSize="s"
-            anchorPosition="downLeft"
+      <EuiFlexGroup gutterSize="m" alignItems="center" responsive={false} wrap>
+        <EuiFlexItem>
+          <EuiTitle
+            size="xxs"
+            className="contextEnginePrototype__proto11SampleBandTitle"
+            data-test-subj="proto11SampleBandTitle"
           >
-            <EuiText
-              size="xs"
-              data-test-subj="proto11SampleProvenance"
-              css={css`
-                max-width: calc(${euiTheme.size.base} * 20);
-              `}
-            >
-              <p>
-                From the sample AI index{' '}
-                <EuiLink
-                  onClick={() => {
-                    setOpenPopover(null);
-                    onExploreSample('web-ops');
-                  }}
-                  data-test-subj="proto11SampleIndexLink"
-                >
-                  {SAMPLE_INDEX_NAME}
-                </EuiLink>
-                , used by the sample agent {SAMPLE_AGENT_NAME}.
-              </p>
-            </EuiText>
-          </EuiPopover>
+            <h3>Try it on sample data before you connect your own.</h3>
+          </EuiTitle>
         </EuiFlexItem>
-        {PIPELINE.map((node, index) => (
-          <React.Fragment key={node.label}>
-            {index > 0 ? (
-              <EuiFlexItem grow={false}>
-                <EuiIcon type="sortRight" color="subdued" aria-hidden={true} />
-              </EuiFlexItem>
-            ) : null}
-            <EuiFlexItem grow={false}>
-              <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
-                <EuiFlexItem grow={false}>
-                  <EuiIcon type={node.icon} size="m" aria-hidden={true} />
-                </EuiFlexItem>
-                <EuiFlexItem grow={false}>
-                  {node.id === 'agent' ? (
-                    <EuiPopover
-                      button={
-                        <EuiLink
-                          color="text"
-                          onClick={() => setOpenPopover(openPopover === 'agent' ? null : 'agent')}
-                          aria-label="Show the sample agent"
-                          data-test-subj="proto11SamplePipeline-agent"
-                        >
-                          <EuiText size="xs">{node.label}</EuiText>
-                        </EuiLink>
-                      }
-                      aria-label="Sample agent"
-                      isOpen={openPopover === 'agent'}
-                      closePopover={() => setOpenPopover(null)}
-                      panelPaddingSize="s"
-                      anchorPosition="downCenter"
-                    >
-                      <PipelinePopoverBody id="agent" />
-                    </EuiPopover>
-                  ) : (
-                    <EuiText size="xs">{node.label}</EuiText>
-                  )}
-                </EuiFlexItem>
-                {node.count !== undefined ? (
-                  <EuiFlexItem grow={false}>
-                    {node.id === 'indicators' ? (
-                      <EuiBadge
-                        color="hollow"
-                        onClick={() => onExploreSample('web-ops', 'knowledge')}
-                        onClickAriaLabel={`Open the Knowledge Indicators of ${SAMPLE_INDEX_NAME}`}
-                        data-test-subj="proto11SamplePipeline-indicators"
-                      >
-                        {node.count}
-                      </EuiBadge>
-                    ) : (
-                      <EuiPopover
-                        button={
-                          <EuiBadge
-                            color="hollow"
-                            onClick={() => setOpenPopover(openPopover === node.id ? null : node.id)}
-                            onClickAriaLabel={`Show the sample ${node.label.toLowerCase()}`}
-                            data-test-subj={`proto11SamplePipeline-${node.id}`}
-                          >
-                            {node.count}
-                          </EuiBadge>
-                        }
-                        aria-label={`Sample ${node.label.toLowerCase()}`}
-                        isOpen={openPopover === node.id}
-                        closePopover={() => setOpenPopover(null)}
-                        panelPaddingSize="s"
-                        anchorPosition="downCenter"
-                      >
-                        <PipelinePopoverBody id={node.id} />
-                      </EuiPopover>
-                    )}
-                  </EuiFlexItem>
-                ) : null}
-              </EuiFlexGroup>
-            </EuiFlexItem>
-          </React.Fragment>
-        ))}
-        <EuiFlexItem />
         <EuiFlexItem grow={false}>
           <EuiFlexGroup
             gutterSize="s"
@@ -433,7 +260,7 @@ export const Proto11SampleStrip = ({
               </EuiFlexItem>
             ))}
           </EuiFlexGroup>
-          <EuiSpacer size="m" />
+          <EuiSpacer size="xl" />
           <DemoRun key={demoIndex} demo={demo} stage={stage} onOpenIndicator={setOpenId} />
         </>
       ) : null}

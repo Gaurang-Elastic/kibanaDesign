@@ -16,6 +16,7 @@ import {
   EuiButtonGroup,
   EuiButtonIcon,
   EuiCheckbox,
+  EuiCode,
   EuiComboBox,
   EuiDescriptionList,
   EuiFieldText,
@@ -57,6 +58,7 @@ import {
   pickerAgents,
   proposeFromComposer,
   proposeFromIndex,
+  tracesSuggestionFor,
   type ReuseMatch,
   type ComposerInput,
   type PickerAgent,
@@ -125,10 +127,12 @@ const ProposalSourceChip = ({
   id,
   found,
   onThisIndex,
+  fromTraces,
 }: {
   id: Proto11SourceId;
   found: boolean;
   onThisIndex?: boolean;
+  fromTraces?: boolean;
 }) => {
   const source = namespaceSourceFor(id);
   return (
@@ -140,6 +144,11 @@ const ProposalSourceChip = ({
         </EuiText>
       </div>
       <EuiBadge color="hollow">{source.typeLabel}</EuiBadge>
+      {fromTraces ? (
+        <EuiBadge color="hollow" data-test-subj="proto11FromTraces">
+          from traces
+        </EuiBadge>
+      ) : null}
       {onThisIndex ? <EuiBadge color="hollow">on this index</EuiBadge> : null}
       {found ? <EuiBadge color="hollow">found</EuiBadge> : null}
     </div>
@@ -168,33 +177,87 @@ const producesPhrase = (description: string) => {
   return trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
 };
 
+const ProposalSourcePicker = ({
+  pickedIds,
+  onAdd,
+}: {
+  pickedIds: Proto11SourceId[];
+  onAdd: (id: Proto11SourceId) => void;
+}) => (
+  <EuiComboBox
+    fullWidth
+    compressed
+    placeholder="Pick the data your agent searches"
+    aria-label="Pick the data your agent searches"
+    options={[...INDEX_SOURCES, ...CONNECTOR_SOURCES]
+      .filter((source) => !pickedIds.includes(source.id))
+      .map((source) => ({ label: source.name, value: source.id }))}
+    selectedOptions={[]}
+    singleSelection={{ asPlainText: true }}
+    onChange={(options) => {
+      const picked = options[0]?.value;
+      if (picked) onAdd(picked);
+    }}
+    isClearable={false}
+    data-test-subj="proto11ProposalSourcePicker"
+  />
+);
+
 const ProposalCard = ({
   proposal,
   reuse,
+  namespaces,
   onChange,
   onCreate,
   onAddTo,
+  onRerun,
   onAskAgent,
+  onAddSource,
 }: {
   proposal: Proto11Proposal;
   reuse?: ReuseMatch;
+  namespaces: Namespace[];
   onChange: () => void;
   onCreate: (name: string) => void;
   onAddTo: (targetName: string) => void;
+  onRerun: (targetName: string) => void;
   onAskAgent: (name: string) => void;
+  onAddSource: (id: Proto11SourceId) => void;
 }) => {
   const { euiTheme } = useEuiTheme();
   const [name, setName] = useState(proposal.name);
   const [mode, setMode] = useState<'add' | 'create'>(reuse ? 'add' : 'create');
   const adding = Boolean(reuse) && mode === 'add';
-  const template = TEMPLATES[goalById(proposal.goal).template];
-  const writesAbout = joinNames(proposal.sourceIds.map((id) => namespaceSourceFor(id).name));
-  const writesLine = `Writes Knowledge Indicators about ${writesAbout}: ${producesPhrase(
-    template.description
-  )}. First pass runs on a sample, about a minute.`;
+  const templateId = goalById(proposal.goal).template;
+  const template = TEMPLATES[templateId];
+  const target = adding && reuse ? namespaces.find((item) => item.name === reuse.name) : undefined;
+  const alreadyThere = Boolean(
+    target?.automations.some((automation) => automation.templateId === templateId)
+  );
+  const writesAbout = proposal.sourceIds.length
+    ? joinNames(proposal.sourceIds.map((id) => namespaceSourceFor(id).name))
+    : '';
+  const writesLine = writesAbout
+    ? `Writes Knowledge Indicators about ${writesAbout}: ${producesPhrase(
+        template.description
+      )}. First pass runs on a sample, about a minute.`
+    : `Writes Knowledge Indicators: ${producesPhrase(
+        template.description
+      )}. First pass runs on a sample, about a minute.`;
   const sourceIds = adding
     ? proposal.sourceIds.filter((id) => !reuse?.coveredIds.includes(id))
     : proposal.sourceIds;
+  const needsSource = Boolean(proposal.trace) && (proposal.traceSourceIds?.length ?? 0) === 0;
+  const canRun = alreadyThere || !needsSource || proposal.sourceIds.length > 0;
+  const sourceChip = (id: Proto11SourceId, onThisIndex?: boolean) => (
+    <ProposalSourceChip
+      key={id}
+      id={id}
+      found={proposal.foundIds.includes(id)}
+      onThisIndex={onThisIndex}
+      fromTraces={proposal.traceSourceIds?.includes(id)}
+    />
+  );
   const nameField = (
     <EuiFieldText
       compressed
@@ -225,7 +288,12 @@ const ProposalCard = ({
                   padding-inline-start: calc(${euiTheme.size.base} + ${euiTheme.size.s});
                 `}
               >
-                <p>{reuse.because}</p>
+                <p>
+                  {reuse.because
+                    ? `${reuse.because.charAt(0).toUpperCase()}${reuse.because.slice(1)}.`
+                    : null}
+                </p>
+                <p>The automation and its Knowledge Indicators are added to this index.</p>
               </EuiText>
               <EuiSpacer size="s" />
               <EuiRadio
@@ -251,62 +319,76 @@ const ProposalCard = ({
         },
     {
       title: 'Automation',
-      description: (
-        <>
-          <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-            <EuiFlexItem grow={false}>
-              <EuiIcon type="bolt" size="m" aria-hidden={true} />
-            </EuiFlexItem>
-            <EuiFlexItem grow={false}>
-              <EuiText size="s">
-                <strong>{template.title}</strong>
-              </EuiText>
-            </EuiFlexItem>
-          </EuiFlexGroup>
-          <EuiText size="s" color="subdued">
-            <p data-test-subj="proto11ProposalWrites">{writesLine}</p>
+      description:
+        alreadyThere && target ? (
+          <EuiText size="s">
+            <p data-test-subj="proto11ProposalDuplicate">
+              {`${template.title} is already on ${target.name}`}
+            </p>
           </EuiText>
-          <BecauseLine>{proposal.automationBecause}</BecauseLine>
-        </>
-      ),
+        ) : (
+          <>
+            <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+              <EuiFlexItem grow={false}>
+                <EuiIcon type="bolt" size="m" aria-hidden={true} />
+              </EuiFlexItem>
+              <EuiFlexItem grow={false}>
+                <EuiText size="s">
+                  <strong>{template.title}</strong>
+                </EuiText>
+              </EuiFlexItem>
+            </EuiFlexGroup>
+            <EuiText size="s" color="subdued">
+              <p data-test-subj="proto11ProposalWrites">{writesLine}</p>
+            </EuiText>
+            <BecauseLine>{proposal.automationBecause}</BecauseLine>
+          </>
+        ),
     },
     {
       title: 'Sources',
-      description: (
+      description: needsSource ? (
         <>
-          {sourceIds.length === 0 && reuse ? (
-            <>
-              <div
-                className="contextEnginePrototype__selectedSources"
-                data-test-subj="proto11ProposalExistingSources"
-              >
-                {proposal.sourceIds.map((id) => (
-                  <ProposalSourceChip
-                    key={id}
-                    id={id}
-                    found={proposal.foundIds.includes(id)}
-                    onThisIndex
-                  />
-                ))}
-              </div>
-              <EuiSpacer size="xs" />
-              <EuiText size="s" color="subdued">
-                <p data-test-subj="proto11ProposalReads">
-                  {`Reads the sources already on ${reuse.name}.`}
-                </p>
-              </EuiText>
-            </>
-          ) : (
+          {proposal.sourceIds.length > 0 ? (
             <>
               <div className="contextEnginePrototype__selectedSources">
-                {sourceIds.map((id) => (
-                  <ProposalSourceChip key={id} id={id} found={proposal.foundIds.includes(id)} />
-                ))}
+                {proposal.sourceIds.map((id) =>
+                  sourceChip(id, adding && reuse?.coveredIds.includes(id))
+                )}
               </div>
+              <EuiSpacer size="s" />
+            </>
+          ) : null}
+          <ProposalSourcePicker pickedIds={proposal.sourceIds} onAdd={onAddSource} />
+          {proposal.sourceIds.length > 0 ? (
+            <>
               <EuiSpacer size="xs" />
               <BecauseLine>{proposal.sourcesBecause}</BecauseLine>
             </>
-          )}
+          ) : null}
+        </>
+      ) : sourceIds.length === 0 && reuse ? (
+        <>
+          <div
+            className="contextEnginePrototype__selectedSources"
+            data-test-subj="proto11ProposalExistingSources"
+          >
+            {proposal.sourceIds.map((id) => sourceChip(id, true))}
+          </div>
+          <EuiSpacer size="xs" />
+          <EuiText size="xs" color="subdued">
+            <p data-test-subj="proto11ProposalReads">
+              {`Reads the sources already on ${reuse.name}.`}
+            </p>
+          </EuiText>
+        </>
+      ) : (
+        <>
+          <div className="contextEnginePrototype__selectedSources">
+            {sourceIds.map((id) => sourceChip(id))}
+          </div>
+          <EuiSpacer size="xs" />
+          <BecauseLine>{proposal.sourcesBecause}</BecauseLine>
         </>
       ),
     },
@@ -329,7 +411,7 @@ const ProposalCard = ({
                 </EuiText>
                 <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
                   <EuiFlexItem grow={false}>
-                    <EuiText size="xs" color="subdued">
+                    <EuiText size="s" color="subdued">
                       <p>Agents can save and recall task memory.</p>
                     </EuiText>
                   </EuiFlexItem>
@@ -358,10 +440,21 @@ const ProposalCard = ({
         <EuiFlexItem grow={false}>
           <EuiTitle size="xs">
             <h3 data-test-subj="proto11ProposalHeading">
-              {adding && reuse ? `Proposed automation for ${reuse.name}` : 'Proposed AI index'}
+              {adding && reuse ? (
+                <>
+                  Proposed automation for <EuiCode>{reuse.name}</EuiCode>
+                </>
+              ) : (
+                'Proposed AI index'
+              )}
             </h3>
           </EuiTitle>
         </EuiFlexItem>
+        {adding && reuse ? (
+          <EuiFlexItem grow={false}>
+            <EuiBadge color="hollow">AI index</EuiBadge>
+          </EuiFlexItem>
+        ) : null}
       </EuiFlexGroup>
       <EuiSpacer size="l" />
       <EuiDescriptionList type="column" columnWidths={[1, 4]} listItems={listItems} />
@@ -397,13 +490,15 @@ const ProposalCard = ({
         <EuiFlexItem grow={false}>
           <EuiButton
             fill
+            isDisabled={!canRun}
             onClick={() => {
-              if (adding && reuse) onAddTo(reuse.name);
+              if (alreadyThere && reuse) onRerun(reuse.name);
+              else if (adding && reuse) onAddTo(reuse.name);
               else onCreate(name);
             }}
             data-test-subj="proto11CreateAndRun"
           >
-            {adding ? 'Add and run' : 'Create and run'}
+            {alreadyThere ? 'Run it again' : adding ? 'Add and run' : 'Create and run'}
           </EuiButton>
         </EuiFlexItem>
       </EuiFlexGroup>
@@ -723,6 +818,7 @@ const Composer = ({
   forcedTarget,
   onCreateFromGoal,
   onAddToIndex,
+  onRerun,
   onAskAgent,
   onProposalChange,
 }: {
@@ -733,6 +829,7 @@ const Composer = ({
   forcedTarget?: string;
   onCreateFromGoal: (options: Omit<CreateFromGoalOptions, 'takenNames'>) => void;
   onAddToIndex: (targetName: string, proposal: Proto11Proposal) => void;
+  onRerun: (targetName: string, proposal: Proto11Proposal) => void;
   onAskAgent: AskAgentAboutProposal;
   onProposalChange?: (showing: boolean) => void;
 }) => {
@@ -747,7 +844,8 @@ const Composer = ({
 
   const hasText = text.trim().length > 0;
   const showingProposal = proposal !== null;
-  const canPropose = !showingProposal && (hasText || agent !== null || pickedIds.length > 0);
+  const attached = agent !== null || pickedIds.length > 0;
+  const canPropose = !showingProposal && attached && hasText;
   const showChips = !compact || focused || hasText;
 
   useEffect(() => {
@@ -793,9 +891,7 @@ const Composer = ({
     --euiFormControlStateHoverColor: transparent;
     background-color: transparent;
     box-shadow: none;
-    padding: ${compact
-      ? euiTheme.size.s
-      : `${euiTheme.size.m} ${euiTheme.size.m} ${showingProposal ? euiTheme.size.m : 0}`};
+    padding: ${compact ? euiTheme.size.s : euiTheme.size.m};
 
     &:focus {
       box-shadow: none;
@@ -810,7 +906,7 @@ const Composer = ({
       inputRef={(element) => {
         fieldRef.current = element;
       }}
-      rows={compact && !focused && !hasText ? 1 : rowsFor(text, 2, 5)}
+      rows={hasText ? rowsFor(text, 1, 5) : 1}
       placeholder={COMPOSER_PLACEHOLDER}
       value={text}
       onChange={(event) => setText(event.target.value)}
@@ -833,7 +929,7 @@ const Composer = ({
     </EuiFilterGroup>
   );
 
-  const proposeButton = (
+  const proposeControl = (
     <EuiButton
       size="s"
       fill={proposal === null}
@@ -844,21 +940,44 @@ const Composer = ({
       Propose
     </EuiButton>
   );
+  const proposeButton = attached ? (
+    proposeControl
+  ) : (
+    <EuiToolTip content="Attach an agent or data first." position="top">
+      <span tabIndex={0} className="contextEnginePrototype__proto11TipAnchor">
+        {proposeControl}
+      </span>
+    </EuiToolTip>
+  );
 
   const chips = (
     <EuiFlexGroup gutterSize="s" responsive={false} wrap data-test-subj="proto11Suggestions">
-      {PROBLEM_CHIPS.map((chip) => (
-        <EuiFlexItem grow={false} key={chip.sentence}>
+      {PROBLEM_CHIPS.map((chip) => {
+        const badge = (
           <EuiBadge
             color="hollow"
+            isDisabled={!attached}
             onClick={() => applyQuestion(chip.sentence)}
             onClickAriaLabel={`Use the question ${chip.sentence}`}
             data-test-subj="proto11ComposerExample"
           >
             {chip.sentence}
           </EuiBadge>
-        </EuiFlexItem>
-      ))}
+        );
+        return (
+          <EuiFlexItem grow={false} key={chip.sentence}>
+            {attached ? (
+              badge
+            ) : (
+              <EuiToolTip content="Attach an agent or data first." position="top">
+                <span tabIndex={0} className="contextEnginePrototype__proto11TipAnchor">
+                  {badge}
+                </span>
+              </EuiToolTip>
+            )}
+          </EuiFlexItem>
+        );
+      })}
     </EuiFlexGroup>
   );
 
@@ -866,11 +985,25 @@ const Composer = ({
     <>
       <EuiSpacer size="m" />
       <ProposalCard
-        key={`${proposal.path}-${proposal.name}-${proposal.sourceIds.join(',')}`}
+        key={`${proposal.path}-${proposal.name}-${proposal.trace?.value ?? ''}`}
         proposal={proposal}
+        namespaces={namespaces}
         reuse={findReuseTarget(proposal, namespaces, forcedTarget)}
         onChange={() => setProposal(null)}
         onAskAgent={(name) => onAskAgent(proposal, name)}
+        onRerun={(targetName) => onRerun(targetName, proposal)}
+        onAddSource={(id) =>
+          setProposal((current) => {
+            if (!current || current.sourceIds.includes(id)) return current;
+            const sourceIds = [...current.sourceIds, id];
+            return {
+              ...current,
+              sourceIds,
+              sourcesBecause:
+                sourceIds.length === 1 ? 'because you picked it' : 'because you picked them',
+            };
+          })
+        }
         onAddTo={(targetName) => onAddToIndex(targetName, proposal)}
         onCreate={(name) =>
           onCreateFromGoal({
@@ -938,18 +1071,20 @@ const Composer = ({
           {scopes}
           <EuiSpacer size="s" />
           <EuiPanel hasBorder paddingSize="none" css={boxCss} data-test-subj="proto11ComposerBox">
-            {field}
-            {showingProposal ? null : (
-              <div
-                css={css`
-                  display: flex;
-                  justify-content: flex-end;
-                  padding: ${euiTheme.size.m};
-                `}
-              >
-                {proposeButton}
-              </div>
-            )}
+            <div
+              className="contextEnginePrototype__proto11ComposerRow contextEnginePrototype__proto11ComposerRow--single"
+              css={css`
+                gap: ${euiTheme.size.s};
+                padding-right: ${euiTheme.size.m};
+              `}
+            >
+              <div className="contextEnginePrototype__proto11ComposerRowField">{field}</div>
+              {showingProposal ? null : (
+                <div className="contextEnginePrototype__proto11ComposerRowAction">
+                  {proposeButton}
+                </div>
+              )}
+            </div>
           </EuiPanel>
         </>
       )}
@@ -961,31 +1096,44 @@ const Composer = ({
 /** The landing composer, also opened from an index to propose an automation for it. */
 export const Proto11Composer = Composer;
 
-/** Inline proposal above Automations. Built from the description and sources, with no question. */
+/** Proposal inside the Automations panel. Built from the description and sources. */
 export const Proto11IndexProposal = ({
   namespace,
   onCreateAndRun,
+  onRerun,
+  onCancel,
 }: {
   namespace: Namespace;
   onCreateAndRun: (proposal: Proto11Proposal) => void;
+  onRerun: (proposal: Proto11Proposal) => void;
+  onCancel: () => void;
 }) => {
   const proposal = proposeFromIndex(namespace);
-  const template = TEMPLATES[goalById(proposal.goal).template];
+  const templateId = goalById(proposal.goal).template;
+  const template = TEMPLATES[templateId];
+  const suggestion = tracesSuggestionFor(namespace);
+  const alreadyThere = namespace.automations.some(
+    (automation) => automation.templateId === templateId
+  );
   return (
-    <EuiPanel
-      hasBorder={false}
-      color="subdued"
-      paddingSize="l"
-      className="contextEnginePrototype__proto11Enter"
-      data-test-subj="proto11IndexProposal"
-    >
+    <div className="contextEnginePrototype__proto11Enter" data-test-subj="proto11IndexProposal">
+      <EuiTitle size="xxs">
+        <h3>Proposed automation</h3>
+      </EuiTitle>
+      <EuiSpacer size="m" />
       <EuiDescriptionList
         type="column"
         columnWidths={[1, 4]}
         listItems={[
           {
             title: 'Automation',
-            description: (
+            description: alreadyThere ? (
+              <EuiText size="s">
+                <p data-test-subj="proto11ProposalDuplicate">
+                  {`${template.title} is already on ${namespace.name}`}
+                </p>
+              </EuiText>
+            ) : (
               <>
                 <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
                   <EuiFlexItem grow={false}>
@@ -1016,19 +1164,32 @@ export const Proto11IndexProposal = ({
           },
         ]}
       />
+      {suggestion ? (
+        <>
+          <EuiSpacer size="s" />
+          <EuiText size="xs" color="subdued">
+            <p data-test-subj="proto11TracesSuggestion">{suggestion}</p>
+          </EuiText>
+        </>
+      ) : null}
       <EuiSpacer size="l" />
-      <EuiFlexGroup justifyContent="flexEnd" responsive={false}>
+      <EuiFlexGroup justifyContent="flexEnd" alignItems="center" gutterSize="m" responsive={false}>
+        <EuiFlexItem grow={false}>
+          <EuiLink onClick={onCancel} data-test-subj="proto11IndexProposalCancel">
+            Cancel
+          </EuiLink>
+        </EuiFlexItem>
         <EuiFlexItem grow={false}>
           <EuiButton
             fill
-            onClick={() => onCreateAndRun(proposal)}
+            onClick={() => (alreadyThere ? onRerun(proposal) : onCreateAndRun(proposal))}
             data-test-subj="proto11IndexProposalRun"
           >
-            Create and run
+            {alreadyThere ? 'Run it again' : 'Add and run'}
           </EuiButton>
         </EuiFlexItem>
       </EuiFlexGroup>
-    </EuiPanel>
+    </div>
   );
 };
 
@@ -1054,6 +1215,7 @@ export const Proto11Landing = ({
   namespaces,
   onCreateFromGoal,
   onAddToIndex,
+  onRerun,
   onCreateEmpty,
   onExploreSample,
   onAskAgent,
@@ -1069,6 +1231,7 @@ export const Proto11Landing = ({
   namespaces: Namespace[];
   onCreateFromGoal: (options: Omit<CreateFromGoalOptions, 'takenNames'>) => void;
   onAddToIndex: (targetName: string, proposal: Proto11Proposal) => void;
+  onRerun: (targetName: string, proposal: Proto11Proposal) => void;
   onCreateEmpty: () => void;
   onExploreSample: ExploreSample;
   onAskAgent: AskAgentAboutProposal;
@@ -1087,6 +1250,7 @@ export const Proto11Landing = ({
           namespaces={namespaces}
           onCreateFromGoal={onCreateFromGoal}
           onAddToIndex={onAddToIndex}
+          onRerun={onRerun}
           onAskAgent={onAskAgent}
         />
         <EuiSpacer size="xl" />
@@ -1125,6 +1289,7 @@ export const Proto11Landing = ({
                 namespaces={namespaces}
                 onCreateFromGoal={onCreateFromGoal}
                 onAddToIndex={onAddToIndex}
+                onRerun={onRerun}
                 onAskAgent={onAskAgent}
                 onProposalChange={setProposalShowing}
               />

@@ -119,7 +119,7 @@ export const Proto11Coverage = ({
                       min-height: 36px;
                       border: 1px solid transparent;
                       border-radius: 4px;
-                      background: ${fill ?? euiTheme.colors.lightestShade};
+                      background: ${fill ?? 'transparent'};
                       color: ${fill
                         ? rampInk(count, colorMode, euiTheme.colors.text)
                         : euiTheme.colors.text};

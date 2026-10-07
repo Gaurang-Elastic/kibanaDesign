@@ -36,7 +36,7 @@ import {
   useGeneratedHtmlId,
 } from '@elastic/eui';
 
-import type { Namespace } from './namespace_data';
+import type { Automation, Namespace } from './namespace_data';
 import { KNOWLEDGE_BLUE } from './proto11_ki_colors';
 import {
   TEMPLATES,
@@ -45,6 +45,7 @@ import {
   firstPassDots,
   outstandingRejected,
   rejectedTotal,
+  rejectionMetaForAutomation,
 } from './proto11_data';
 import type { Proto11Meta } from './proto11_types';
 
@@ -133,8 +134,21 @@ export const Proto11RunCallout = ({
     prevPhase.current = meta.phase;
   }, [meta.phase]);
 
-  if (meta.sample) return null;
-  if (meta.phase === 'firstPass') {
+  const addon = meta.addon?.phase === 'firstPass' ? meta.addon : undefined;
+  const calloutMeta: Proto11Meta = addon
+    ? {
+        ...meta,
+        phase: 'firstPass',
+        tick: addon.tick,
+        sourceIds: addon.sourceIds,
+        runTemplates: [addon.template],
+        written: { ...meta.written, sample: addon.written },
+        sample: false,
+      }
+    : meta;
+
+  if (!addon && meta.sample) return null;
+  if (calloutMeta.phase === 'firstPass') {
     return (
       <EuiCallOut
         announceOnMount
@@ -143,7 +157,7 @@ export const Proto11RunCallout = ({
         title="Building first Knowledge Indicators from a sample of your data"
         data-test-subj="proto11FirstPass"
       >
-        <FirstPassDotGrid meta={meta} />
+        <FirstPassDotGrid meta={calloutMeta} />
       </EuiCallOut>
     );
   }
@@ -198,6 +212,21 @@ export const Proto11RunCallout = ({
   return null;
 };
 
+/** Rejected KIs for this automation, including a finished add-on pass. */
+export const Proto11AutomationRejection = ({
+  namespace,
+  automation,
+  onFix,
+}: {
+  namespace: Namespace;
+  automation: Automation;
+  onFix: () => void;
+}) => {
+  const noticeMeta = rejectionMetaForAutomation(namespace, automation);
+  if (!noticeMeta) return null;
+  return <Proto11RejectedNotice meta={noticeMeta} onFix={onFix} />;
+};
+
 /** Rejected KIs inside the automation card that produced them. */
 export const Proto11RejectedNotice = ({
   meta,
@@ -207,7 +236,16 @@ export const Proto11RejectedNotice = ({
   onFix: () => void;
 }) => {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(true);
   const total = rejectedTotal(meta);
+  useEffect(() => {
+    if (meta.fix !== 'fixed') {
+      setNoteOpen(true);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setNoteOpen(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [meta.fix, meta.fixAutomationId]);
   if (meta.sample || meta.phase === 'firstPass' || total === 0) return null;
 
   if (meta.fix === 'rerunning') {
@@ -223,6 +261,7 @@ export const Proto11RejectedNotice = ({
     );
   }
   if (meta.fix === 'fixed') {
+    if (!noteOpen) return null;
     return (
       <EuiCallOut
         announceOnMount
@@ -231,6 +270,7 @@ export const Proto11RejectedNotice = ({
         iconType="check"
         title={`${kiCount(total)} passed verification and were saved.`}
         className="contextEnginePrototype__automationNotice"
+        data-test-subj="proto11RejectionFixed"
       />
     );
   }
@@ -442,7 +482,7 @@ export const Proto11FixFlyout = ({
             {groups.map((group) => (
               <li key={group.source}>
                 <strong>
-                  {group.count} on {group.sourceName}.
+                  {group.count} on {group.sourceName}:
                 </strong>{' '}
                 {group.fix}
               </li>

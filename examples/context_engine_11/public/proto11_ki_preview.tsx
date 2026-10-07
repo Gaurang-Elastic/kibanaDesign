@@ -29,7 +29,7 @@ import {
 } from '@elastic/eui';
 
 import { toIndicatorDocument, type KnowledgeIndicator } from './knowledge_indicators';
-import { AGENT_TEAL, AGENT_TEAL_INK, KiTypeBadge, KNOWLEDGE_BLUE } from './proto11_ki_colors';
+import { AGENT_TEAL, KiTypeBadge, KNOWLEDGE_BLUE } from './proto11_ki_colors';
 import { comparisonHeadline, type TokenComparison } from './proto11_data';
 
 /** Small clickable KI card: title, hollow type badge, source in muted text. */
@@ -88,7 +88,7 @@ export const KiPreviewRow = ({
     <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
       <EuiFlexItem className="contextEnginePrototype__proto11KiRowTitle">
         <EuiText size="s" textAlign="left">
-          <strong>{indicator.title}</strong>
+          <span>{indicator.title}</span>
         </EuiText>
       </EuiFlexItem>
       <EuiFlexItem grow={false}>
@@ -103,68 +103,89 @@ export const KiPreviewRow = ({
   </EuiPanel>
 );
 
-/**
- * With Context is knowledge blue. Without Context is the agent teal.
- * The retry step stays a warning.
- */
+/** Retrieve is knowledge blue. Other steps are neutral grey. The retry step stays a warning. */
 const WITH_STEPS = [
   { label: 'retrieve', tone: 'knowledge' },
   { label: 'answer', tone: 'neutral' },
 ] as const;
 
 const WITHOUT_STEPS = [
-  { label: 'list indices', tone: 'agent' },
-  { label: 'read mapping', tone: 'agent' },
-  { label: 'sample documents', tone: 'agent' },
-  { label: 'write query', tone: 'agent' },
+  { label: 'list indices', tone: 'neutral' },
+  { label: 'read mapping', tone: 'neutral' },
+  { label: 'sample documents', tone: 'neutral' },
+  { label: 'write query', tone: 'neutral' },
   { label: 'retry after field error', tone: 'warning' },
-  { label: 'answer', tone: 'agent' },
+  { label: 'answer', tone: 'neutral' },
 ] as const;
 
-/** Retrieve and answer beside the dry-run steps, above the token bars. */
-const ComparisonSteps = () => {
+interface CompareStep {
+  label: string;
+  tone: 'knowledge' | 'neutral' | 'warning';
+}
+
+const comparisonCaption = (countLabel: string, tokens: number) =>
+  `${countLabel} · about ${tokens.toLocaleString('en-US')} tokens`;
+
+/** Label and chips on one line, caption pinned right, full-width bar underneath. */
+const ContextCompare = ({
+  label,
+  steps,
+  caption,
+  share,
+}: {
+  label: string;
+  steps: readonly CompareStep[];
+  caption: string;
+  share: number;
+}) => {
   const { euiTheme } = useEuiTheme();
-  const rows = [
-    { label: 'With Context', steps: WITH_STEPS },
-    { label: 'Without Context', steps: WITHOUT_STEPS },
-  ];
   return (
-    <div data-test-subj="proto11ComparisonSteps">
-      {rows.map((row) => (
+    <div
+      data-test-subj={label === 'With Context' ? 'proto11CompareWith' : 'proto11CompareWithout'}
+      css={css`
+        display: flex;
+        flex-direction: column;
+        gap: ${euiTheme.size.m};
+      `}
+    >
+      <div
+        css={css`
+          display: flex;
+          align-items: flex-start;
+          gap: ${euiTheme.size.s};
+        `}
+      >
         <div
-          key={row.label}
+          data-test-subj="proto11ComparisonSteps"
           css={css`
             display: flex;
-            flex-wrap: nowrap;
+            flex: 1;
+            flex-wrap: wrap;
             align-items: center;
             gap: 4px;
-            margin-bottom: 6px;
+            min-width: 0;
           `}
         >
           <EuiText size="xs">
             <span
               css={css`
-                display: inline-block;
-                width: 110px;
+                font-weight: 500;
+                white-space: nowrap;
               `}
             >
-              {row.label}
+              {label}
             </span>
           </EuiText>
-          {row.steps.map((step) => {
+          {steps.map((step) => {
             const background =
               step.tone === 'knowledge'
                 ? KNOWLEDGE_BLUE
-                : step.tone === 'agent'
-                ? AGENT_TEAL
                 : step.tone === 'warning'
                 ? transparentize(euiTheme.colors.warning, 0.75)
                 : euiTheme.colors.lightestShade;
             const color =
               step.tone === 'knowledge'
                 ? '#FFFFFF'
-                : step.tone === 'agent'
-                ? AGENT_TEAL_INK
                 : step.tone === 'warning'
                 ? euiTheme.colors.textWarning
                 : euiTheme.colors.text;
@@ -189,98 +210,129 @@ const ComparisonSteps = () => {
             );
           })}
         </div>
-      ))}
+        <EuiText
+          size="xs"
+          color="subdued"
+          data-test-subj="proto11ComparisonCaption"
+          css={css`
+            flex: none;
+          `}
+        >
+          <span
+            css={css`
+              white-space: nowrap;
+            `}
+          >
+            {caption}
+          </span>
+        </EuiText>
+      </div>
+      <div
+        role="img"
+        aria-label={`${label}: ${caption}`}
+        data-test-subj="proto11ComparisonBars"
+        css={css`
+          height: ${euiTheme.size.xs};
+          border-radius: ${euiTheme.size.xxs};
+          background: ${AGENT_TEAL};
+          overflow: hidden;
+        `}
+      >
+        <div
+          css={css`
+            height: 100%;
+            background: ${KNOWLEDGE_BLUE};
+          `}
+          style={{ width: `${share * 100}%` }}
+        />
+      </div>
     </div>
   );
 };
 
-/** Optional headline, With and Without Context bars, and the estimate or sample note under them. */
+/** Headline, With and Without Context, and an optional estimate line under them. */
 export const ComparisonBlock = ({
   comparison,
   showHeadline = true,
   note,
+  sample = false,
 }: {
   comparison?: TokenComparison;
   showHeadline?: boolean;
-  note: string;
+  note?: string;
+  /** Hollow Sample badge beside the headline. Used by the landing sample band. */
+  sample?: boolean;
 }) => (
   <div data-test-subj="proto11Comparison">
     {comparison ? (
       <>
         {showHeadline ? (
           <>
-            <EuiTitle size="xs">
-              <h4>{comparisonHeadline(comparison)}</h4>
-            </EuiTitle>
-            <EuiSpacer size="m" />
-          </>
-        ) : null}
-        <ComparisonSteps />
-        <EuiSpacer size="s" />
-        <ComparisonBars comparison={comparison} />
-        <EuiSpacer size="m" />
-      </>
-    ) : null}
-    <EuiText size="xs" color="subdued">
-      <p>{note}</p>
-    </EuiText>
-  </div>
-);
-
-/** With Context is a short blue bar. Without Context is a full teal bar. */
-const ComparisonBars = ({
-  comparison: { withContext, withoutContext },
-}: {
-  comparison: TokenComparison;
-}) => {
-  const { euiTheme } = useEuiTheme();
-  const ratio = Math.min(1, withContext.tokens / Math.max(1, withoutContext.tokens));
-  const rows = [
-    { label: 'With Context', detail: withContext.detail, share: ratio },
-    { label: 'Without Context', detail: withoutContext.detail, share: 1 },
-  ];
-  return (
-    <div
-      data-test-subj="proto11ComparisonBars"
-      css={css`
-        display: grid;
-        grid-template-columns: 110px minmax(${euiTheme.size.xxxxl}, 1fr) auto;
-        align-items: center;
-        column-gap: ${euiTheme.size.m};
-        row-gap: ${euiTheme.size.s};
-      `}
-    >
-      {rows.map(({ label, detail, share }) => (
-        <React.Fragment key={label}>
-          <EuiText size="xs">
-            <p>{label}</p>
-          </EuiText>
-          <div
-            role="img"
-            aria-label={`${label}: ${detail}`}
-            css={css`
-              height: ${euiTheme.size.xs};
-              border-radius: ${euiTheme.size.xxs};
-              background: ${euiTheme.colors.lightestShade};
-              overflow: hidden;
-            `}
-          >
+            <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+              <EuiFlexItem grow={false}>
+                <EuiTitle size="xs">
+                  <h4>{comparisonHeadline(comparison)}</h4>
+                </EuiTitle>
+              </EuiFlexItem>
+              {sample ? (
+                <EuiFlexItem grow={false}>
+                  <EuiBadge color="hollow" data-test-subj="proto11SampleHeadlineBadge">
+                    Sample
+                  </EuiBadge>
+                </EuiFlexItem>
+              ) : null}
+            </EuiFlexGroup>
             <div
               css={css`
-                height: 100%;
-                background: ${label === 'With Context' ? KNOWLEDGE_BLUE : AGENT_TEAL};
+                height: 20px;
               `}
-              style={{ width: `${share * 100}%` }}
             />
-          </div>
-          <EuiText size="xs">
-            <p>{detail}</p>
-          </EuiText>
-        </React.Fragment>
-      ))}
-    </div>
-  );
-};
+          </>
+        ) : null}
+        <div
+          css={css`
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+          `}
+        >
+          <ContextCompare
+            label="With Context"
+            steps={WITH_STEPS}
+            caption={comparisonCaption('1 retrieval', comparison.withContext.tokens)}
+            share={Math.min(
+              1,
+              comparison.withContext.tokens / Math.max(1, comparison.withoutContext.tokens)
+            )}
+          />
+          <ContextCompare
+            label="Without Context"
+            steps={WITHOUT_STEPS}
+            caption={comparisonCaption(
+              `${comparison.withoutContext.calls} calls`,
+              comparison.withoutContext.tokens
+            )}
+            share={1}
+          />
+        </div>
+      </>
+    ) : null}
+    {note ? (
+      <>
+        {comparison ? (
+          <div
+            css={css`
+              height: 20px;
+            `}
+          />
+        ) : null}
+        <EuiText size="xs" color="subdued">
+          <p>{note}</p>
+        </EuiText>
+      </>
+    ) : null}
+  </div>
+);
 
 /** KI flyout with the raw document, as stored in the AI index. */
 export const KiJsonFlyout = ({

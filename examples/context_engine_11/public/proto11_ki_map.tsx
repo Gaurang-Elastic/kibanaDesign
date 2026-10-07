@@ -588,6 +588,9 @@ export const Proto11KiMap = ({
       }
     : null;
   const flowSources = coverageSources;
+  const connectedCount = namespace.proto11?.connectedAgents?.length ?? 0;
+  const flowTooSmall = flowSources.length < 2 && connectedCount === 0;
+  const graphTooSmall = flowSources.length + sliceCount + connectedCount < 3;
 
   return (
     <div data-test-subj="proto11KiMap">
@@ -636,7 +639,11 @@ export const Proto11KiMap = ({
           background: ${euiTheme.colors.emptyShade};
         `}
       >
-        {mode === 'coverage' || mode === 'flow' ? (
+        {mode === 'flow' && flowTooSmall ? (
+          <EuiText size="s" data-test-subj="proto11KiMapEmpty">
+            <p>Not enough here to show a flow yet. Try Coverage.</p>
+          </EuiText>
+        ) : mode === 'coverage' || mode === 'flow' ? (
           <div
             css={css`
               padding: 16px;
@@ -661,7 +668,12 @@ export const Proto11KiMap = ({
             )}
           </div>
         ) : null}
-        {mode === 'graph' ? (
+        {mode === 'graph' && graphTooSmall ? (
+          <EuiText size="s" data-test-subj="proto11KiMapEmpty">
+            <p>Not enough here to show a graph yet. Try Coverage.</p>
+          </EuiText>
+        ) : null}
+        {mode === 'graph' && !graphTooSmall ? (
           <EuiButtonEmpty
             size="xs"
             onClick={fit}
@@ -676,7 +688,7 @@ export const Proto11KiMap = ({
             Fit
           </EuiButtonEmpty>
         ) : null}
-        {mode === 'graph' || mode === 'treemap' ? (
+        {(mode === 'graph' && !graphTooSmall) || mode === 'treemap' ? (
           <svg
             width={width}
             height={canvasHeight}

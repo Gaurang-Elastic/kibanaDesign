@@ -91,15 +91,22 @@ import {
   createSampleNamespace,
   curatedNamespaces,
   declineRerun,
-  indicatorSourceGroup,
+  displayedDerivation,
+  displayedProduces,
+  displayedReads,
+  goalById,
   proposalSummary,
   proto11AddedLine,
   TEMPLATES,
   proto11StatusPill,
+  repairEmptyAddon,
+  rerunAutomation,
   sampleNameFor,
   sampleScenarioOf,
+  rejectionMetaForAutomation,
   sendFixMessage,
   sourceHasOutstandingRejections,
+  sourceKiCount,
   startFullRun,
   startRerun,
   type CreateFromGoalOptions,
@@ -120,8 +127,8 @@ import {
   SAMPLE_QUESTION_LABEL,
 } from './proto11_sample_panel';
 import {
+  Proto11AutomationRejection,
   Proto11FixFlyout,
-  Proto11RejectedNotice,
   Proto11RunCallout,
   Proto11SampleCallout,
 } from './proto11_overview';
@@ -540,7 +547,7 @@ const ReadyCallout = ({
 }) => (
   <EuiCallOut
     color="success"
-    iconType="checkInCircleFilled"
+    iconType="checkCircleFill"
     title={READY_CALLOUT_TITLE}
     onDismiss={onDismiss}
   >
@@ -682,6 +689,18 @@ function ContextEngineApp({
         item.proto11.fix === 'rerunning' ||
         item.proto11.fix === 'fixed')
   );
+
+  useEffect(() => {
+    setNamespaces((current) => {
+      let changed = false;
+      const next = current.map((item) => {
+        const repaired = repairEmptyAddon(item);
+        if (repaired !== item) changed = true;
+        return repaired;
+      });
+      return changed ? next : current;
+    });
+  }, []);
 
   useEffect(() => {
     if (!hasActiveProto11Run) return;
@@ -936,6 +955,14 @@ function ContextEngineApp({
     const existing = namespaces.find((item) => item.name === targetName);
     if (!existing) return;
     const updated = addProposalToNamespace(existing, proposal);
+    setNamespaces((current) => current.map((item) => (item.name === targetName ? updated : item)));
+    openDetail(updated);
+  };
+
+  const rerunProposal = (targetName: string, proposal: Proto11Proposal) => {
+    const existing = namespaces.find((item) => item.name === targetName);
+    if (!existing) return;
+    const updated = rerunAutomation(existing, goalById(proposal.goal).template);
     setNamespaces((current) => current.map((item) => (item.name === targetName ? updated : item)));
     openDetail(updated);
   };
@@ -1459,7 +1486,7 @@ function ContextEngineApp({
     primaryActionItem: {
       id: 'create-ai-index',
       label: 'Create AI index',
-      iconType: 'plusCircle',
+      iconType: 'plusInCircle',
       run: proto11On ? openComposerPage : openNameForm,
       testId: 'contextEngineCreateAiIndex',
     },
@@ -1882,6 +1909,7 @@ function ContextEngineApp({
                 namespaces={namespaces}
                 onCreateFromGoal={createFromGoal}
                 onAddToIndex={addProposalToIndex}
+                onRerun={rerunProposal}
                 onCreateEmpty={openNameForm}
                 onExploreSample={trySample}
                 onAskAgent={openProposalAgent}
@@ -2136,6 +2164,7 @@ function ContextEngineApp({
                 namespaces={namespaces}
                 onCreateFromGoal={createFromGoal}
                 onAddToIndex={addProposalToIndex}
+                onRerun={rerunProposal}
                 onAskAgent={openProposalAgent}
                 onProposalChange={setCreateProposalOpen}
               />
@@ -2223,8 +2252,6 @@ function ContextEngineApp({
               <EuiFlexItem grow={false}>
                 <EuiButton
                   fill
-                  iconType="arrowRight"
-                  iconSide="right"
                   isDisabled={Boolean(createDisabledReason)}
                   onClick={createNamespace}
                 >
@@ -2269,13 +2296,6 @@ function ContextEngineApp({
       badges.unshift({ label: 'Exploration', color: 'hollow' });
     }
     const hideKnowledgeTab = Boolean(meta) && namespace.indicators.length === 0;
-    const sourcesWithIndicators = new Set(
-      meta
-        ? namespace.indicators.map(
-            (indicator) => indicatorSourceGroup(indicator, namespace.sources, meta.agent).name
-          )
-        : []
-    );
     const showUsageTab =
       USAGE_ENABLED &&
       flags.proto11Usage &&
@@ -2370,6 +2390,11 @@ function ContextEngineApp({
     const tracesDirty =
       tracesSignature(tracesDraft) !== tracesSignature(namespace.traces ?? []);
     const connectedAgents = meta?.connectedAgents ?? [];
+    const traceAgentName = (namespace.traces ?? []).find(
+      (trace) =>
+        trace.type === 'elastic_agent' &&
+        !connectedAgents.some((agent) => agent.name === trace.value)
+    )?.value;
     const agentsDirty =
       agentsDraft.map((item) => item.name).join('\n') !==
       connectedAgents.map((item) => item.name).join('\n');
@@ -2388,7 +2413,9 @@ function ContextEngineApp({
     };
     const openEditor = (panel: EditablePanel) => {
       if (panel === 'agents') {
-        setAgentsDraft(connectedAgents);
+        setAgentsDraft(
+          traceAgentName ? [...connectedAgents, { name: traceAgentName }] : connectedAgents
+        );
         setAgentsEditing(true);
         return;
       }
@@ -2510,7 +2537,7 @@ function ContextEngineApp({
           emphasis === 'empty' ? (
             <EuiButtonEmpty
               size="s"
-              iconType="arrowDown"
+              iconType="chevronSingleDown"
               iconSide="right"
               onClick={() => {
                 setAutomationsMenuOpen(null);
@@ -2523,7 +2550,7 @@ function ContextEngineApp({
             <EuiButton
               size="s"
               fill={emphasis === 'fill'}
-              iconType="arrowDown"
+              iconType="chevronSingleDown"
               iconSide="right"
               onClick={() => {
                 setAutomationsMenuOpen(null);
@@ -3001,7 +3028,9 @@ function ContextEngineApp({
                 ) : hasSources ? (
                   <>
                     <EuiSpacer size="m" />
-                    {namespace.sources.map((source) => (
+                    {namespace.sources.map((source) => {
+                      const produced = meta ? sourceKiCount(namespace, source) : 0;
+                      return (
                       <div key={source.id} className="contextEnginePrototype__row">
                         <EuiIcon type={source.icon} size="m" />
                         <div className="contextEnginePrototype__rowMain">
@@ -3012,37 +3041,35 @@ function ContextEngineApp({
                                 : source.name}
                             </strong>
                           </EuiText>
-                          {meta && !sourcesWithIndicators.has(source.name) ? (
+                          {meta ? (
                             <EuiText
                               size="xs"
                               color={
-                                sourceHasOutstandingRejections(meta, source.name)
+                                produced === 0 && sourceHasOutstandingRejections(namespace, source)
                                   ? 'warning'
                                   : 'subdued'
                               }
+                              data-test-subj="proto11SourceKiCount"
                             >
-                              <p>No Knowledge Indicators yet</p>
+                              <p>
+                                {produced === 0
+                                  ? 'No Knowledge Indicators yet'
+                                  : `${produced} ${
+                                      produced === 1
+                                        ? 'Knowledge Indicator'
+                                        : 'Knowledge Indicators'
+                                    }`}
+                              </p>
                             </EuiText>
                           ) : null}
                         </div>
                         <EuiBadge color="hollow">{sourceTypeLabel(source)}</EuiBadge>
                       </div>
-                    ))}
+                      );
+                    })}
                   </>
                 ) : null}
               </EuiPanel>
-              {automationProposalOpen && proto11On ? (
-                <div ref={proposalComposerRef} data-test-subj="proto11AutomationComposer">
-                  <Proto11IndexProposal
-                    namespace={namespace}
-                    onCreateAndRun={(proposal) => {
-                      addProposalToIndex(namespace.name, proposal);
-                      setAutomationProposalOpen(false);
-                    }}
-                  />
-                  <EuiSpacer size="l" />
-                </div>
-              ) : null}
               {automationsLocked ? (
                 <EuiPanel
                   hasBorder
@@ -3101,6 +3128,25 @@ function ContextEngineApp({
                       </div>
                     ) : null}
                   </div>
+                  {automationProposalOpen && proto11On ? (
+                    <>
+                      <EuiSpacer size="l" />
+                      <div ref={proposalComposerRef} data-test-subj="proto11AutomationComposer">
+                        <Proto11IndexProposal
+                          namespace={namespace}
+                          onCreateAndRun={(proposal) => {
+                            addProposalToIndex(namespace.name, proposal);
+                            setAutomationProposalOpen(false);
+                          }}
+                          onRerun={(proposal) => {
+                            rerunProposal(namespace.name, proposal);
+                            setAutomationProposalOpen(false);
+                          }}
+                          onCancel={() => setAutomationProposalOpen(false)}
+                        />
+                      </div>
+                    </>
+                  ) : null}
                   {hasAutomations ? <EuiSpacer size="m" /> : null}
                   {hasAutomations ? (
                     namespace.automations.map((automation) => (
@@ -3259,24 +3305,27 @@ function ContextEngineApp({
                             </p>
                           </EuiText>
                         ) : null}
-                        {meta && automation.templateId === meta.runTemplates[0] ? (
-                          <Proto11RejectedNotice
-                            meta={meta}
-                            onFix={() => setFixFlyoutFor(namespace.name)}
+                        {meta ? (
+                          <Proto11AutomationRejection
+                            namespace={namespace}
+                            automation={automation}
+                            onFix={() => setFixFlyoutFor(automation.id)}
                           />
                         ) : null}
                         <EuiText size="s">
                           <p>{automation.description}</p>
                         </EuiText>
-                        {meta && automation.derivation ? (
+                        {meta && automation.templateId ? (
                           <EuiText size="xs" color="subdued">
-                            <p>{automation.derivation}</p>
+                            <p>
+                              {displayedDerivation(automation.templateId, automation.derivation)}
+                            </p>
                           </EuiText>
                         ) : null}
                         <div className="contextEnginePrototype__automationIo">
                           <span className="contextEnginePrototype__automationIoLabel">Reads</span>
-                          {automation.reads.length > 0 ? (
-                            automation.reads.map((source) => (
+                          {displayedReads(namespace, automation).length > 0 ? (
+                            displayedReads(namespace, automation).map((source) => (
                               <EuiBadge key={source} color="hollow">
                                 {source}
                               </EuiBadge>
@@ -3286,12 +3335,12 @@ function ContextEngineApp({
                           )}
                           <EuiIcon type="arrowRight" size="s" color="subdued" />
                           <span className="contextEnginePrototype__automationIoLabel">Produces</span>
-                          {meta && automation.producesCount === 0 && !automation.hasRun ? (
+                          {meta && displayedProduces(namespace, automation) === 0 && !automation.hasRun ? (
                             <EuiBadge color="hollow">No Knowledge Indicators yet</EuiBadge>
                           ) : (
                             <EuiBadge color="hollow">
-                              {automation.producesCount}{' '}
-                              {automation.producesCount === 1
+                              {displayedProduces(namespace, automation)}{' '}
+                              {displayedProduces(namespace, automation) === 1
                                 ? 'Knowledge Indicator'
                                 : 'Knowledge Indicators'}
                             </EuiBadge>
@@ -3311,6 +3360,7 @@ function ContextEngineApp({
                   onDraftChange={setAgentsDraft}
                   agentBuilderHref={coreStart.http.basePath.prepend('/app/agent_builder')}
                   actions={connectAgentActions()}
+                  suggestedAgent={traceAgentName}
                 />
               ) : null}
             </div>
@@ -3384,18 +3434,37 @@ function ContextEngineApp({
             />
           ) : null}
         </PageBody>
-        {meta && fixFlyoutFor === namespace.name ? (
-          <Proto11FixFlyout
-            namespace={namespace}
-            meta={meta}
-            onClose={() => setFixFlyoutFor(null)}
-            onRerun={() => updateProto11Namespace(namespace.name, startRerun)}
-            onDecline={() => updateProto11Namespace(namespace.name, declineRerun)}
-            onSend={(message) =>
-              updateProto11Namespace(namespace.name, (item) => sendFixMessage(item, message))
-            }
-          />
-        ) : null}
+        {meta && fixFlyoutFor
+          ? (() => {
+              const fixAutomation = namespace.automations.find((item) => item.id === fixFlyoutFor);
+              const fixMeta = fixAutomation
+                ? rejectionMetaForAutomation(namespace, fixAutomation)
+                : undefined;
+              if (!fixAutomation || !fixMeta) return null;
+              return (
+                <Proto11FixFlyout
+                  namespace={namespace}
+                  meta={fixMeta}
+                  onClose={() => setFixFlyoutFor(null)}
+                  onRerun={() =>
+                    updateProto11Namespace(namespace.name, (item) =>
+                      startRerun(item, fixAutomation.id)
+                    )
+                  }
+                  onDecline={() =>
+                    updateProto11Namespace(namespace.name, (item) =>
+                      declineRerun(item, fixAutomation.id)
+                    )
+                  }
+                  onSend={(message) =>
+                    updateProto11Namespace(namespace.name, (item) =>
+                      sendFixMessage(item, message, fixAutomation.id)
+                    )
+                  }
+                />
+              );
+            })()
+          : null}
         {pendingPanelSwitch && activeEditPanel ? (
           <EuiConfirmModal
             title={`Discard changes to ${EDITABLE_PANEL_LABEL[activeEditPanel]}?`}

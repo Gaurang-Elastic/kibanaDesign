@@ -31,9 +31,7 @@ import {
 import { KiDetailFlyout } from './proto11_ki_detail';
 import { ComparisonBlock, KiPreviewCard } from './proto11_ki_preview';
 
-const ESTIMATE_NOTE =
-  'Estimated from a dry run against this AI index. Measured numbers appear in Usage once your agent is connected.';
-const SAMPLE_NOTE = 'Sample run on sample data.';
+const ESTIMATE_NOTE = 'Estimated from a dry run against this AI index.';
 
 const formatCount = (value: number) => value.toLocaleString('en-US');
 
@@ -229,8 +227,7 @@ export const Proto11TestQuestion = ({
                     }
                   : undefined
               }
-              showHeadline={false}
-              note={sample ? SAMPLE_NOTE : ESTIMATE_NOTE}
+              note={ESTIMATE_NOTE}
             />
           </EuiPanel>
         </>

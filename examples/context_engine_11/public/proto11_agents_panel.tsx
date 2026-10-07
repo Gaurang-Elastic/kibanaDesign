@@ -229,6 +229,7 @@ export const Proto11ConnectedAgentsPanel = ({
   guide,
   onSaveGuide,
   onDismissGuide,
+  suggestedAgent,
 }: {
   namespaceName: string;
   agents: ConnectedAgent[];
@@ -240,15 +241,19 @@ export const Proto11ConnectedAgentsPanel = ({
   guide?: Proto11ConnectGuide;
   onSaveGuide?: (agentName: string) => void;
   onDismissGuide?: () => void;
+  /** Traces agent that is not connected yet. Save adds it. */
+  suggestedAgent?: string;
 }) => {
   const [outside, setOutside] = useState(false);
   const [tab, setTab] = useState<OutsideTab>('mcp');
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState('');
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     setOutside(false);
     setTab('mcp');
+    setAdding(false);
   }, [editing]);
 
   const savedNames = agents.map((agent) => agent.name);
@@ -385,13 +390,49 @@ export const Proto11ConnectedAgentsPanel = ({
             </p>
           </EuiText>
           <EuiSpacer size="s" />
-          <EuiLink onClick={() => setOutside(false)}>Back to Agent Builder agents</EuiLink>
+          <EuiLink onClick={() => setOutside(false)}>Back to agents on Elastic</EuiLink>
         </div>
       );
     }
+    const showingSuggestion = Boolean(
+      suggestedAgent &&
+        draft.some((agent) => agent.name === suggestedAgent) &&
+        !savedNames.includes(suggestedAgent)
+    );
+    const otherDraft = draft.filter((agent) => !showingSuggestion || agent.name !== suggestedAgent);
+    const showSelect = !showingSuggestion || adding;
     return (
       <>
-        {draft.map((agent) => (
+        {showingSuggestion && suggestedAgent ? (
+          <div
+            className="contextEnginePrototype__row"
+            css={agentRowCss}
+            data-test-subj="proto11SuggestedTraceAgent"
+          >
+            <span css={agentIconCss}>
+              <EuiIcon type="productAgent" size="m" aria-hidden={true} />
+            </span>
+            <div className="contextEnginePrototype__rowMain">
+              <EuiText size="s">
+                <strong>{suggestedAgent}</strong>
+              </EuiText>
+              <EuiText size="xs" color="subdued">
+                <p>
+                  Its traces already feed this index. Connect it so it can retrieve the Knowledge
+                  Indicators.
+                </p>
+              </EuiText>
+            </div>
+            <EuiToolTip content={`Remove ${suggestedAgent}`} disableScreenReaderOutput>
+              <EuiButtonIcon
+                iconType="cross"
+                aria-label={`Remove ${suggestedAgent}`}
+                onClick={() => onDraftChange(draft.filter((item) => item.name !== suggestedAgent))}
+              />
+            </EuiToolTip>
+          </div>
+        ) : null}
+        {otherDraft.map((agent) => (
           <AgentRow
             key={agent.name}
             agent={agent}
@@ -401,8 +442,8 @@ export const Proto11ConnectedAgentsPanel = ({
           />
         ))}
         <EuiSpacer size="m" />
-        {available.length > 0 ? (
-          <EuiFormRow label="Agent Builder agent">
+        {showSelect && available.length > 0 ? (
+          <EuiFormRow label="Agents on Elastic">
             <EuiSelect
               compressed
               hasNoInitialSelection
@@ -415,11 +456,21 @@ export const Proto11ConnectedAgentsPanel = ({
               data-test-subj="proto11ConnectAgentSelect"
             />
           </EuiFormRow>
-        ) : (
+        ) : null}
+        {showSelect && available.length === 0 ? (
           <EuiText size="s" color="subdued">
-            <p>Every Agent Builder agent is connected.</p>
+            <p>Every agent on Elastic is connected.</p>
           </EuiText>
-        )}
+        ) : null}
+        {showingSuggestion && !adding && available.length > 0 ? (
+          <EuiLink
+            color="text"
+            onClick={() => setAdding(true)}
+            data-test-subj="proto11AddAnotherAgent"
+          >
+            Add another agent
+          </EuiLink>
+        ) : null}
         <EuiSpacer size="s" />
         <EuiLink onClick={() => setOutside(true)} data-test-subj="proto11ConnectUseOutside">
           Use outside Elastic

@@ -781,7 +781,9 @@ const fillerKis: PortedKi[] = FILLER.flatMap(({ template, source, titles }) =>
     content: `${title}. Written from ${sourceDisplayName(source)}.`,
     attributes: {},
     related: [],
-    rejected: source === 'nginx-error' || (source === 'cpu' && CPU_REJECTED.has(title)),
+    rejected:
+      template === 'overview' &&
+      (source === 'nginx-error' || (source === 'cpu' && CPU_REJECTED.has(title))),
   }))
 );
 
@@ -923,7 +925,7 @@ const FAILURES: Partial<
     example: 'Field guide: nginx error severities',
     error: 'Unknown column [error.msg], did you mean [error.message]?',
     query: 'FROM logs-nginx.error-default\n| STATS n = COUNT(*) BY error.msg',
-    fix: 'error.msg does not exist in logs-nginx.error-default. The field is error.message.',
+    fix: 'error.msg should be error.message.',
   },
   cpu: {
     reason: 'ES|QL syntax is invalid',
@@ -932,7 +934,7 @@ const FAILURES: Partial<
     error: "line 2:9: mismatched input 'BY' expecting {'(', ...}",
     query:
       'FROM metrics-system.cpu-default\n| STATS BY cloud.availability_zone AVG(system.cpu.total.norm.pct)',
-    fix: 'The CPU queries put BY before the aggregation.',
+    fix: 'BY before the aggregation.',
   },
 };
 
@@ -1083,9 +1085,53 @@ export const failureGroupsFor = (meta: Proto11Meta): FailureGroup[] => {
   });
 };
 
-export const sourceHasOutstandingRejections = (meta: Proto11Meta, sourceName: string) =>
-  outstandingRejected(meta) > 0 &&
-  failureGroupsFor(meta).some((group) => group.sourceName === sourceName);
+const sourceMatchesGroup = (source: NamespaceSource, groupName: string) => {
+  if (source.name === groupName || source.subtitle === groupName) return true;
+  const needle = source.name
+    .replace(/^FROM\s+/i, '')
+    .trim()
+    .toLowerCase();
+  return (
+    source.typeLabel === 'ES|QL' && needle.length >= 4 && groupName.toLowerCase().includes(needle)
+  );
+};
+
+/** Saved Knowledge Indicators whose source row is this one. */
+export const sourceKiCount = (namespace: Namespace, source: NamespaceSource): number => {
+  const meta = namespace.proto11;
+  if (!meta) return 0;
+  const names = namespace.indicators.map(
+    (indicator) => indicatorSourceGroup(indicator, namespace.sources, meta.agent).name
+  );
+  const exact = names.filter((name) => name === source.name || name === source.subtitle).length;
+  if (exact > 0) return exact;
+  const needle = source.name
+    .replace(/^FROM\s+/i, '')
+    .trim()
+    .toLowerCase();
+  if (source.typeLabel !== 'ES|QL' || needle.length < 4) return 0;
+  const claimed = new Set(
+    namespace.sources
+      .filter((item) => item.id !== source.id && item.typeLabel !== 'ES|QL')
+      .map((item) => item.name)
+  );
+  return names.filter((name) => name.toLowerCase().includes(needle) && !claimed.has(name)).length;
+};
+
+export const sourceHasOutstandingRejections = (
+  namespace: Namespace,
+  source: NamespaceSource
+): boolean => {
+  const meta = namespace.proto11;
+  if (!meta) return false;
+  return namespace.automations.some((automation) => {
+    const scoped = rejectionMetaForAutomation(namespace, automation);
+    if (!scoped || scoped.fix === 'rerunning' || scoped.fix === 'fixed' || scoped.fix === 'done') {
+      return false;
+    }
+    return failureGroupsFor(scoped).some((group) => sourceMatchesGroup(source, group.sourceName));
+  });
+};
 
 /** Agent statements shown in the first-pass callout, in order. */
 export const reasoningLinesFor = (meta: Proto11Meta): string[] => {
@@ -1359,7 +1405,7 @@ export const createProto11Namespace = ({
   connectFrom,
 }: CreateFromGoalOptions): Namespace => {
   const goal = goalById(goalId);
-  const chosen = sourceIds && sourceIds.length > 0 ? sourceIds : goal.defaultSources;
+  const chosen = sourceIds ?? [];
   const name = uniqueName(slugify(requestedName ?? '') || goal.baseName, takenNames);
   const indexName = backingIndexName(name);
   const agent = trace?.value;
@@ -1811,26 +1857,56 @@ const withTurns = (
   return { ...meta, fixChat: { card: card ?? chat.card, turns: [...chat.turns, ...turns] } };
 };
 
-/** Only the automations that produced rejected KIs take part in a re-run. */
-const setRerunStatus = (
+/** Sources the automation actually read. An add-on uses its own list, never the first run's. */
+const sourceIdsForAutomation = (
+  namespace: Namespace,
+  automation: Automation
+): Proto11SourceId[] => {
+  const meta = namespace.proto11;
+  if (!meta || !automation.templateId) return [];
+  const stored =
+    meta.addon?.automationId === automation.id
+      ? meta.addon.sourceIds
+      : meta.runTemplates.includes(automation.templateId)
+      ? meta.sourceIds
+      : [];
+  return stored.length > 0 ? stored : inferredSourceIds(namespace);
+};
+
+const planForAutomation = (namespace: Namespace, automation: Automation): Plan => {
+  const meta = namespace.proto11;
+  if (!meta || !automation.templateId) return { sample: [], full: [], rejected: [] };
+  return planFor({
+    sourceIds: sourceIdsForAutomation(namespace, automation),
+    runTemplates: [automation.templateId],
+    sample: false,
+  });
+};
+
+/** Adds this automation's fixed rejections without rewriting the rest of the index. */
+const applyRerunProgress = (
   namespace: Namespace,
   meta: Proto11Meta,
-  runStatus: Automation['runStatus'],
-  ran: boolean
+  automation: Automation,
+  fixedCount: number
 ): Namespace => {
-  const templates = new Set(planFor(meta).rejected.map((ki) => ki.template));
+  const incoming = planForAutomation(namespace, automation)
+    .rejected.slice(0, fixedCount)
+    .map((ki) => toIndicator(ki));
+  const incomingIds = new Set(incoming.map((item) => item.id));
+  const indicators = [
+    ...namespace.indicators.filter((item) => !incomingIds.has(item.id)),
+    ...incoming,
+  ];
+  const base = meta.fixProducesBase ?? automation.producesCount;
   return {
     ...namespace,
-    ...(ran ? { updated: 'just now' } : {}),
-    automations: namespace.automations.map((automation) =>
-      automation.templateId && templates.has(automation.templateId)
-        ? {
-            ...automation,
-            runStatus,
-            ...(ran ? { hasRun: true, lastRunAt: 'just now' } : {}),
-          }
-        : automation
+    indicators,
+    knowledge: statsFromIndicators(indicators),
+    automations: namespace.automations.map((item) =>
+      item.id === automation.id ? { ...item, producesCount: base + incoming.length } : item
     ),
+    proto11: meta,
   };
 };
 
@@ -1885,8 +1961,46 @@ const advanceAddon = (namespace: Namespace): Namespace => {
   };
 };
 
+/** Writes the sample a finished add-on pass missed when its source list was empty. */
+export const repairEmptyAddon = (namespace: Namespace): Namespace => {
+  const meta = namespace.proto11;
+  const addon = meta?.addon;
+  if (!meta || meta.sample || !addon || addon.phase !== 'sampleReady' || addon.written > 0) {
+    return namespace;
+  }
+  const ids = addon.sourceIds.length > 0 ? addon.sourceIds : inferredSourceIds(namespace);
+  if (ids.length === 0) return namespace;
+  const plan = planFor({ sourceIds: ids, runTemplates: [addon.template], sample: false });
+  if (plan.sample.length === 0) return namespace;
+  const incoming = plan.sample.map((ki) => toIndicator(ki));
+  const incomingIds = new Set(incoming.map((indicator) => indicator.id));
+  const indicators = [
+    ...namespace.indicators.filter((indicator) => !incomingIds.has(indicator.id)),
+    ...incoming,
+  ];
+  return {
+    ...namespace,
+    indicators,
+    knowledge: statsFromIndicators(indicators),
+    automations: namespace.automations.map((automation) => {
+      if (automation.id !== addon.automationId) return automation;
+      const reads =
+        automation.reads.length > 0
+          ? automation.reads
+          : namespace.sources.map((source) => source.name);
+      return { ...automation, reads, producesCount: incoming.length };
+    }),
+    proto11: {
+      ...meta,
+      addon: { ...addon, sourceIds: ids, written: incoming.length },
+    },
+  };
+};
+
 /** One step of the simulated runs. Returns the same object when nothing changes. */
 export const advanceProto11 = (namespace: Namespace): Namespace => {
+  const repaired = repairEmptyAddon(namespace);
+  if (repaired !== namespace) return repaired;
   const meta = namespace.proto11;
   if (!meta) return namespace;
   if (meta.addon?.phase === 'firstPass') return advanceAddon(namespace);
@@ -1926,31 +2040,54 @@ export const advanceProto11 = (namespace: Namespace): Namespace => {
   }
 
   if (next.fix === 'rerunning') {
+    const automation = namespace.automations.find((item) => item.id === next.fixAutomationId);
+    if (!automation?.templateId) {
+      return { ...namespace, proto11: { ...next, fix: 'none', fixTick: 0 } };
+    }
+    const rejected = planForAutomation(namespace, automation).rejected;
     const fixTick = next.fixTick + 1;
-    const fixed = Math.min(
-      plan.rejected.length,
-      Math.round((plan.rejected.length * fixTick) / RERUN_TICKS)
-    );
+    const fixed = Math.min(rejected.length, Math.round((rejected.length * fixTick) / RERUN_TICKS));
     if (fixTick >= RERUN_TICKS) {
       const finished: Proto11Meta = {
         ...next,
         fix: 'fixed',
         fixTick: 0,
-        written: { ...next.written, fixed: plan.rejected.length },
+        written: { ...next.written, fixed: rejected.length },
       };
-      const total = writtenItems(finished).length;
-      next = withTurns(finished, [
+      const noted = withTurns(finished, [
         {
           role: 'agent',
-          text: `Done. ${total} Knowledge Indicators ready, 0 rejected.`,
+          text: `Done. ${rejected.length} Knowledge Indicators ready, 0 rejected.`,
         },
       ]);
-      return setRerunStatus(withWritten(namespace, next), next, statusAfterRerun(next), true);
+      const written = applyRerunProgress(namespace, noted, automation, rejected.length);
+      return {
+        ...written,
+        updated: 'just now',
+        automations: written.automations.map((item) =>
+          item.id === automation.id
+            ? {
+                ...item,
+                runStatus: statusAfterRerun(noted),
+                hasRun: true,
+                lastRunAt: 'just now',
+              }
+            : item
+        ),
+      };
     }
-    next = { ...next, fixTick, written: { ...next.written, fixed } };
-  } else if (next.fix === 'fixed') {
+    return applyRerunProgress(
+      namespace,
+      { ...next, fixTick, written: { ...next.written, fixed } },
+      automation,
+      fixed
+    );
+  }
+  if (next.fix === 'fixed') {
     const fixTick = next.fixTick + 1;
-    next = fixTick >= NOTE_TICKS ? { ...next, fix: 'done', fixTick: 0 } : { ...next, fixTick };
+    const updated =
+      fixTick >= NOTE_TICKS ? { ...next, fix: 'done', fixTick: 0 } : { ...next, fixTick };
+    return { ...namespace, proto11: updated };
   }
 
   return next === meta ? namespace : withWritten(namespace, next);
@@ -1963,54 +2100,102 @@ export const startFullRun = (namespace: Namespace): Namespace => {
   return setRunStatus({ ...namespace, proto11: next }, next, 'running', false);
 };
 
-export const startRerun = (namespace: Namespace): Namespace => {
-  const meta = namespace.proto11;
-  if (!meta || meta.fix !== 'none') return namespace;
-  const next: Proto11Meta = { ...withTurns(meta, [], 'rerun'), fix: 'rerunning', fixTick: 0 };
-  return setRerunStatus({ ...namespace, proto11: next }, next, 'running', false);
+const producesBaseFor = (namespace: Namespace, automation: Automation): number => {
+  if (automation.producesCount > 0) return automation.producesCount;
+  if (!automation.hasRun || !automation.templateId) return 0;
+  const uri = workflowUri(automation.templateId);
+  const written = namespace.indicators.filter(
+    (indicator) => indicator.governance.provenance.created_by.uri === uri
+  ).length;
+  if (written > 0) return written;
+  return planForAutomation(namespace, automation).sample.length;
 };
 
-export const declineRerun = (namespace: Namespace): Namespace => {
+/** Chat stays with the automation that opened it. A different card starts a fresh one. */
+const chatForAutomation = (meta: Proto11Meta, automationId: string): Proto11Meta =>
+  meta.fix === 'none' && meta.fixAutomationId !== automationId
+    ? { ...meta, fixChat: { card: 'confirm', turns: [] }, fixAutomationId: automationId }
+    : meta;
+
+export const startRerun = (namespace: Namespace, automationId: string): Namespace => {
+  const meta = namespace.proto11;
+  const automation = namespace.automations.find((item) => item.id === automationId);
+  if (!meta || !automation?.templateId || meta.fix !== 'none') return namespace;
+  if (planForAutomation(namespace, automation).rejected.length === 0) return namespace;
+  const next: Proto11Meta = {
+    ...withTurns(chatForAutomation(meta, automationId), [], 'rerun'),
+    fix: 'rerunning',
+    fixTick: 0,
+    fixAutomationId: automationId,
+    fixProducesBase: producesBaseFor(namespace, automation),
+    written: { ...meta.written, fixed: 0 },
+  };
+  return {
+    ...namespace,
+    automations: namespace.automations.map((item) =>
+      item.id === automationId ? { ...item, runStatus: 'running' } : item
+    ),
+    proto11: next,
+  };
+};
+
+export const declineRerun = (namespace: Namespace, automationId: string): Namespace => {
   const meta = namespace.proto11;
   if (!meta || meta.fix !== 'none') return namespace;
   return {
     ...namespace,
-    proto11: withTurns(
-      meta,
-      [
-        {
-          role: 'agent',
-          text: 'The automation is already fixed; the next scheduled run will pick them up.',
-        },
-      ],
-      'declined'
-    ),
+    proto11: {
+      ...withTurns(
+        chatForAutomation(meta, automationId),
+        [
+          {
+            role: 'agent',
+            text: 'The automation is already fixed; the next scheduled run will pick them up.',
+          },
+        ],
+        'declined'
+      ),
+      fixAutomationId: automationId,
+    },
   };
 };
 
 const RERUN_REPLY = /^(?:yes|run it|yes,? run it)[.!]*$/i;
 
-const fixFallbackReply = (meta: Proto11Meta) => {
-  if (meta.fix === 'rerunning') return 'Still re-running. I will post here when it finishes.';
-  if (meta.fix !== 'none') return 'Nothing is waiting to re-run.';
-  const total = rejectedTotal(meta);
+const fixFallbackReply = (namespace: Namespace, automationId: string) => {
+  const meta = namespace.proto11;
+  const automation = namespace.automations.find((item) => item.id === automationId);
+  if (!meta || !automation) return 'Nothing is waiting to re-run.';
+  if (meta.fixAutomationId === automationId && meta.fix === 'rerunning') {
+    return 'Still re-running. I will post here when it finishes.';
+  }
+  if (meta.fixAutomationId === automationId && meta.fix !== 'none') {
+    return 'Nothing is waiting to re-run.';
+  }
+  const total = planForAutomation(namespace, automation).rejected.length;
   return `Reply yes to re-run the ${total} rejected Knowledge ${
     total === 1 ? 'Indicator' : 'Indicators'
   }.`;
 };
 
 /** A message typed in the fix panel. "yes" or "run it" confirms the re-run. */
-export const sendFixMessage = (namespace: Namespace, message: string): Namespace => {
+export const sendFixMessage = (
+  namespace: Namespace,
+  message: string,
+  automationId: string
+): Namespace => {
   const meta = namespace.proto11;
   const text = message.trim();
   if (!meta || !text) return namespace;
-  const asked = { ...namespace, proto11: withTurns(meta, [{ role: 'user', text }]) };
-  if (meta.fix === 'none' && RERUN_REPLY.test(text)) return startRerun(asked);
+  if (meta.fix !== 'none' && meta.fixAutomationId !== automationId) return namespace;
+  const scoped = chatForAutomation(meta, automationId);
+  const asked = { ...namespace, proto11: withTurns(scoped, [{ role: 'user', text }]) };
+  if (scoped.fix === 'none' && RERUN_REPLY.test(text)) return startRerun(asked, automationId);
   return {
     ...namespace,
-    proto11: withTurns(meta, [
+    proto11: withTurns(scoped, [
       { role: 'user', text },
-      { role: 'agent', text: fixFallbackReply(meta) },
+      { role: 'agent', text: fixFallbackReply(namespace, automationId) },
     ]),
   };
 };
@@ -2043,6 +2228,8 @@ export interface Proto11Proposal {
   sourcesBecause: string;
   /** Sources the question path matched, shown with a found badge. */
   foundIds: Proto11SourceId[];
+  /** Sources inferred from the attached agent's traces. Shown with a from-traces badge. */
+  traceSourceIds?: Proto11SourceId[];
   trace?: IndexTrace;
   /** The question that produced this proposal, when the path started from one. */
   question?: string;
@@ -2062,8 +2249,6 @@ export const proposalSummary = (proposal: Proto11Proposal, name: string): string
 
 const uniqueIds = (ids: Proto11SourceId[]) => ids.filter((id, index) => ids.indexOf(id) === index);
 
-const quoted = (words: string[]) => joinList(words.map((word) => `"${word}"`));
-
 export const proposeFromAgent = (
   agent: string,
   traceType: IndexTrace['type'],
@@ -2073,8 +2258,7 @@ export const proposeFromAgent = (
   const top = questions
     .filter((question) => question.failures !== undefined)
     .sort((a, b) => (b.failures ?? 0) - (a.failures ?? 0))[0];
-  const traced = uniqueIds(questions.flatMap((question) => question.sourceIds));
-  const sourceIds = traced.length > 0 ? traced : goalById('gaps').defaultSources;
+  const sourceIds = uniqueIds(questions.flatMap((question) => question.sourceIds));
   return {
     path: 'agent',
     goal: 'gaps',
@@ -2084,11 +2268,11 @@ export const proposeFromAgent = (
       : `because ${agent} has no traces yet, so it starts once tracing is connected`,
     sourceIds,
     sourcesBecause:
-      questions.length > 0
+      questions.length > 0 && sourceIds.length > 0
         ? `because its questions name ${joinList(
             questions.map((question) => question.topic)
           )}, which live in ${joinList(sourceIds.map(sourceDisplayName))}`
-        : 'because there are no traces to read yet, these are the defaults for this automation',
+        : 'because there are no traces to read yet',
     foundIds: [],
     trace: { value: agent, type: traceType },
   };
@@ -2128,6 +2312,16 @@ export const proposeFromData = (
   };
 };
 
+export interface ComposerInput {
+  text: string;
+  agent?: { name: string; traceType: IndexTrace['type'] };
+  sourceIds: Proto11SourceId[];
+  takenNames: string[];
+}
+
+const tracedSourceIds = (agent: NonNullable<ComposerInput['agent']>) =>
+  uniqueIds(traceQuestionsFor(agent.name).flatMap((question) => question.sourceIds));
+
 const NAME_HINTS: Array<[RegExp, string]> = [
   [/saturat/i, 'saturation'],
   [/checkout/i, 'checkout'],
@@ -2144,131 +2338,100 @@ const nameFromQuestion = (text: string) => {
   return `web-ops-${hint ? hint[1] : 'questions'}`;
 };
 
-export const proposeFromQuestion = (text: string, takenNames: string[]): Proto11Proposal => {
+const quoted = (words: string[]) => joinList(words.map((word) => `"${word}"`));
+
+/** Template for free text, from the same source-keyword match the question path used. */
+const keywordTemplate = (
+  text: string,
+  takenNames: string[]
+): { goal: Proto11GoalId; because: string; name: string; foundIds: Proto11SourceId[] } => {
   const name = uniqueName(nameFromQuestion(text), takenNames);
   const matches = WEB_OPS_SOURCES.map((source) => ({
     id: source.id,
     words: matchedWords(text, source.keywords),
   })).filter((match) => match.words.length > 0);
-
   if (matches.length === 0) {
     return {
-      path: 'question',
       goal: 'indices',
       name,
-      automationBecause:
-        'because the question does not name a source, so it starts with an overview of your indices',
-      sourceIds: goalById('indices').defaultSources,
-      sourcesBecause: 'because nothing in the question matched a source, these are the defaults',
       foundIds: [],
-      question: text.trim(),
+      because:
+        'because the question does not name a source, so it starts with an overview of your indices',
     };
   }
-
-  const sourceIds = matches.map((match) => match.id);
+  const foundIds = matches.map((match) => match.id);
   const words = matches
     .flatMap((match) => match.words)
     .filter(
       (word, index, all) =>
         all.findIndex((other) => other.toLowerCase() === word.toLowerCase()) === index
     );
-  const hasIndex = sourceIds.some((id) => sourceById(id).kind === 'Index');
+  const hasIndex = foundIds.some((id) => sourceById(id).kind === 'Index');
   return {
-    path: 'question',
     goal: hasIndex ? 'indices' : 'docs',
     name,
-    automationBecause: `because the question names ${quoted(words)}, which live in ${joinList(
-      sourceIds.map(sourceDisplayName)
+    foundIds,
+    because: `because the question names ${quoted(words)}, which live in ${joinList(
+      foundIds.map(sourceDisplayName)
     )}`,
-    sourceIds,
-    sourcesBecause: `because ${joinList(
-      matches.map((match) => `${sourceDisplayName(match.id)} matched ${quoted(match.words)}`)
-    )}`,
-    foundIds: sourceIds,
-    question: text.trim(),
   };
 };
 
-export interface ComposerInput {
-  text: string;
-  agent?: { name: string; traceType: IndexTrace['type'] };
-  sourceIds: Proto11SourceId[];
-  takenNames: string[];
-}
-
-const attachedLine = (ids: Proto11SourceId[]) =>
-  `you attached ${joinList(ids.map(sourceDisplayName))}`;
-
-/** One composer, three paths: text routes to the question path, else agent, else data. */
+/**
+ * The text picks the template. A chip maps to one template; other text uses the keyword match.
+ * An attached agent adds its traces as evidence and infers sources. It does not change the template.
+ * Learn from traces is never proposed here.
+ */
 export const proposeFromComposer = ({
   text,
   agent,
   sourceIds,
   takenNames,
 }: ComposerInput): Proto11Proposal => {
-  const trace = agent ? { trace: { value: agent.name, type: agent.traceType } } : {};
-
-  if (text.trim()) {
-    const problem = problemFor(text);
-    if (problem) {
-      const ids = sourceIds.length > 0 ? sourceIds : [...problem.defaultSources];
-      const hasIndex = ids.some((id) => sourceById(id).kind === 'Index');
-      return {
-        path: 'question',
-        goal: hasIndex ? 'indices' : 'docs',
-        name: uniqueName(problem.baseName, takenNames),
-        automationBecause: `because you said ${problem.said}, and ${gapsLine(ids)}`,
-        sourceIds: ids,
-        sourcesBecause:
-          sourceIds.length > 0
-            ? `because you attached ${joinList(sourceIds.map(sourceDisplayName))}`
-            : `because ${gapsLine(ids)}`,
-        foundIds: [],
-        question: text.trim(),
-        ...trace,
-      };
-    }
-    const base = proposeFromQuestion(text, takenNames);
-    if (sourceIds.length === 0) return { ...base, ...trace };
-    if (base.foundIds.length === 0) {
-      const fromData = proposeFromData(sourceIds, takenNames);
-      return {
-        ...base,
-        goal: fromData.goal,
-        automationBecause: fromData.automationBecause,
-        sourceIds,
-        sourcesBecause: `because the question does not name a source, and ${attachedLine(
-          sourceIds
-        )}`,
-        ...trace,
-      };
-    }
-    const extra = sourceIds.filter((id) => !base.sourceIds.includes(id));
-    const merged = uniqueIds([...base.sourceIds, ...sourceIds]);
-    return {
-      ...base,
-      goal: merged.some((id) => sourceById(id).kind === 'Index') ? 'indices' : 'docs',
-      sourceIds: merged,
-      sourcesBecause:
-        extra.length > 0
-          ? `${base.sourcesBecause}, and ${attachedLine(extra)}`
-          : base.sourcesBecause,
-      ...trace,
-    };
+  const trimmed = text.trim();
+  const problem = problemFor(trimmed);
+  const keyword = keywordTemplate(trimmed, takenNames);
+  const goal = problem?.goal ?? keyword.goal;
+  const traced = agent ? tracedSourceIds(agent) : [];
+  const ids = uniqueIds([...traced, ...sourceIds]);
+  const questions = agent ? traceQuestionsFor(agent.name) : [];
+  let sourcesBecause: string;
+  if (traced.length > 0 && sourceIds.length > 0) {
+    sourcesBecause = `because you attached ${joinList(
+      sourceIds.map(sourceDisplayName)
+    )}, and its questions name ${joinList(questions.map((question) => question.topic))}`;
+  } else if (traced.length > 0) {
+    sourcesBecause = `because its questions name ${joinList(
+      questions.map((question) => question.topic)
+    )}, which live in ${joinList(traced.map(sourceDisplayName))}`;
+  } else if (sourceIds.length === 1) {
+    sourcesBecause = 'because you picked it';
+  } else if (sourceIds.length > 1) {
+    sourcesBecause = 'because you picked them';
+  } else {
+    sourcesBecause = 'because there are no traces to read yet';
   }
-
-  if (agent) {
-    const base = proposeFromAgent(agent.name, agent.traceType, takenNames);
-    const extra = sourceIds.filter((id) => !base.sourceIds.includes(id));
-    if (extra.length === 0) return base;
-    return {
-      ...base,
-      sourceIds: [...base.sourceIds, ...extra],
-      sourcesBecause: `${base.sourcesBecause}, and ${attachedLine(extra)}`,
-    };
-  }
-
-  return proposeFromData(sourceIds, takenNames);
+  const automationBecause = problem
+    ? ids.length
+      ? `because you said ${problem.said}, and ${gapsLine(ids)}`
+      : `because you said ${problem.said}`
+    : keyword.because;
+  return {
+    path: 'question',
+    goal,
+    name: problem ? uniqueName(problem.baseName, takenNames) : keyword.name,
+    automationBecause,
+    sourceIds: ids,
+    sourcesBecause,
+    foundIds: keyword.foundIds.filter((id) => ids.includes(id)),
+    ...(trimmed ? { question: trimmed } : {}),
+    ...(agent
+      ? {
+          traceSourceIds: traced,
+          trace: { value: agent.name, type: agent.traceType },
+        }
+      : {}),
+  };
 };
 
 const catalogSources = [...WEB_OPS_SOURCES, ...HIGHER_ED_SOURCES];
@@ -2280,45 +2443,120 @@ const sourceIdsOf = (namespace: Namespace): Proto11SourceId[] => {
   return uniqueIds([...(namespace.proto11?.sourceIds ?? []), ...fromNames]);
 };
 
-const sourceKindClause = (ids: Proto11SourceId[]): string => {
-  const indices = ids.filter((id) => sourceById(id).kind === 'Index').length;
-  const connectors = ids.length - indices;
-  if (ids.length === 0) return 'no sources are attached yet';
-  if (connectors === 0 && indices === 1) return 'the source is an index';
-  if (connectors === 0 && indices === 2) return 'both sources are indices';
-  if (connectors === 0) return 'all sources are indices';
-  if (indices === 0 && connectors === 1) return 'the source is a document connector';
-  if (indices === 0) return 'the sources are document connectors';
-  return `the sources are ${kindPhrase(ids)}`;
+/** Catalog sources named by an ES|QL query when the index has no catalog source id. */
+const inferredSourceIds = (namespace: Namespace): Proto11SourceId[] => {
+  const named = catalogSources
+    .filter((source) => namespace.sources.some((item) => item.name === source.name))
+    .map((source) => source.id);
+  if (named.length > 0) return uniqueIds(named);
+  const needles = namespace.sources
+    .map((source) =>
+      source.name
+        .replace(/^FROM\s+/i, '')
+        .trim()
+        .toLowerCase()
+    )
+    .filter((needle) => needle.length >= 4);
+  return uniqueIds(
+    catalogSources
+      .filter((source) => needles.some((needle) => source.name.toLowerCase().includes(needle)))
+      .map((source) => source.id)
+  );
 };
 
-const mentionedWords = (text: string, ids: Proto11SourceId[]): string[] => {
-  const words: string[] = [];
-  ids.forEach((id) => {
-    const word = matchedWords(text, sourceById(id).keywords)[0];
-    if (word && !words.some((item) => item.toLowerCase() === word.toLowerCase())) words.push(word);
-  });
-  return words;
+/** Source badges for an automation card. Falls back to the sources on the index. */
+export const displayedReads = (namespace: Namespace, automation: Automation): string[] => {
+  if (automation.reads.length > 0) return automation.reads;
+  return namespace.sources.map((source) => source.name);
 };
 
-/** Proposal for an existing index, from its description and sources. No question. */
+/** Knowledge Indicators this automation wrote. */
+export const displayedProduces = (namespace: Namespace, automation: Automation): number => {
+  if (automation.producesCount > 0 || !automation.hasRun || !automation.templateId) {
+    return automation.producesCount;
+  }
+  const uri = workflowUri(automation.templateId);
+  const written = namespace.indicators.filter(
+    (indicator) => indicator.governance.provenance.created_by.uri === uri
+  ).length;
+  if (written > 0) return written;
+  const ids = inferredSourceIds(namespace);
+  if (ids.length === 0) return 0;
+  return planFor({
+    sourceIds: ids,
+    runTemplates: [automation.templateId],
+    sample: Boolean(namespace.proto11?.sample),
+  }).sample.length;
+};
+
+/** Short name for a source in a because line. ES|QL queries drop the leading FROM. */
+const sourceReadName = (source: NamespaceSource): string => {
+  const from = /^FROM\s+(.+)$/i.exec(source.name.trim());
+  return from ? from[1] : source.name;
+};
+
+/**
+ * Two or more indices map across sources. A document connector digests pages.
+ * An index or an ES|QL query gets a field guide.
+ */
+const goalForIndex = (namespace: Namespace): Proto11GoalId => {
+  const sources = namespace.sources;
+  const indexCount = sources.filter((source) => source.typeLabel === 'Index').length;
+  const connectorOnly =
+    sources.length > 0 &&
+    sources.every((source) => source.typeLabel === 'Connector' || source.typeLabel === 'Managed');
+  if (indexCount >= 2) return 'multi';
+  if (connectorOnly) return 'docs';
+  return 'indices';
+};
+
+const descriptionAsk = (intent: string, goal: Proto11GoalId): string => {
+  const text = intent.toLowerCase();
+  if (/\bfields?\b/.test(text) && /\bquer/.test(text)) return 'field and query guidance';
+  if (/\bdigest\b|\beach page\b|\beach document\b/.test(text)) return 'a digest of each document';
+  if (/\bwhich source\b|\bmap of\b/.test(text))
+    return 'a map of which source answers which question';
+  if (goal === 'docs') return 'a digest of each document';
+  if (goal === 'multi') return 'a map of which source answers which question';
+  return 'field and query guidance';
+};
+
+/** Proposal for an existing index. The template follows its description and sources. */
 export const proposeFromIndex = (namespace: Namespace): Proto11Proposal => {
   const sourceIds = sourceIdsOf(namespace);
-  const words = mentionedWords(namespace.intent, sourceIds);
-  const clause = sourceKindClause(sourceIds);
-  const hasIndex = sourceIds.some((id) => sourceById(id).kind === 'Index');
+  const goal = goalForIndex(namespace);
+  const names = namespace.sources.map(sourceReadName);
+  const reads = names.length > 0 ? joinList(names) : 'nothing yet';
   return {
     path: 'data',
-    goal: sourceIds.length === 0 || hasIndex ? 'indices' : 'docs',
+    goal,
     name: namespace.name,
-    automationBecause:
-      words.length > 0
-        ? `because the description mentions ${joinList(words)}, and ${clause}`
-        : `because the description does not name a source, and ${clause}`,
+    automationBecause: `because this index reads ${reads} and the description asks for ${descriptionAsk(
+      namespace.intent,
+      goal
+    )}.`,
     sourceIds,
     sourcesBecause: 'Uses the sources on this index',
     foundIds: [],
   };
+};
+
+/**
+ * Second suggestion under an index proposal. Absent when the index has no traces,
+ * or none of those traces record a failed question.
+ */
+export const tracesSuggestionFor = (namespace: Namespace): string | undefined => {
+  for (const trace of namespace.traces ?? []) {
+    const agent = PICKER_AGENTS.find((item) => item.name === trace.value);
+    const failed =
+      agent?.failed ??
+      traceQuestionsFor(trace.value).reduce((sum, question) => sum + (question.failures ?? 0), 0);
+    if (failed > 0) {
+      const noun = failed === 1 ? 'question' : 'questions';
+      return `Also suggested: Learn from traces, because ${trace.value} failed ${failed} ${noun} last week`;
+    }
+  }
+  return undefined;
 };
 
 const agentNamesOf = (namespace: Namespace): string[] => {
@@ -2390,14 +2628,125 @@ export const findReuseTarget = (
   return ranked[0]?.match;
 };
 
+const TEMPLATE_DERIVATION: Record<Proto11TemplateId, string> = {
+  overview: 'Chosen because the sources are indices and need a field guide.',
+  xsource: 'Chosen because several sources need a map of which one answers which question.',
+  digest: 'Chosen because the sources are documents and need a digest of each page.',
+  profiles: 'Chosen because the sources name services that need a profile.',
+  gaps: 'Chosen because this index has traces, so it can answer the questions the agent got wrong.',
+};
+
+const derivationMatchesTemplate = (template: Proto11TemplateId, text: string): boolean => {
+  const line = text.toLowerCase();
+  switch (template) {
+    case 'overview':
+      return /overview|indic|searching|field guide|fields with no guide|an index/.test(line);
+    case 'xsource':
+      return /several|cross-source|join|which source|sources well/.test(line);
+    case 'digest':
+      return /document|digest|runbook|connector/.test(line);
+    case 'profiles':
+      return /profile|service|entit/.test(line);
+    case 'gaps':
+      return /trace|struggled|got wrong|failed/.test(line);
+  }
+};
+
+/** The Chosen-because line for an automation card. A stored line is kept only when it belongs to this template. */
+export const displayedDerivation = (template: Proto11TemplateId, stored?: string): string => {
+  if (stored && derivationMatchesTemplate(template, stored)) return stored;
+  return TEMPLATE_DERIVATION[template];
+};
+
+/**
+ * Rejections, fix state, and chat for this automation only.
+ * An add-on never reads the first automation's plan.
+ */
+export const rejectionMetaForAutomation = (
+  namespace: Namespace,
+  automation: Automation
+): Proto11Meta | undefined => {
+  const meta = namespace.proto11;
+  const template = automation.templateId;
+  if (!meta || !template || !automation.hasRun) return undefined;
+  const addon = meta.addon?.automationId === automation.id ? meta.addon : undefined;
+  if (addon?.phase === 'firstPass') return undefined;
+  const inPrimaryRun = meta.runTemplates.includes(template) && !addon;
+  if (inPrimaryRun && meta.phase === 'firstPass') return undefined;
+  const ownsFix = meta.fixAutomationId === automation.id;
+  return {
+    ...meta,
+    sourceIds: sourceIdsForAutomation(namespace, automation),
+    runTemplates: [template],
+    phase: inPrimaryRun ? meta.phase : 'sampleReady',
+    sample: inPrimaryRun ? meta.sample : false,
+    fix: ownsFix ? meta.fix : 'none',
+    fixChat: ownsFix ? meta.fixChat : undefined,
+    written: ownsFix ? meta.written : { sample: 0, full: 0, fixed: 0 },
+  };
+};
+
+/** Starts the existing automation's first pass again. Does not add a second copy. */
+export const rerunAutomation = (namespace: Namespace, template: Proto11TemplateId): Namespace => {
+  const meta = namespace.proto11;
+  const automation = namespace.automations.find((item) => item.templateId === template);
+  if (!meta || !automation) return namespace;
+  const reset = (item: Automation): Automation =>
+    item.templateId === template
+      ? { ...item, runStatus: 'firstPass', hasRun: false, producesCount: 0, lastRunAt: null }
+      : item;
+  if (!meta.runTemplates.includes(template)) {
+    return {
+      ...namespace,
+      updated: 'just now',
+      automations: namespace.automations.map(reset),
+      proto11: {
+        ...meta,
+        addon: {
+          template,
+          sourceIds:
+            sourceIdsOf(namespace).length > 0
+              ? sourceIdsOf(namespace)
+              : inferredSourceIds(namespace),
+          automationId: automation.id,
+          tick: 0,
+          written: 0,
+          phase: 'firstPass',
+        },
+      },
+    };
+  }
+  const nextMeta: Proto11Meta = {
+    ...meta,
+    phase: 'firstPass',
+    tick: 0,
+    written: { sample: 0, full: 0, fixed: 0 },
+    fix: 'none',
+    fixTick: 0,
+  };
+  const restarted = withWritten(
+    { ...namespace, automations: namespace.automations.map(reset) },
+    nextMeta
+  );
+  return {
+    ...restarted,
+    updated: 'just now',
+    automations: restarted.automations.map(reset),
+  };
+};
+
 /** Adds the proposal's new sources and automation, and starts that automation's sample pass. */
 export const addProposalToNamespace = (
   namespace: Namespace,
   proposal: Proto11Proposal
 ): Namespace => {
+  const template = goalById(proposal.goal).template;
+  if (namespace.automations.some((automation) => automation.templateId === template)) {
+    return rerunAutomation(namespace, template);
+  }
+  const runIds = proposal.sourceIds.length > 0 ? proposal.sourceIds : inferredSourceIds(namespace);
   const existingIds = sourceIdsOf(namespace);
   const newIds = proposal.sourceIds.filter((id) => !existingIds.includes(id));
-  const template = goalById(proposal.goal).template;
   const meta: Proto11Meta = namespace.proto11
     ? { ...namespace.proto11, sourceIds: uniqueIds([...existingIds, ...proposal.sourceIds]) }
     : {
@@ -2410,17 +2759,25 @@ export const addProposalToNamespace = (
     automationId = `${namespace.name}-${template}-${suffix}`;
     suffix += 1;
   }
+  const built = buildAutomation({
+    namespaceName: namespace.name,
+    indexName: namespace.indexName,
+    template,
+    sourceIds: runIds,
+    agent: proposal.trace?.value ?? meta.agent,
+    derivation: `Chosen ${proposal.automationBecause}.`,
+    runStatus: 'firstPass',
+  });
+  const actualNames = namespace.sources.map((source) => source.name);
+  const reads = proposal.sourceIds.length > 0 && built.reads.length > 0 ? built.reads : actualNames;
+  const steps = TEMPLATES[template].steps(reads);
   const automation = {
-    ...buildAutomation({
-      namespaceName: namespace.name,
-      indexName: namespace.indexName,
-      template,
-      sourceIds: proposal.sourceIds,
-      agent: proposal.trace?.value ?? meta.agent,
-      derivation: `Chosen ${proposal.automationBecause}.`,
-      runStatus: 'firstPass',
-    }),
+    ...built,
     id: automationId,
+    reads,
+    steps,
+    stepCount: steps.length,
+    yaml: workflowYamlFor(TEMPLATES[template].title, namespace.indexName, reads),
   };
   const knownNames = new Set(namespace.sources.map((source) => source.name));
   const traces =
@@ -2440,7 +2797,7 @@ export const addProposalToNamespace = (
       ...meta,
       addon: {
         template,
-        sourceIds: proposal.sourceIds,
+        sourceIds: runIds,
         automationId,
         tick: 0,
         written: 0,
@@ -2519,25 +2876,25 @@ export const PROBLEM_CHIPS: ReadonlyArray<{
   sentence: string;
   said: string;
   baseName: string;
-  defaultSources: Proto11SourceId[];
+  goal: Proto11GoalId;
 }> = [
   {
     sentence: 'My agent spends too long searching the data',
     said: 'the agent spends too long searching',
     baseName: 'web-ops-search',
-    defaultSources: ['cpu'],
+    goal: 'indices',
   },
   {
     sentence: 'My agent has to reason over complex documents',
     said: 'the agent has to reason over complex documents',
     baseName: 'web-ops-documents',
-    defaultSources: ['runbooks'],
+    goal: 'docs',
   },
   {
     sentence: 'My agent needs several data sources it does not understand',
     said: 'the agent needs several data sources it does not understand',
     baseName: 'web-ops-sources',
-    defaultSources: ['nginx-access', 'cpu'],
+    goal: 'multi',
   },
 ];
 

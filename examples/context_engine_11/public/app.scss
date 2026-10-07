@@ -669,6 +669,15 @@ html {
 
 .contextEnginePrototype__usageChart {
   height: 240px;
+  position: relative;
+}
+
+.contextEnginePrototype__usageTargetLabel {
+  font-size: 12px;
+  pointer-events: none;
+  position: absolute;
+  right: 12px;
+  top: 22%;
 }
 
 .contextEnginePrototype__usageRow {
@@ -1625,6 +1634,21 @@ html {
   flex-wrap: wrap;
 }
 
+.contextEnginePrototype__proto11ComposerRow--single {
+  align-items: flex-end;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+
+  .contextEnginePrototype__proto11ComposerRowField {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}
+
+h3.euiTitle.contextEnginePrototype__proto11SampleBandTitle {
+  font-weight: 500;
+}
+
 .contextEnginePrototype__proto11ComposerRowScopes,
 .contextEnginePrototype__proto11ComposerRowAction {
   flex: 0 0 auto;
@@ -1673,6 +1697,10 @@ html {
 
 .contextEnginePrototype__proto11AttachPopover {
   width: 340px;
+}
+
+.contextEnginePrototype__proto11TipAnchor {
+  display: inline-flex;
 }
 
 .contextEnginePrototype__proto11KiRowTitle,

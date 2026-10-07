@@ -369,18 +369,30 @@ export const Proto11UsageTab = ({
                 xScaleType={ScaleType.Time}
                 yScaleType={ScaleType.Linear}
                 color={hitColor}
+                lineSeriesStyle={{
+                  line: { strokeWidth: 2 },
+                  point: { visible: 'never' },
+                }}
               />
               <LineSeries
                 id="target"
                 name="Target"
+                hideInLegend
                 data={targetPoints}
                 xAccessor="x"
                 yAccessors={['y']}
                 xScaleType={ScaleType.Time}
                 yScaleType={ScaleType.Linear}
                 color={targetColor}
+                lineSeriesStyle={{
+                  line: { strokeWidth: 1, dash: [4, 4] },
+                  point: { visible: 'never' },
+                }}
               />
             </Chart>
+            <span className="contextEnginePrototype__usageTargetLabel" data-test-subj="contextEngineUsageTarget">
+              Target
+            </span>
           </div>
         )}
         <EuiSpacer size="s" />
