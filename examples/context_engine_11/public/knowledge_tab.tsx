@@ -14,7 +14,6 @@ import {
   EuiButton,
   EuiButtonEmpty,
   EuiButtonGroup,
-  EuiCard,
   EuiCodeBlock,
   EuiFlexGroup,
   EuiFlexItem,
@@ -57,110 +56,6 @@ const kiViewByIndex = new Map<string, 'list' | 'map'>();
 
 const viewForIndex = (name: string): 'list' | 'map' => kiViewByIndex.get(name) ?? 'list';
 
-const relativeUpdated = (iso: string | null | undefined) => {
-  if (!iso) return '';
-  const elapsed = Date.now() - new Date(iso).getTime();
-  const minutes = Math.round(elapsed / 60000);
-  if (minutes < 60) return minutes <= 1 ? 'just now' : `${minutes} minutes ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
-  const days = Math.round(hours / 24);
-  if (days < 14) return days === 1 ? '1 day ago' : `${days} days ago`;
-  const weeks = Math.round(days / 7);
-  return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`;
-};
-
-const automationForCard = (indicator: HydratedKnowledgeIndicator, automations: Automation[]) => {
-  const uri = indicator.governance.provenance.created_by.uri;
-  if (uri.startsWith('workflow://')) {
-    const slug = uri.slice('workflow://'.length);
-    const match = automations.find((automation) => slugify(automation.title) === slug);
-    if (match) return match.title;
-  }
-  return indicator.extractedBy;
-};
-
-const provenanceLine = (indicator: HydratedKnowledgeIndicator, namespace: Namespace) => {
-  const source = indicatorSourceGroup(indicator, namespace.sources, namespace.proto11?.agent).name;
-  const automation = automationForCard(indicator, namespace.automations);
-  const updated = relativeUpdated(indicator.updated_at);
-  return [
-    source ? `From ${source}` : '',
-    automation ? `via ${automation}` : '',
-    updated ? `updated ${updated}` : '',
-  ]
-    .filter(Boolean)
-    .join(' · ');
-};
-
-/** Three lines of content, then the rest behind Show more. */
-const CARD_LINE_LIMIT = 3;
-const CARD_CHAR_LIMIT = 180;
-
-const KiListCard = ({
-  indicator,
-  namespace,
-  onOpen,
-}: {
-  indicator: HydratedKnowledgeIndicator;
-  namespace: Namespace;
-  onOpen: () => void;
-}) => {
-  const [expanded, setExpanded] = useState(false);
-  const content = indicator.content || '';
-  const expandable =
-    content.split('\n').length > CARD_LINE_LIMIT || content.length > CARD_CHAR_LIMIT;
-
-  return (
-    <EuiPanel
-      hasBorder
-      paddingSize="m"
-      className="contextEnginePrototype__kiCard"
-      data-test-subj="proto11KiCard"
-    >
-      <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-        <EuiFlexItem grow={false}>
-          <KiTypeBadge type={indicator.type} />
-        </EuiFlexItem>
-        <EuiFlexItem>
-          <button
-            type="button"
-            className="contextEnginePrototype__kiCardTitle"
-            onClick={onOpen}
-            data-test-subj="proto11KiOpen"
-          >
-            {indicator.title}
-          </button>
-        </EuiFlexItem>
-      </EuiFlexGroup>
-      <EuiSpacer size="s" />
-      <EuiText size="s">
-        <p
-          className={`contextEnginePrototype__kiCardBody${
-            expandable && !expanded ? ' contextEnginePrototype__kiCardBody--clamp' : ''
-          }`}
-        >
-          {content}
-        </p>
-      </EuiText>
-      {expandable ? (
-        <EuiButtonEmpty
-          size="xs"
-          flush="left"
-          onClick={() => setExpanded((current) => !current)}
-          data-test-subj="proto11KiCardMore"
-        >
-          {expanded ? 'Show less' : 'Show more'}
-        </EuiButtonEmpty>
-      ) : null}
-      <EuiSpacer size="s" />
-      <EuiText size="xs" color="subdued">
-        <p data-test-subj="proto11KiCardProvenance">{provenanceLine(indicator, namespace)}</p>
-      </EuiText>
-    </EuiPanel>
-  );
-};
-
 export interface Proto11KnowledgeProps {
   sample: boolean;
   /** Check a few applies to indices Proto 11 created. */
@@ -169,7 +64,7 @@ export interface Proto11KnowledgeProps {
   checkHidden: boolean;
   onLookedAt: (id: string) => void;
   onHideCheck: () => void;
-  /** Rendered first, above Check a few. */
+  /** Opened from the count line, above the list. */
   testQuestion?: React.ReactNode;
 }
 
@@ -214,18 +109,12 @@ const groupBySource = (
   return Array.from(groups.values()).sort((a, b) => rank(a.name) - rank(b.name));
 };
 
-/** One KI from each source, topped up to three when there are fewer sources. */
-const checkPicks = (groups: SourceGroup[]): HydratedKnowledgeIndicator[] => {
-  const picks = groups.slice(0, CHECK_TARGET).map((group) => group.items[0]);
-  for (let depth = 1; picks.length < CHECK_TARGET; depth += 1) {
-    const before = picks.length;
-    groups.forEach((group) => {
-      if (picks.length < CHECK_TARGET && group.items[depth]) picks.push(group.items[depth]);
-    });
-    if (picks.length === before) break;
-  }
-  return picks;
-};
+/** One Knowledge Indicator from each of the first three sources. */
+const checkPicks = (groups: SourceGroup[]): HydratedKnowledgeIndicator[] =>
+  groups
+    .slice(0, CHECK_TARGET)
+    .map((group) => group.items[0])
+    .filter((item): item is HydratedKnowledgeIndicator => Boolean(item));
 
 /** Future KI detail flyout ticket. Off so this tab matches the build. */
 const KI_DETAIL_FLYOUT = false;
@@ -520,6 +409,7 @@ export const KnowledgeTab = ({
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewedVersion, setViewedVersion] = useState<number | null>(null);
   const [openRows, setOpenRows] = useState<string[]>([]);
+  const [testOpen, setTestOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -528,6 +418,7 @@ export const KnowledgeTab = ({
     setOpenId(null);
     setViewedVersion(null);
     setOpenRows([]);
+    setTestOpen(false);
     setKiView(viewForIndex(namespace.name));
   }, [namespace.name]);
 
@@ -619,24 +510,60 @@ export const KnowledgeTab = ({
     setKiView('list');
   };
 
-  const renderRow = (indicator: HydratedKnowledgeIndicator) =>
-    proto11 ? (
-      <KiListCard
-        key={indicator.id}
-        indicator={indicator}
-        namespace={namespace}
-        onOpen={() => openIndicator(indicator.id)}
-      />
-    ) : (
-      <KiAccordionRow
-        key={indicator.id}
-        indicator={indicator}
-        proto11={false}
-        open={openRows.includes(indicator.id)}
-        onToggle={(isOpen) => setRowOpen(indicator.id, isOpen)}
-        onOpen={() => openIndicator(indicator.id)}
-      />
+  const renderRow = (indicator: HydratedKnowledgeIndicator) => (
+    <KiAccordionRow
+      key={indicator.id}
+      indicator={indicator}
+      proto11={false}
+      open={openRows.includes(indicator.id)}
+      onToggle={(isOpen) => setRowOpen(indicator.id, isOpen)}
+      onOpen={() => openIndicator(indicator.id)}
+    />
+  );
+
+  const checkIds = new Set(picks.map((pick) => pick.id));
+  const renderProto11Rows = () => {
+    if (filtered.length === 0) {
+      return (
+        <EuiText size="s" color="subdued">
+          <p>No Knowledge Indicators match this filter.</p>
+        </EuiText>
+      );
+    }
+    return (
+      <div className="contextEnginePrototype__kiTabList">
+        {filtered.map((indicator) => {
+          const source = indicatorSourceGroup(
+            indicator,
+            namespace.sources,
+            namespace.proto11?.agent
+          ).name;
+          const showCheckBadge =
+            checkIds.has(indicator.id) && !proto11?.lookedAt.includes(indicator.id);
+          return (
+            <button
+              key={indicator.id}
+              type="button"
+              className="contextEnginePrototype__kiTabListRow contextEnginePrototype__kiTabListRow--proto11"
+              onClick={() => openIndicator(indicator.id)}
+              data-test-subj="proto11KiRow"
+            >
+              <span className="contextEnginePrototype__kiTabListMain">
+                <span className="contextEnginePrototype__kiTabListTitle">{indicator.title}</span>
+                <span className="contextEnginePrototype__kiTabListSource">{source}</span>
+              </span>
+              <KiTypeBadge type={indicator.type} />
+              {showCheckBadge ? (
+                <EuiBadge color="hollow" data-test-subj="proto11CheckThis">
+                  Check this
+                </EuiBadge>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
     );
+  };
 
   const filteredGroups = allGroups
     .map((group) => ({
@@ -673,6 +600,7 @@ export const KnowledgeTab = ({
         </EuiText>
       );
     }
+    if (proto11) return renderProto11Rows();
     if (!groupedBySource) return filtered.map(renderRow);
     return filteredGroups.map((group) => (
       <EuiAccordion
@@ -703,85 +631,16 @@ export const KnowledgeTab = ({
     ));
   };
 
+  const checkTotal = Math.min(CHECK_TARGET, picks.length);
+
   return (
     <>
-      <EuiText size="s" color="subdued" className="contextEnginePrototype__kiSubtitleWrap">
-        <p className="contextEnginePrototype__kiSubtitle">The knowledge your agents retrieve.</p>
-      </EuiText>
+      {proto11 ? null : (
+        <EuiText size="s" color="subdued" className="contextEnginePrototype__kiSubtitleWrap">
+          <p className="contextEnginePrototype__kiSubtitle">The knowledge your agents retrieve.</p>
+        </EuiText>
+      )}
       <div className="contextEnginePrototype__panels">
-        {proto11?.testQuestion}
-        {showCheck && proto11 ? (
-          <EuiPanel
-            hasBorder
-            paddingSize="l"
-            className="contextEnginePrototype__panel"
-            data-test-subj="proto11CheckAFew"
-          >
-            <div className="contextEnginePrototype__panelHeader">
-              <div className="contextEnginePrototype__panelHeaderText">
-                <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-                  <EuiFlexItem grow={false}>
-                    <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
-                      <h2>Check a few</h2>
-                    </EuiTitle>
-                  </EuiFlexItem>
-                  <EuiFlexItem grow={false}>
-                    <EuiBadge color="hollow">
-                      {lookedAtCount} of {Math.min(CHECK_TARGET, picks.length)} looked at
-                    </EuiBadge>
-                  </EuiFlexItem>
-                </EuiFlexGroup>
-                <EuiText size="xs" color="subdued" className="contextEnginePrototype__panelDesc">
-                  <p>One from each source. You do not need to review everything.</p>
-                </EuiText>
-              </div>
-              <div className="contextEnginePrototype__panelActions">
-                <EuiButtonEmpty size="s" onClick={proto11.onHideCheck}>
-                  Hide
-                </EuiButtonEmpty>
-              </div>
-            </div>
-            <EuiSpacer size="m" />
-            <EuiFlexGroup gutterSize="m" responsive={false}>
-              {picks.map((pick) => {
-                const group = indicatorSourceGroup(
-                  pick,
-                  namespace.sources,
-                  namespace.proto11?.agent
-                );
-                const looked = proto11.lookedAt.includes(pick.id);
-                return (
-                  <EuiFlexItem key={pick.id}>
-                    <EuiCard
-                      textAlign="left"
-                      paddingSize="m"
-                      hasBorder
-                      titleElement="h3"
-                      titleSize="xs"
-                      title={pick.title}
-                      description={group.name}
-                      onClick={() => openIndicator(pick.id)}
-                      footer={
-                        <EuiFlexGroup gutterSize="xs" responsive={false} wrap>
-                          <EuiFlexItem grow={false}>
-                            <KiTypeBadge type={pick.type} />
-                          </EuiFlexItem>
-                          {looked ? (
-                            <EuiFlexItem grow={false}>
-                              <EuiBadge color="hollow" iconType="eye">
-                                Looked at
-                              </EuiBadge>
-                            </EuiFlexItem>
-                          ) : null}
-                        </EuiFlexGroup>
-                      }
-                    />
-                  </EuiFlexItem>
-                );
-              })}
-            </EuiFlexGroup>
-          </EuiPanel>
-        ) : null}
         <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__panel">
           <div className="contextEnginePrototype__kiLockup">
             <EuiText size="s">
@@ -797,13 +656,46 @@ export const KnowledgeTab = ({
                     <EuiBadge color="hollow">Sample</EuiBadge>
                   </>
                 ) : null}
+                {showCheck ? (
+                  <span data-test-subj="proto11CheckProgress">
+                    {' · '}
+                    {lookedAtCount} of {checkTotal} checked
+                  </span>
+                ) : null}
               </p>
             </EuiText>
-            <EuiButtonEmpty iconType="popout" iconSide="right" href={discoverHref} target="_blank">
-              View raw docs in Discover
-            </EuiButtonEmpty>
+            <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+              {proto11 ? (
+                <EuiFlexItem grow={false}>
+                  <EuiButtonEmpty
+                    size="s"
+                    onClick={() => setTestOpen((open) => !open)}
+                    data-test-subj="proto11TestQuestionToggle"
+                  >
+                    Test a question
+                  </EuiButtonEmpty>
+                </EuiFlexItem>
+              ) : null}
+              {proto11 ? <EuiFlexItem grow={false}>{viewToggle}</EuiFlexItem> : null}
+              <EuiFlexItem grow={false}>
+                <EuiButtonEmpty
+                  iconType="popout"
+                  iconSide="right"
+                  href={discoverHref}
+                  target="_blank"
+                >
+                  View raw docs in Discover
+                </EuiButtonEmpty>
+              </EuiFlexItem>
+            </EuiFlexGroup>
           </div>
           <EuiSpacer size="m" />
+          {testOpen && proto11?.testQuestion ? (
+            <>
+              {proto11.testQuestion}
+              <EuiSpacer size="m" />
+            </>
+          ) : null}
 
           {hydrated.length === 0 ? (
             <div className="contextEnginePrototype__kiEmpty">
@@ -838,7 +730,6 @@ export const KnowledgeTab = ({
                     />
                   )}
                 </div>
-                {viewToggle}
               </div>
               {proto11 && kiView === 'list' && (sourceFilter || typeFilter !== 'all') ? (
                 <EuiFlexGroup
@@ -892,11 +783,7 @@ export const KnowledgeTab = ({
                 />
               ) : (
                 <div
-                  className={
-                    proto11
-                      ? 'contextEnginePrototype__kiCardList'
-                      : 'contextEnginePrototype__kiTabList'
-                  }
+                  className={proto11 ? undefined : 'contextEnginePrototype__kiTabList'}
                   ref={listRef}
                 >
                   {renderList()}

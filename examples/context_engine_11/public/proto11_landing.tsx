@@ -46,7 +46,7 @@ import {
   useEuiTheme,
 } from '@elastic/eui';
 
-import { MEMORY_HELPER, SHOW_MEMORY_TOGGLE } from './demo_flags';
+import { SHOW_MEMORY_TOGGLE } from './demo_flags';
 import {
   GENAI_TRACE_OPTIONS,
   PROBLEM_CHIPS,
@@ -135,6 +135,13 @@ const ProposalSourceChip = ({
   fromTraces?: boolean;
 }) => {
   const source = namespaceSourceFor(id);
+  const origin = onThisIndex
+    ? 'on this index'
+    : fromTraces
+      ? 'from traces'
+      : found
+        ? 'found'
+        : null;
   return (
     <div className="contextEnginePrototype__sourceChip">
       <EuiIcon type={source.icon} size="m" aria-hidden={true} />
@@ -144,13 +151,11 @@ const ProposalSourceChip = ({
         </EuiText>
       </div>
       <EuiBadge color="hollow">{source.typeLabel}</EuiBadge>
-      {fromTraces ? (
-        <EuiBadge color="hollow" data-test-subj="proto11FromTraces">
-          from traces
+      {origin ? (
+        <EuiBadge color="hollow" data-test-subj="proto11SourceOrigin">
+          {origin}
         </EuiBadge>
       ) : null}
-      {onThisIndex ? <EuiBadge color="hollow">on this index</EuiBadge> : null}
-      {found ? <EuiBadge color="hollow">found</EuiBadge> : null}
     </div>
   );
 };
@@ -160,7 +165,7 @@ const BecauseLine = ({ children }: { children: string }) => {
     ? `Because${children.slice('because'.length)}`
     : children;
   return (
-    <EuiText size="s" color="subdued">
+    <EuiText size="xs" color="subdued">
       <p>{sentence}</p>
     </EuiText>
   );
@@ -282,10 +287,10 @@ const ProposalCard = ({
                 data-test-subj="proto11ProposalTargetAdd"
               />
               <EuiText
-                size="s"
+                size="xs"
                 color="subdued"
                 css={css`
-                  padding-inline-start: calc(${euiTheme.size.base} + ${euiTheme.size.s});
+                  padding-inline-start: calc(${euiTheme.size.base} * 2 + ${euiTheme.size.s});
                 `}
               >
                 <p>
@@ -338,10 +343,16 @@ const ProposalCard = ({
                 </EuiText>
               </EuiFlexItem>
             </EuiFlexGroup>
-            <EuiText size="s" color="subdued">
-              <p data-test-subj="proto11ProposalWrites">{writesLine}</p>
-            </EuiText>
-            <BecauseLine>{proposal.automationBecause}</BecauseLine>
+            <div
+              css={css`
+                padding-inline-start: calc(${euiTheme.size.base} * 2 + ${euiTheme.size.s});
+              `}
+            >
+              <EuiText size="xs" color="subdued">
+                <p data-test-subj="proto11ProposalWrites">{writesLine}</p>
+              </EuiText>
+              <BecauseLine>{proposal.automationBecause}</BecauseLine>
+            </div>
           </>
         ),
     },
@@ -363,7 +374,13 @@ const ProposalCard = ({
           {proposal.sourceIds.length > 0 ? (
             <>
               <EuiSpacer size="xs" />
-              <BecauseLine>{proposal.sourcesBecause}</BecauseLine>
+              <div
+                css={css`
+                  padding-inline-start: calc(${euiTheme.size.base} * 2 + ${euiTheme.size.s});
+                `}
+              >
+                <BecauseLine>{proposal.sourcesBecause}</BecauseLine>
+              </div>
             </>
           ) : null}
         </>
@@ -388,7 +405,13 @@ const ProposalCard = ({
             {sourceIds.map((id) => sourceChip(id))}
           </div>
           <EuiSpacer size="xs" />
-          <BecauseLine>{proposal.sourcesBecause}</BecauseLine>
+          <div
+            css={css`
+              padding-inline-start: calc(${euiTheme.size.base} * 2 + ${euiTheme.size.s});
+            `}
+          >
+            <BecauseLine>{proposal.sourcesBecause}</BecauseLine>
+          </div>
         </>
       ),
     },
@@ -403,22 +426,27 @@ const ProposalCard = ({
     ...(SHOW_MEMORY_TOGGLE
       ? [
           {
-            title: 'Memory',
+            title: (
+              <>
+                Memory
+                <EuiIconTip
+                  content="Agents can save and recall task memory."
+                  aria-label="Agents can save and recall task memory."
+                  position="top"
+                  anchorProps={{
+                    css: css`
+                      margin-left: ${euiTheme.size.xs};
+                      vertical-align: text-bottom;
+                    `,
+                  }}
+                />
+              </>
+            ),
             description: (
               <div data-test-subj="proto11ProposalMemory">
                 <EuiText size="s">
                   <p>On</p>
                 </EuiText>
-                <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
-                  <EuiFlexItem grow={false}>
-                    <EuiText size="s" color="subdued">
-                      <p>Agents can save and recall task memory.</p>
-                    </EuiText>
-                  </EuiFlexItem>
-                  <EuiFlexItem grow={false}>
-                    <EuiIconTip content={MEMORY_HELPER} aria-label={MEMORY_HELPER} position="top" />
-                  </EuiFlexItem>
-                </EuiFlexGroup>
               </div>
             ),
           },
@@ -961,7 +989,13 @@ const Composer = ({
             onClickAriaLabel={`Use the question ${chip.sentence}`}
             data-test-subj="proto11ComposerExample"
           >
-            {chip.sentence}
+            <span
+              css={css`
+                font-weight: ${euiTheme.font.weight.regular};
+              `}
+            >
+              {chip.sentence}
+            </span>
           </EuiBadge>
         );
         return (

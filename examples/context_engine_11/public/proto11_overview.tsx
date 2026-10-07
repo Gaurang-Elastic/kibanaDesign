@@ -108,32 +108,14 @@ const FirstPassDotGrid = ({ meta }: { meta: Proto11Meta }) => {
 const kiCount = (count: number) =>
   count === 1 ? '1 Knowledge Indicator' : `${count} Knowledge Indicators`;
 
-/** The first-pass, sample-ready and full-run states above the overview panels. */
+/** The first-pass and full-run states above the overview panels. */
 export const Proto11RunCallout = ({
   namespace,
   meta,
-  runFilled,
-  onRunAll,
-  onAdjust,
 }: {
   namespace: Namespace;
   meta: Proto11Meta;
-  runFilled: boolean;
-  onRunAll: () => void;
-  onAdjust: () => void;
 }) => {
-  const [holdGrid, setHoldGrid] = useState(false);
-  const prevPhase = useRef(meta.phase);
-  useEffect(() => {
-    if (prevPhase.current === 'firstPass' && meta.phase === 'sampleReady') {
-      setHoldGrid(true);
-      const timer = window.setTimeout(() => setHoldGrid(false), 2000);
-      prevPhase.current = meta.phase;
-      return () => window.clearTimeout(timer);
-    }
-    prevPhase.current = meta.phase;
-  }, [meta.phase]);
-
   const addon = meta.addon?.phase === 'firstPass' ? meta.addon : undefined;
   const calloutMeta: Proto11Meta = addon
     ? {
@@ -161,42 +143,7 @@ export const Proto11RunCallout = ({
       </EuiCallOut>
     );
   }
-  if (meta.phase === 'sampleReady') {
-    return (
-      <EuiCallOut
-        announceOnMount
-        color="success"
-        iconType="checkCircleFill"
-        title={`${kiCount(
-          namespace.indicators.length
-        )} ready from a sample. Check a few before running on all your data.`}
-        data-test-subj="proto11SampleReady"
-      >
-        {holdGrid ? (
-          <>
-            <FirstPassDotGrid meta={meta} />
-            <EuiSpacer size="s" />
-          </>
-        ) : null}
-        <EuiFlexGroup gutterSize="m" alignItems="center" responsive={false}>
-          <EuiFlexItem grow={false}>
-            <EuiButton
-              size="s"
-              color="success"
-              fill={runFilled}
-              onClick={onRunAll}
-              data-test-subj="proto11RunAll"
-            >
-              Run on all data
-            </EuiButton>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiLink onClick={onAdjust}>Adjust first</EuiLink>
-          </EuiFlexItem>
-        </EuiFlexGroup>
-      </EuiCallOut>
-    );
-  }
+  if (meta.phase === 'sampleReady') return null;
   if (meta.phase === 'fullRun') {
     return (
       <EuiCallOut

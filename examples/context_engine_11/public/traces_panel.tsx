@@ -26,6 +26,7 @@ import {
   EuiText,
   EuiTextArea,
   EuiTitle,
+  EuiToolTip,
 } from '@elastic/eui';
 import type { EuiComboBoxOptionOption } from '@elastic/eui';
 
@@ -104,6 +105,8 @@ export const AgentTracesPanel = ({
   variant = 'editor',
   actions,
   description,
+  descriptionSize,
+  bare = false,
 }: {
   traces: IndexTrace[];
   onChange: (next: IndexTrace[]) => void;
@@ -113,6 +116,10 @@ export const AgentTracesPanel = ({
   actions?: React.ReactNode;
   /** `undefined` keeps the default helper. `null` hides it. */
   description?: string | null;
+  /** View mode defaults to xs. Pass `s` when the sentence is the panel's content. */
+  descriptionSize?: 'xs' | 's';
+  /** Fields only, for the index details editor. */
+  bare?: boolean;
 }) => {
   const attached = traces[0] ?? null;
   const [justAdded, setJustAdded] = useState(false);
@@ -156,24 +163,33 @@ export const AgentTracesPanel = ({
   const headingDescription = description === undefined ? TRACE_DESCRIPTION : description;
 
   return (
-    <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__panel">
-      <div className="contextEnginePrototype__panelHeader">
-        <div className="contextEnginePrototype__panelHeaderText">
-          <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
-            <h2>Agent traces</h2>
-          </EuiTitle>
-          {headingDescription ? (
-            <EuiText
-              size={variant === 'view' ? 'xs' : 's'}
-              color="subdued"
-              className="contextEnginePrototype__panelDesc"
-            >
-              <p>{headingDescription}</p>
-            </EuiText>
-          ) : null}
+    <EuiPanel
+      hasBorder={!bare}
+      hasShadow={false}
+      paddingSize={bare ? 'none' : 'l'}
+      color={bare ? 'transparent' : undefined}
+      className={bare ? undefined : 'contextEnginePrototype__panel'}
+      data-test-subj={bare ? 'proto11TracesFields' : undefined}
+    >
+      {bare ? null : (
+        <div className="contextEnginePrototype__panelHeader">
+          <div className="contextEnginePrototype__panelHeaderText">
+            <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
+              <h2>Agent traces</h2>
+            </EuiTitle>
+            {headingDescription ? (
+              <EuiText
+                size={descriptionSize ?? (variant === 'view' ? 'xs' : 's')}
+                color="subdued"
+                className="contextEnginePrototype__panelDesc"
+              >
+                <p>{headingDescription}</p>
+              </EuiText>
+            ) : null}
+          </div>
+          {actions ? <div className="contextEnginePrototype__panelActions">{actions}</div> : null}
         </div>
-        {actions ? <div className="contextEnginePrototype__panelActions">{actions}</div> : null}
-      </div>
+      )}
       {variant === 'view' ? (
         attached ? (
           <>
@@ -284,7 +300,7 @@ export const AgentTracesPanel = ({
                   justAdded ? ' contextEnginePrototype__selectedSource--enter' : ''
                 }`}
               >
-                <EuiIcon type={traceTypeIcon(attached.type)} size="m" />
+                <EuiIcon type={traceTypeIcon(attached.type)} size="m" aria-hidden={true} />
                 <div
                   className={
                     attached.type === 'esql'
@@ -297,25 +313,31 @@ export const AgentTracesPanel = ({
                   </EuiText>
                 </div>
                 <EuiBadge color="hollow">{traceTypeBadge(attached.type)}</EuiBadge>
-                <EuiButtonIcon
-                  iconType="cross"
-                  aria-label="Remove attached traces"
-                  onClick={() => onChange([])}
-                />
+                <EuiToolTip content="Remove attached traces" disableScreenReaderOutput>
+                  <EuiButtonIcon
+                    iconType="cross"
+                    aria-label="Remove attached traces"
+                    onClick={() => onChange([])}
+                  />
+                </EuiToolTip>
               </div>
             </>
           ) : null}
         </>
       )}
+      {bare && actions ? (
+        <>
+          <EuiSpacer size="m" />
+          <EuiFlexGroup gutterSize="s" justifyContent="flexEnd" responsive={false}>
+            {actions}
+          </EuiFlexGroup>
+        </>
+      ) : null}
     </EuiPanel>
   );
 };
 
-export const TracesEditActions = ({
-  onEdit,
-}: {
-  onEdit: () => void;
-}) => (
+export const TracesEditActions = ({ onEdit }: { onEdit: () => void }) => (
   <EuiButtonEmpty size="s" iconType="pencil" onClick={onEdit}>
     Edit
   </EuiButtonEmpty>

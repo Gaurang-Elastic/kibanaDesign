@@ -709,6 +709,116 @@ html {
   gap: 8px;
 }
 
+.contextEnginePrototype__setupProgress {
+  background: var(--euiColorLightestShade, #f5f7fa);
+  border-radius: 4px;
+  height: 4px;
+  overflow: hidden;
+}
+
+.contextEnginePrototype__setupProgressFill {
+  background: #0b64dd;
+  height: 100%;
+}
+
+.contextEnginePrototype__setupSteps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.contextEnginePrototype__setupStep--current {
+  background: var(--euiColorLightestShade, #f5f7fa);
+  border-radius: 6px;
+  margin-inline: -8px;
+  padding: 8px;
+}
+
+.contextEnginePrototype__setupStepRow {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.contextEnginePrototype__setupMark {
+  border: 1px solid var(--euiColorMediumShade, #98a2b3);
+  border-radius: 8px;
+  box-sizing: border-box;
+  flex: none;
+  height: 16px;
+  width: 16px;
+}
+
+.contextEnginePrototype__setupMark--current {
+  border-color: #0b64dd;
+}
+
+.contextEnginePrototype__setupStepName {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 450;
+  padding: 0;
+  text-align: left;
+}
+
+.contextEnginePrototype__setupStep--future .contextEnginePrototype__setupStepName {
+  color: var(--euiColorSubduedText, #69707d);
+  font-weight: 400;
+}
+
+.contextEnginePrototype__setupDetail {
+  padding-left: 24px;
+  padding-top: 8px;
+}
+
+.contextEnginePrototype__addAutomationMenu {
+  padding: 8px;
+  width: 360px;
+}
+
+.contextEnginePrototype__addAutomationChoice {
+  align-items: flex-start;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 12px;
+  padding: 8px;
+  text-align: left;
+  text-decoration: none;
+  width: 100%;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--euiColorLightestShade, #f5f7fa);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.contextEnginePrototype__addAutomationChoiceTitle {
+  display: block;
+  font-weight: 450;
+}
+
+.contextEnginePrototype__addAutomationChoiceDesc {
+  color: var(--euiTextSubduedColor, #69707d);
+  display: block;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  margin-top: 2px;
+}
+
 .contextEnginePrototype__automationCard {
   border: 1px solid var(--euiBorderColor, #d3dae6);
   border-radius: 6px;
@@ -1109,6 +1219,24 @@ html {
   color: var(--euiTextSubduedColor, #69707d);
   font-size: 12px;
   line-height: 16px;
+}
+
+.contextEnginePrototype__kiTabListRow--proto11 {
+  height: auto;
+  min-height: 48px;
+  padding-block: 8px;
+}
+
+.contextEnginePrototype__kiTabListSource {
+  color: var(--euiTextSubduedColor, #69707d);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.contextEnginePrototype__proto11Figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
 }
 
 .contextEnginePrototype__kiValueList {
@@ -1635,14 +1763,7 @@ html {
 }
 
 .contextEnginePrototype__proto11ComposerRow--single {
-  align-items: flex-end;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-
-  .contextEnginePrototype__proto11ComposerRowField {
-    flex: 1 1 100%;
-    min-width: 0;
-  }
+  flex-wrap: nowrap;
 }
 
 h3.euiTitle.contextEnginePrototype__proto11SampleBandTitle {

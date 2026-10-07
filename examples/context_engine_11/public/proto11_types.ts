@@ -29,6 +29,8 @@ export interface ConnectedAgent {
   lastRetrieval?: string;
   /** Ships with a sample AI index rather than being connected by the user. */
   sample?: boolean;
+  /** Quiet status on the Used by row, such as a coding agent that just connected. */
+  connectedNote?: string;
 }
 
 /** Shown once, under the first-pass callout, until the user saves or dismisses it. */
@@ -89,6 +91,10 @@ export interface Proto11Meta {
   addon?: Proto11AddonRun;
   /** Present only until the user saves or dismisses the creation connect guide. */
   connectGuide?: Proto11ConnectGuide;
+  /** The coding agent, or a later run, saved the first memory. */
+  firstMemoryReceived?: boolean;
+  /** The collapsed setup card was dismissed. */
+  setupDismissed?: boolean;
 }
 
 /** Sample pass for an automation added to an existing AI index. */

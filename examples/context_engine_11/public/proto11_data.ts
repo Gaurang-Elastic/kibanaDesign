@@ -1301,34 +1301,56 @@ export const uniqueName = (base: string, taken: string[]) => {
   return `${base}-${suffix}`;
 };
 
-const descriptionFor = (goal: GoalDef, sourceIds: Proto11SourceId[], agent?: string) => {
-  const names = sourceIds.map(sourceDisplayName);
-  const indexNames = sourceIds
-    .filter((id) => sourceById(id).kind === 'Index')
-    .map(sourceDisplayName);
-  switch (goal.id) {
-    case 'indices':
-      return `Helps agents understand what ${joinList(
-        indexNames.length ? indexNames : names
-      )} contain and how to query them.`;
-    case 'multi':
-      return `Helps agents pick the right source among ${joinList(
-        names
-      )} and join them on shared fields.`;
-    case 'docs':
-      return `Helps agents answer from ${joinList(
-        names
-      )} with short facts distilled from each page.`;
-    case 'entities':
-      return `Helps agents describe the services found in ${joinList(
-        names
-      )}, with their traffic, errors and owners.`;
-    case 'gaps':
-    default:
-      return `Helps agents answer the questions ${
-        agent ?? 'your agent'
-      } got wrong, using ${joinList(names)}.`;
+const SOURCE_TOPIC: Record<Proto11SourceId, string> = {
+  'nginx-access': 'nginx',
+  'nginx-error': 'nginx',
+  cpu: 'host',
+  k8s: 'container',
+  runbooks: 'runbooks',
+  enrollment: 'cohorts',
+  tuition: 'tuition',
+  peers: 'peer universities',
+};
+
+const topicsForIds = (sourceIds: Proto11SourceId[]): string[] => {
+  const topics: string[] = [];
+  sourceIds.forEach((id) => {
+    const topic = SOURCE_TOPIC[id];
+    if (topic && !topics.includes(topic)) topics.push(topic);
+  });
+  return topics;
+};
+
+const purposeSentence = (topics: string[], agent?: string) => {
+  const line = topics.length > 0 ? `Answers ${joinList(topics)} questions` : 'Answers questions';
+  return agent ? `${line} for ${agent}.` : `${line}.`;
+};
+
+const descriptionFor = (_goal: GoalDef, sourceIds: Proto11SourceId[], agent?: string) =>
+  purposeSentence(topicsForIds(sourceIds), agent);
+
+/** One purpose sentence. Stored text is kept when it does not name a source. */
+export const overviewPurpose = (namespace: Namespace): string => {
+  const intent = namespace.intent.trim();
+  const listsSource = namespace.sources.some(
+    (source) => source.name.length > 0 && intent.includes(source.name)
+  );
+  if (intent && !listsSource) {
+    const sentence = intent.split(/(?<=\.)\s/)[0]?.trim() ?? intent;
+    return /[.!?]$/.test(sentence) ? sentence : `${sentence}.`;
   }
+  const topics: string[] = [];
+  namespace.sources.forEach((source) => {
+    const found = [...WEB_OPS_SOURCES, ...HIGHER_ED_SOURCES].find(
+      (item) => item.name === source.name
+    );
+    const topic = found ? SOURCE_TOPIC[found.id] : undefined;
+    if (topic && !topics.includes(topic)) topics.push(topic);
+  });
+  const agent =
+    namespace.proto11?.agent ||
+    namespace.traces?.find((trace) => trace.type === 'elastic_agent')?.value;
+  return purposeSentence(topics, agent);
 };
 
 const freshMeta = (
@@ -1775,6 +1797,12 @@ const CURATED_FROM_GOALS: ReadonlyArray<Omit<CreateFromGoalOptions, 'takenNames'
     sourceIds: ['nginx-access', 'nginx-error', 'cpu'],
     trace: SIGNIFICANT_EVENTS_TRACE,
   },
+  {
+    goalId: 'indices',
+    name: 'web-ops-cpu',
+    sourceIds: ['cpu'],
+    intent: 'Field and query guidance for the host CPU metrics.',
+  },
 ];
 
 /** Runs the first pass to completion so the index opens at Run on all data. */
@@ -1786,10 +1814,11 @@ const toSampleReady = (namespace: Namespace): Namespace => {
   return current;
 };
 
-/** The Learning catalog that Reset demo data restores, besides the managed index. */
+/** Fresh Existing user catalog, besides the managed elastic index. */
 export const curatedNamespaces = (): Namespace[] => [
   createSampleNamespace('web-ops'),
   createSampleNamespace('higher-ed'),
+  createSampleNamespace('large'),
   ...CURATED_FROM_GOALS.map((options) =>
     toSampleReady(createProto11Namespace({ ...options, takenNames: [] }))
   ),

@@ -76,7 +76,9 @@ export const DemoControlsMenuSection = ({
       >
         Non-admin
       </EuiContextMenuItem>
-      {CATALOG_STATES.filter((state) => flags.proto11Setup || !state.proto11Only).map((state) => (
+      {flags.proto11Setup
+        ? null
+        : CATALOG_STATES.filter((state) => !state.proto11Only).map((state) => (
         <EuiContextMenuItem
           key={state.id}
           icon={

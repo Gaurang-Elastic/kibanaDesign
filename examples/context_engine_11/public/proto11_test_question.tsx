@@ -41,11 +41,14 @@ export const Proto11TestQuestion = ({
   discoverHref,
   onAskAboutIndicator,
   onDeleteIndicator,
+  embedded = false,
 }: {
   namespace: Namespace;
   discoverHref: string;
   onAskAboutIndicator: (indicator: KnowledgeIndicator, message: string) => void;
   onDeleteIndicator: (indicator: KnowledgeIndicator) => void;
+  /** Fields only, opened from the Knowledge Indicators count line. */
+  embedded?: boolean;
 }) => {
   const [question, setQuestion] = useState('');
   const [result, setResult] = useState<TestQuestionResult | null>(null);
@@ -70,33 +73,37 @@ export const Proto11TestQuestion = ({
 
   return (
     <EuiPanel
-      hasBorder
-      paddingSize="l"
-      className="contextEnginePrototype__panel"
+      hasBorder={!embedded}
+      hasShadow={false}
+      paddingSize={embedded ? 'none' : 'l'}
+      color={embedded ? 'transparent' : undefined}
+      className={embedded ? undefined : 'contextEnginePrototype__panel'}
       data-test-subj="proto11TestQuestion"
     >
-      <div className="contextEnginePrototype__panelHeader">
-        <div className="contextEnginePrototype__panelHeaderText">
-          <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-            <EuiFlexItem grow={false}>
-              <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
-                <h2>Test a question</h2>
-              </EuiTitle>
-            </EuiFlexItem>
-            {sample ? (
+      {embedded ? null : (
+        <div className="contextEnginePrototype__panelHeader">
+          <div className="contextEnginePrototype__panelHeaderText">
+            <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
               <EuiFlexItem grow={false}>
-                <EuiBadge color="hollow">Sample</EuiBadge>
+                <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
+                  <h2>Test a question</h2>
+                </EuiTitle>
               </EuiFlexItem>
-            ) : null}
-          </EuiFlexGroup>
-          <EuiText size="xs" color="subdued" className="contextEnginePrototype__panelDesc">
-            <p>
-              See which Knowledge Indicators answer it, and what the agent would do without them.
-            </p>
-          </EuiText>
+              {sample ? (
+                <EuiFlexItem grow={false}>
+                  <EuiBadge color="hollow">Sample</EuiBadge>
+                </EuiFlexItem>
+              ) : null}
+            </EuiFlexGroup>
+            <EuiText size="xs" color="subdued" className="contextEnginePrototype__panelDesc">
+              <p>
+                See which Knowledge Indicators answer it, and what the agent would do without them.
+              </p>
+            </EuiText>
+          </div>
         </div>
-      </div>
-      <EuiSpacer size="m" />
+      )}
+      {embedded ? null : <EuiSpacer size="m" />}
       <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
         <EuiFlexItem>
           <EuiFieldText

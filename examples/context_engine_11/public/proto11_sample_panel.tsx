@@ -11,10 +11,10 @@ import React, { useEffect, useState } from 'react';
 import { css } from '@emotion/react';
 import {
   EuiBadge,
-  EuiButtonEmpty,
   EuiContextMenu,
   EuiFlexGroup,
   EuiFlexItem,
+  EuiIcon,
   EuiLink,
   EuiPanel,
   EuiPopover,
@@ -61,19 +61,27 @@ const ExploreSampleMenu = ({ onExploreSample }: { onExploreSample: ExploreSample
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   return (
+    <EuiText size="xs" color="subdued">
     <EuiPopover
       button={
-        <EuiButtonEmpty
-          size="xs"
-          color="text"
-          flush="both"
-          iconType="chevronSingleDown"
-          iconSide="right"
+        <EuiLink
+          color="subdued"
           onClick={() => setOpen((isOpen) => !isOpen)}
+          aria-expanded={open}
           data-test-subj="proto11ExploreSample"
         >
           Explore sample AI index
-        </EuiButtonEmpty>
+          <EuiIcon
+            type="chevronSingleDown"
+            size="s"
+            css={css`
+              width: 12px;
+              height: 12px;
+              margin-left: 2px;
+              vertical-align: text-bottom;
+            `}
+          />
+        </EuiLink>
       }
       aria-label="Explore sample AI index"
       isOpen={open}
@@ -99,6 +107,7 @@ const ExploreSampleMenu = ({ onExploreSample }: { onExploreSample: ExploreSample
         ]}
       />
     </EuiPopover>
+    </EuiText>
   );
 };
 

@@ -95,8 +95,8 @@ import {
   displayedProduces,
   displayedReads,
   goalById,
+  overviewPurpose,
   proposalSummary,
-  proto11AddedLine,
   TEMPLATES,
   proto11StatusPill,
   repairEmptyAddon,
@@ -112,7 +112,7 @@ import {
   type CreateFromGoalOptions,
   type Proto11Proposal,
 } from './proto11_data';
-import { Proto11ConnectedAgentsPanel } from './proto11_agents_panel';
+import { Proto11AddAgentFlyout, Proto11UsedByPanel } from './proto11_agents_panel';
 import {
   Proto11Composer,
   Proto11HeroArt,
@@ -132,6 +132,8 @@ import {
   Proto11RunCallout,
   Proto11SampleCallout,
 } from './proto11_overview';
+import { Proto11SetupCard } from './proto11_setup_card';
+import { proto11RequiredSetupDone } from './proto11_setup';
 import { Proto11TestQuestion } from './proto11_test_question';
 import { Proto11MemoriesTab, type IndexMemory } from './proto11_memories_tab';
 import { Proto11UsageSummary, Proto11UsageTab } from './proto11_usage_tab';
@@ -185,7 +187,7 @@ const EDITABLE_PANEL_LABEL: Record<EditablePanel, string> = {
   description: 'Description',
   traces: 'Agent traces',
   sources: 'Sources',
-  agents: 'Connected agents',
+  agents: 'Agents',
 };
 
 const tracesSignature = (traces: IndexTrace[]) =>
@@ -467,7 +469,9 @@ const OverviewStatCell = ({
 );
 
 const CatalogStateBadges = ({ namespace }: { namespace: Namespace }) => {
-  const needsSetup = indexState(namespace) !== 'ready' && !namespace.proto11;
+  const needsSetup = namespace.proto11
+    ? !namespace.proto11.sample && !proto11RequiredSetupDone(namespace)
+    : indexState(namespace) !== 'ready';
   const sample = Boolean(namespace.proto11?.sample);
   return (
     <div className="contextEnginePrototype__cardBadges">
@@ -582,6 +586,126 @@ const DisabledReason = ({ children }: { children: React.ReactNode }) => (
   </EuiText>
 );
 
+const Proto11Figures = ({ namespace }: { namespace: Namespace }) => {
+  const lastRun =
+    namespace.lastSuccessfulRun?.when ??
+    [...namespace.automations].reverse().find((item) => item.lastRunAt)?.lastRunAt ??
+    (namespace.proto11?.sample
+      ? 'on sample data'
+      : namespace.automations.some((item) => item.hasRun)
+      ? 'just now'
+      : 'Not yet');
+  const figures = [
+    {
+      label: 'Knowledge Indicators',
+      value: String(namespace.indicators.length),
+      test: 'proto11FigureKi',
+    },
+    { label: 'Sources', value: String(namespace.sources.length), test: 'proto11FigureSources' },
+    {
+      label: 'Automations',
+      value: String(namespace.automations.length),
+      test: 'proto11FigureAutomations',
+    },
+    { label: 'Last run', value: lastRun, test: 'proto11FigureLastRun' },
+  ];
+  return (
+    <div className="contextEnginePrototype__proto11Figures" data-test-subj="proto11OverviewFigures">
+      {figures.map((figure) => (
+        <div key={figure.label} data-test-subj={figure.test}>
+          <EuiTitle size="s">
+            <p>{figure.value}</p>
+          </EuiTitle>
+          <EuiText size="s" color="subdued">
+            <p>{figure.label}</p>
+          </EuiText>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const Proto11AutomationFacts = ({
+  automation,
+  namespace,
+  onFix,
+}: {
+  automation: Automation;
+  namespace: Namespace;
+  onFix: () => void;
+}) => {
+  const [whyOpen, setWhyOpen] = useState(false);
+  const [readsOpen, setReadsOpen] = useState(false);
+  const reads = displayedReads(namespace, automation);
+  const produced = displayedProduces(namespace, automation);
+  const schedule = automation.templateId
+    ? TEMPLATES[automation.templateId].scheduleLabel
+    : automation.scheduleLabel;
+  const running = automation.runStatus === 'firstPass' || automation.runStatus === 'running';
+  const when = namespace.proto11?.sample ? 'on sample data' : automation.lastRunAt ?? 'just now';
+  const producedLabel =
+    produced === 1 ? '1 Knowledge Indicator' : `${produced} Knowledge Indicators`;
+  return (
+    <>
+      <EuiText size="s">
+        <p data-test-subj="proto11AutomationMeta">
+          {running
+            ? `Added by Elastic AI Agent · ${schedule} · running`
+            : `Added by Elastic AI Agent · ${schedule} · ran ${when}`}
+        </p>
+      </EuiText>
+      <EuiText size="s">
+        <p>
+          Reads{' '}
+          <EuiPopover
+            aria-label="Sources this automation reads"
+            button={
+              <EuiLink
+                onClick={() => setReadsOpen((open) => !open)}
+                data-test-subj="proto11ReadsSources"
+              >
+                {reads.length} {reads.length === 1 ? 'source' : 'sources'}
+              </EuiLink>
+            }
+            isOpen={readsOpen}
+            closePopover={() => setReadsOpen(false)}
+            panelPaddingSize="s"
+          >
+            {reads.length === 0 ? (
+              <EuiText size="s">
+                <p>No sources</p>
+              </EuiText>
+            ) : (
+              reads.map((source) => (
+                <EuiText key={source} size="s">
+                  <p>{source}</p>
+                </EuiText>
+              ))
+            )}
+          </EuiPopover>
+          {' · '}produced {producedLabel}
+        </p>
+      </EuiText>
+      <Proto11AutomationRejection namespace={namespace} automation={automation} onFix={onFix} />
+      <EuiLink
+        color="subdued"
+        onClick={() => setWhyOpen((open) => !open)}
+        data-test-subj="proto11AutomationWhy"
+      >
+        Why
+      </EuiLink>
+      {whyOpen ? (
+        <EuiText size="s" data-test-subj="proto11AutomationWhyBody">
+          <p>{automation.description}</p>
+          {automation.templateId ? (
+            <p>{displayedDerivation(automation.templateId, automation.derivation)}</p>
+          ) : null}
+        </EuiText>
+      ) : null}
+    </>
+  );
+};
+
 function ContextEngineApp({
   coreStart,
   plugins,
@@ -622,13 +746,13 @@ function ContextEngineApp({
   const [tracesDraft, setTracesDraft] = useState<IndexTrace[]>([]);
   const [agentsEditing, setAgentsEditing] = useState(false);
   const [agentsDraft, setAgentsDraft] = useState<ConnectedAgent[]>([]);
+  const [addAgent, setAddAgent] = useState<{ name?: string } | null>(null);
   const [automationsAddOpen, setAutomationsAddOpen] = useState(false);
   const [automationProposalOpen, setAutomationProposalOpen] = useState(false);
   const proposalComposerRef = useRef<HTMLDivElement>(null);
   const [automationsMenuOpen, setAutomationsMenuOpen] = useState<string | null>(null);
   const [catalogActionsOpen, setCatalogActionsOpen] = useState<string | null>(null);
   const [pendingDeleteIndex, setPendingDeleteIndex] = useState<Namespace | null>(null);
-  const [pendingReset, setPendingReset] = useState(false);
   const [useInAgentNamespace, setUseInAgentNamespace] = useState<Namespace | null>(null);
 
   const [agentOpen, setAgentOpen] = useState(false);
@@ -843,6 +967,7 @@ function ContextEngineApp({
     // Learning is the empty catalog: get-started plus the managed index only.
     // Created indexes stay persisted and come back in Working.
     if (flags.catalogState === 'learning') return Boolean(item.proto11);
+    if (proto11On) return Boolean(item.proto11);
     return true;
   });
   const proto11HeaderBadges: AppHeaderBadge[] | undefined = proto11On
@@ -879,10 +1004,12 @@ function ContextEngineApp({
     setAutomationsAddOpen(false);
     setAutomationsMenuOpen(null);
     setAutomationProposalOpen(false);
+    setAddAgent(null);
   };
 
   useEffect(() => {
     setNextStepDismissed(false);
+    setAddAgent(null);
   }, [activeName, screen]);
 
   useEffect(() => {
@@ -991,16 +1118,14 @@ function ContextEngineApp({
     openDetail(created, tab);
   };
 
-  const confirmResetDemoData = () => {
-    setPendingReset(false);
-    setNamespaces((current) => [
-      ...curatedNamespaces(),
-      ...current.filter((item) => !item.userCreated),
-    ]);
+  const applyProto11Audience = (audience: 'empty' | 'learning') => {
+    setNamespaces((current) => {
+      const kept = current.filter((item) => !item.userCreated);
+      return audience === 'learning' ? [...curatedNamespaces(), ...kept] : kept;
+    });
     setReadyCalloutDismissed({});
-    setDemoCatalogState('learning');
+    setDemoCatalogState(audience);
     goLanding();
-    coreStart.notifications.toasts.addSuccess('Demo data reset');
   };
 
   const removeSample = (namespaceName: string) => {
@@ -2399,7 +2524,9 @@ function ContextEngineApp({
       agentsDraft.map((item) => item.name).join('\n') !==
       connectedAgents.map((item) => item.name).join('\n');
     const isPanelDirty = (panel: EditablePanel) => {
-      if (panel === 'description') return descriptionDirty;
+      if (panel === 'description') {
+        return descriptionDirty || (editIntentOpen && tracesEditing && tracesDirty);
+      }
       if (panel === 'traces') return tracesDirty;
       if (panel === 'agents') return agentsDirty;
       return sourcesDirty;
@@ -2456,24 +2583,34 @@ function ContextEngineApp({
       setPendingPanelSwitch(null);
       setEditIntentOpen(false);
     };
+    const openDetails = () => {
+      if (activeEditPanel && activeEditPanel !== 'description' && isPanelDirty(activeEditPanel)) {
+        setPendingPanelSwitch('description');
+        return;
+      }
+      if (editIntentOpen && (descriptionDirty || tracesDirty)) return;
+      closeActiveEditor();
+      setIntentDraft(namespace.intent);
+      setMemoryDraft(namespace.memoryEnabled !== false);
+      setEditIntentOpen(true);
+      setTracesDraft(namespace.traces ?? []);
+      setTracesEditing(true);
+    };
+    const saveDetails = () => {
+      replaceNamespace({
+        ...namespace,
+        intent: intentDraft.trim(),
+        ...(showMemory ? { memoryEnabled: memoryDraft } : {}),
+        traces: tracesDraft,
+      });
+      setPendingPanelSwitch(null);
+      setEditIntentOpen(false);
+      setTracesEditing(false);
+    };
     const saveTraces = () => {
       replaceNamespace({ ...namespace, traces: tracesDraft });
       setPendingPanelSwitch(null);
       setTracesEditing(false);
-    };
-    const saveAgents = () => {
-      const previous = namespace.proto11?.connectedAgents ?? [];
-      const hadRetrieval =
-        Boolean(namespace.proto11?.sample) || previous.some((item) => Boolean(item.lastRetrieval));
-      const nextAgents =
-        hadRetrieval || agentsDraft.length === 0
-          ? agentsDraft
-          : agentsDraft.map((item, index) =>
-              index === 0 ? { ...item, lastRetrieval: 'just now' } : item
-            );
-      updateProto11Meta(namespace.name, { connectedAgents: nextAgents });
-      setPendingPanelSwitch(null);
-      setAgentsEditing(false);
     };
     const saveSourcesEditor = () => {
       replaceNamespace({
@@ -2509,28 +2646,25 @@ function ContextEngineApp({
       </EuiButton>
     );
     const canEditPanels = !namespace.managed;
-    const connectAgentActions = () => {
-      if (!canEditPanels) return undefined;
-      if (agentsEditing) return headerEditButtons(agentsDirty, saveAgents);
-      if (connectedAgents.length > 0) return panelEditLink(() => requestEdit('agents'));
-      if (anyEditing) return panelAddEmpty('Connect an agent', () => requestEdit('agents'));
-      const onlyCallToAction =
-        Boolean(meta) &&
-        !meta?.sample &&
-        (meta?.phase === 'fullRun' || meta?.phase === 'complete') &&
-        fixFlyoutFor === null;
-      return onlyCallToAction ? (
-        panelAddFilled('Connect an agent', () => requestEdit('agents'))
-      ) : (
-        <EuiButton size="s" onClick={() => requestEdit('agents')}>
-          Connect an agent
-        </EuiButton>
-      );
+    const saveAddedAgent = (name: string) => {
+      const current = namespace.proto11?.connectedAgents ?? [];
+      if (!current.some((agent) => agent.name === name)) {
+        updateProto11Meta(namespace.name, {
+          connectedAgents: [...current, { name }],
+          connectGuide: undefined,
+        });
+      }
+      setAddAgent(null);
     };
     const hasDescription = Boolean(namespace.intent);
     const hasTraces = (namespace.traces?.length ?? 0) > 0;
     const hasSources = namespace.sources.length > 0;
     const hasAutomations = namespace.automations.length > 0;
+    const automationsDescription = proto11On && hasAutomations ? null : AUTOMATIONS_EMPTY;
+    const learnsFromName =
+      (namespace.traces ?? []).find((trace) => trace.type === 'elastic_agent')?.value ||
+      meta?.agent;
+    const proto11Overview = Boolean(proto11On && meta);
     const addAutomationButton = (emphasis: 'fill' | 'button' | 'empty') => (
       <EuiPopover
         button={
@@ -2571,37 +2705,65 @@ function ContextEngineApp({
           items={
             proto11On
               ? [
-                  <EuiContextMenuItem
-                    key="propose-automation"
-                    icon="bolt"
-                    onClick={() => {
-                      setAutomationsAddOpen(false);
-                      setAutomationProposalOpen(true);
-                    }}
-                    data-test-subj="proto11ProposeAutomation"
-                  >
-                    Propose automation
-                  </EuiContextMenuItem>,
-                  <EuiContextMenuItem
-                    key="use-ai-agent"
-                    icon="productAgent"
-                    disabled={Boolean(suggestReason)}
-                    onClick={() => {
-                      setAutomationsAddOpen(false);
-                      openAgent(namespace, 'suggest');
-                    }}
-                  >
-                    Use AI Agent
-                  </EuiContextMenuItem>,
-                  <EuiContextMenuItem
-                    key="create-workflow"
-                    icon="workflowsApp"
-                    href={workflowsHref}
-                    target="_blank"
-                    onClick={() => setAutomationsAddOpen(false)}
-                  >
-                    Create workflow
-                  </EuiContextMenuItem>,
+                  <div key="proto11-add-automation" className="contextEnginePrototype__addAutomationMenu">
+                    <button
+                      type="button"
+                      className="contextEnginePrototype__addAutomationChoice"
+                      onClick={() => {
+                        setAutomationsAddOpen(false);
+                        setAutomationProposalOpen(true);
+                      }}
+                      data-test-subj="proto11SuggestAutomation"
+                    >
+                      <EuiIcon type="bolt" size="m" aria-hidden={true} />
+                      <span>
+                        <span className="contextEnginePrototype__addAutomationChoiceTitle">
+                          Suggest an automation
+                        </span>
+                        <span className="contextEnginePrototype__addAutomationChoiceDesc">
+                          Context proposes one from this index&apos;s description and sources.
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="contextEnginePrototype__addAutomationChoice"
+                      disabled={Boolean(suggestReason)}
+                      onClick={() => {
+                        setAutomationsAddOpen(false);
+                        openAgent(namespace, 'suggest');
+                      }}
+                      data-test-subj="proto11BuildWithAgent"
+                    >
+                      <EuiIcon type="productAgent" size="m" aria-hidden={true} />
+                      <span>
+                        <span className="contextEnginePrototype__addAutomationChoiceTitle">
+                          Build with Elastic AI Agent
+                        </span>
+                        <span className="contextEnginePrototype__addAutomationChoiceDesc">
+                          Describe what you want in a chat in the side panel.
+                        </span>
+                      </span>
+                    </button>
+                    <a
+                      className="contextEnginePrototype__addAutomationChoice"
+                      href={workflowsHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setAutomationsAddOpen(false)}
+                      data-test-subj="proto11BuildInWorkflows"
+                    >
+                      <EuiIcon type="external" size="m" aria-hidden={true} />
+                      <span>
+                        <span className="contextEnginePrototype__addAutomationChoiceTitle">
+                          Build in Workflows
+                        </span>
+                        <span className="contextEnginePrototype__addAutomationChoiceDesc">
+                          Write the workflow yourself in the Workflows app.
+                        </span>
+                      </span>
+                    </a>
+                  </div>,
                 ]
               : [
                   <EuiContextMenuItem
@@ -2711,6 +2873,115 @@ function ContextEngineApp({
           ) : null}
           {effectiveTab === 'overview' ? (
             <div className="contextEnginePrototype__panels">
+              {proto11Overview && meta && !meta.sample ? (
+                <Proto11SetupCard
+                  namespace={namespace}
+                  fillAction={!anyEditing}
+                  apiKeysHref={coreStart.http.basePath.prepend(
+                    '/app/management/security/api_keys'
+                  )}
+                  onAddSources={goToSources}
+                  onRunAll={() => updateProto11Namespace(namespace.name, startFullRun)}
+                  onViewKnowledge={() => setDetailTab('knowledge')}
+                  onAddElasticAgent={() => setAddAgent({})}
+                  onAddTraces={() => requestEdit('traces')}
+                  onConnectExternal={() => {
+                    updateProto11Namespace(namespace.name, (item) => {
+                      const itemMeta = item.proto11;
+                      if (!itemMeta) return item;
+                      const agents = itemMeta.connectedAgents ?? [];
+                      const nextAgents = agents.some(
+                        (agent) => agent.name === 'Claude Code (external)'
+                      )
+                        ? agents
+                        : [
+                            ...agents,
+                            {
+                              name: 'Claude Code (external)',
+                              connectedNote: 'Connected · just now',
+                            },
+                          ];
+                      const traces = item.traces ?? [];
+                      return {
+                        ...item,
+                        traces:
+                          traces.length > 0
+                            ? traces
+                            : [{ value: 'Claude Code', type: 'elastic_agent' }],
+                        proto11: {
+                          ...itemMeta,
+                          connectedAgents: nextAgents,
+                          connectGuide: undefined,
+                        },
+                      };
+                    });
+                  }}
+                  onMemoryReceived={() =>
+                    updateProto11Meta(namespace.name, { firstMemoryReceived: true })
+                  }
+                  onDismiss={() => updateProto11Meta(namespace.name, { setupDismissed: true })}
+                />
+              ) : null}
+              {proto11Overview ? (
+                <>
+                  <EuiText size="s" data-test-subj="proto11OverviewMeta">
+                    <p>
+                      {overviewPurpose(namespace)}
+                      {showMemory
+                        ? ` · ${namespace.memoryEnabled === false ? 'Memory off' : 'Memory on'}`
+                        : ''}
+                      {` · Learns from ${learnsFromName || 'None'}`}
+                      {canEditPanels && !meta?.sample ? (
+                        <>
+                          {' · '}
+                          <EuiLink onClick={openDetails} data-test-subj="proto11EditDetails">
+                            Edit details
+                          </EuiLink>
+                        </>
+                      ) : null}
+                    </p>
+                  </EuiText>
+                  {editIntentOpen ? (
+                    <EuiPanel
+                      hasBorder
+                      paddingSize="l"
+                      className="contextEnginePrototype__panel"
+                      data-test-subj="proto11DetailsEditor"
+                    >
+                      <EuiFormRow label="Description" fullWidth>
+                        <EuiTextArea
+                          fullWidth
+                          rows={4}
+                          placeholder={DESCRIPTION_PLACEHOLDER}
+                          value={intentDraft}
+                          onChange={(event) => setIntentDraft(event.target.value)}
+                          aria-label="Description"
+                        />
+                      </EuiFormRow>
+                      {showMemory ? (
+                        <>
+                          <EuiSpacer size="m" />
+                          <MemorySwitch checked={memoryDraft} onChange={setMemoryDraft} />
+                        </>
+                      ) : null}
+                      <EuiSpacer size="l" />
+                      <AgentTracesPanel
+                        bare
+                        traces={tracesDraft}
+                        onChange={setTracesDraft}
+                        accordionId="context-engine-11-detail-traces-esql"
+                        variant="editor"
+                        description={null}
+                      />
+                      <EuiSpacer size="m" />
+                      <EuiFlexGroup gutterSize="s" justifyContent="flexEnd" responsive={false}>
+                        {headerEditButtons(descriptionDirty || tracesDirty, saveDetails)}
+                      </EuiFlexGroup>
+                    </EuiPanel>
+                  ) : null}
+                  <Proto11Figures namespace={namespace} />
+                </>
+              ) : null}
               {OVERVIEW_STATS_ENABLED ? overviewStatsRow : null}
               {meta?.sample ? (
                 <Proto11SampleCallout
@@ -2718,35 +2989,7 @@ function ContextEngineApp({
                   onRemove={() => removeSample(namespace.name)}
                 />
               ) : null}
-              {meta ? (
-                <Proto11RunCallout
-                  namespace={namespace}
-                  meta={meta}
-                  runFilled={!anyEditing && fixFlyoutFor === null}
-                  onRunAll={() => updateProto11Namespace(namespace.name, startFullRun)}
-                  onAdjust={goToAutomations}
-                />
-              ) : null}
-              {meta?.connectGuide ? (
-                <Proto11ConnectedAgentsPanel
-                  namespaceName={namespace.name}
-                  agents={connectedAgents}
-                  editing={false}
-                  draft={agentsDraft}
-                  onDraftChange={setAgentsDraft}
-                  agentBuilderHref={coreStart.http.basePath.prepend('/app/agent_builder')}
-                  guide={meta.connectGuide}
-                  onSaveGuide={(agentName) =>
-                    updateProto11Meta(namespace.name, {
-                      connectedAgents: [{ name: agentName }],
-                      connectGuide: undefined,
-                    })
-                  }
-                  onDismissGuide={() =>
-                    updateProto11Meta(namespace.name, { connectGuide: undefined })
-                  }
-                />
-              ) : null}
+              {meta ? <Proto11RunCallout namespace={namespace} meta={meta} /> : null}
               {namespace.sources.length === 0 && !readyCalloutDismissed[namespace.name] ? (
                 <ReadyCallout
                   onDismiss={() =>
@@ -2899,6 +3142,8 @@ function ContextEngineApp({
                 </>
               ) : null}
 
+              {proto11Overview ? null : (
+              <>
               <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__panel">
                 <div className="contextEnginePrototype__panelHeader">
                   <div className="contextEnginePrototype__panelHeaderText">
@@ -2983,6 +3228,8 @@ function ContextEngineApp({
                         : panelAddEmpty('+ Add traces', () => requestEdit('traces'))
                 }
               />
+              </>
+              )}
               <EuiPanel
                 hasBorder
                 paddingSize="l"
@@ -2994,12 +3241,16 @@ function ContextEngineApp({
                     <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
                       <h2>Sources</h2>
                     </EuiTitle>
-                    {sourcesEditing ? (
+                    {sourcesEditing && !proto11Overview ? (
                       <EuiText size="xs" color="subdued" className="contextEnginePrototype__panelDesc">
                         <p>{SOURCES_SUBTITLE}</p>
                       </EuiText>
                     ) : !hasSources ? (
-                      <EuiText size="xs" color="subdued" className="contextEnginePrototype__panelDesc">
+                      <EuiText
+                        size={proto11Overview ? 's' : 'xs'}
+                        color="subdued"
+                        className="contextEnginePrototype__panelDesc"
+                      >
                         <p>{SOURCES_EMPTY}</p>
                       </EuiText>
                     ) : null}
@@ -3043,7 +3294,7 @@ function ContextEngineApp({
                           </EuiText>
                           {meta ? (
                             <EuiText
-                              size="xs"
+                              size="s"
                               color={
                                 produced === 0 && sourceHasOutstandingRejections(namespace, source)
                                   ? 'warning'
@@ -3107,13 +3358,15 @@ function ContextEngineApp({
                           ) : null}
                         </h2>
                       </EuiTitle>
+                      {automationsDescription ? (
                       <EuiText
-                        size={hasAutomations ? 's' : 'xs'}
+                        size={proto11Overview || hasAutomations ? 's' : 'xs'}
                         color="subdued"
                         className="contextEnginePrototype__panelDesc"
                       >
-                        <p>{AUTOMATIONS_EMPTY}</p>
+                        <p>{automationsDescription}</p>
                       </EuiText>
+                      ) : null}
                     </div>
                     {canEditPanels ? (
                       <div className="contextEnginePrototype__panelActions">
@@ -3179,8 +3432,7 @@ function ContextEngineApp({
                               button={
                                 <EuiButtonEmpty
                                   size="s"
-                                  iconType="arrowDown"
-                                  iconSide="right"
+                                  iconType="pencil"
                                   onClick={() => {
                                     setAutomationsAddOpen(false);
                                     setAutomationsMenuOpen((current) =>
@@ -3285,26 +3537,17 @@ function ContextEngineApp({
                             </EuiPopover>
                           </div>
                         </div>
+                        {meta && automation.templateId ? (
+                          <Proto11AutomationFacts
+                            automation={automation}
+                            namespace={namespace}
+                            onFix={() => setFixFlyoutFor(automation.id)}
+                          />
+                        ) : (
+                          <>
                         <EuiText size="xs" color="subdued">
-                          <p>
-                            {meta && automation.templateId
-                              ? proto11AddedLine(automation, namespace)
-                              : automationAddedLine(automation)}
-                          </p>
+                          <p>{automationAddedLine(automation)}</p>
                         </EuiText>
-                        {proto11On ? (
-                          <EuiText
-                            size="xs"
-                            color="subdued"
-                            data-test-subj="proto11AutomationSchedule"
-                          >
-                            <p>
-                              {automation.templateId
-                                ? TEMPLATES[automation.templateId].scheduleLabel
-                                : automation.scheduleLabel}
-                            </p>
-                          </EuiText>
-                        ) : null}
                         {meta ? (
                           <Proto11AutomationRejection
                             namespace={namespace}
@@ -3315,13 +3558,6 @@ function ContextEngineApp({
                         <EuiText size="s">
                           <p>{automation.description}</p>
                         </EuiText>
-                        {meta && automation.templateId ? (
-                          <EuiText size="xs" color="subdued">
-                            <p>
-                              {displayedDerivation(automation.templateId, automation.derivation)}
-                            </p>
-                          </EuiText>
-                        ) : null}
                         <div className="contextEnginePrototype__automationIo">
                           <span className="contextEnginePrototype__automationIoLabel">Reads</span>
                           {displayedReads(namespace, automation).length > 0 ? (
@@ -3346,21 +3582,45 @@ function ContextEngineApp({
                             </EuiBadge>
                           )}
                         </div>
+                          </>
+                        )}
                       </div>
                     ))
                   ) : null}
                 </EuiPanel>
               )}
-              {meta && !meta.connectGuide ? (
-                <Proto11ConnectedAgentsPanel
+              {proto11Overview ? (
+                <AgentTracesPanel
+                  traces={
+                    tracesEditing && !editIntentOpen ? tracesDraft : namespace.traces ?? []
+                  }
+                  onChange={setTracesDraft}
+                  accordionId="context-engine-11-overview-traces-esql"
+                  variant={tracesEditing && !editIntentOpen ? 'editor' : 'view'}
+                  description={
+                    tracesEditing && !editIntentOpen
+                      ? null
+                      : 'Used to find what agents could not answer.'
+                  }
+                  descriptionSize="s"
+                  actions={
+                    !canEditPanels || meta?.sample
+                      ? undefined
+                      : tracesEditing && !editIntentOpen
+                        ? headerEditButtons(tracesDirty, saveTraces)
+                        : hasTraces
+                          ? panelEditLink(() => requestEdit('traces'))
+                          : panelAddEmpty('+ Add traces', () => requestEdit('traces'))
+                  }
+                />
+              ) : null}
+              {meta ? (
+                <Proto11UsedByPanel
                   namespaceName={namespace.name}
                   agents={connectedAgents}
-                  editing={agentsEditing}
-                  draft={agentsDraft}
-                  onDraftChange={setAgentsDraft}
-                  agentBuilderHref={coreStart.http.basePath.prepend('/app/agent_builder')}
-                  actions={connectAgentActions()}
-                  suggestedAgent={traceAgentName}
+                  canAdd={canEditPanels}
+                  onAdd={() => setAddAgent({})}
+                  onOpenSettings={(name) => setAddAgent({ name })}
                 />
               ) : null}
             </div>
@@ -3401,6 +3661,7 @@ function ContextEngineApp({
                       testQuestion: (
                         <Proto11TestQuestion
                           key={namespace.name}
+                          embedded
                           namespace={namespace}
                           discoverHref={coreStart.http.basePath.prepend('/app/discover')}
                           onAskAboutIndicator={(indicator) =>
@@ -3434,6 +3695,16 @@ function ContextEngineApp({
             />
           ) : null}
         </PageBody>
+        {addAgent && meta ? (
+          <Proto11AddAgentFlyout
+            indexLabel={namespace.displayName}
+            taken={connectedAgents.map((agent) => agent.name)}
+            agentName={addAgent.name}
+            onChoose={(name) => setAddAgent({ name })}
+            onSave={saveAddedAgent}
+            onClose={() => setAddAgent(null)}
+          />
+        ) : null}
         {meta && fixFlyoutFor
           ? (() => {
               const fixAutomation = namespace.automations.find((item) => item.id === fixFlyoutFor);
@@ -3836,45 +4107,19 @@ function ContextEngineApp({
             Demo state
           </EuiText>
           {proto11On ? (
-            <EuiSuperSelect<CatalogDemoState | 'reset' | 'large'>
+            <EuiSuperSelect<'empty' | 'learning'>
               compressed
               options={[
-                { value: 'empty', inputDisplay: 'Empty' },
-                { value: 'learning', inputDisplay: 'Learning' },
-                { value: 'working', inputDisplay: 'Working' },
+                { value: 'empty', inputDisplay: 'New user', 'data-test-subj': 'contextEngineNewUser' },
                 {
-                  value: 'large',
-                  inputDisplay: 'Large index',
-                  'data-test-subj': 'contextEngineLargeIndex',
-                },
-                {
-                  value: 'reset',
-                  inputDisplay: 'Reset demo data',
-                  dropdownDisplay: (
-                    <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
-                      <EuiFlexItem grow={false}>
-                        <EuiIcon type="refresh" size="s" aria-hidden={true} />
-                      </EuiFlexItem>
-                      <EuiFlexItem grow={false}>Reset demo data</EuiFlexItem>
-                    </EuiFlexGroup>
-                  ),
-                  'data-test-subj': 'contextEngineResetDemoData',
+                  value: 'learning',
+                  inputDisplay: 'Existing user',
+                  'data-test-subj': 'contextEngineExistingUser',
                 },
               ]}
-              valueOfSelected={flags.catalogState}
+              valueOfSelected={flags.catalogState === 'empty' ? 'empty' : 'learning'}
               popoverProps={{ panelMinWidth: 200 }}
-              onChange={(value) => {
-                if (value === 'reset') {
-                  setPendingReset(true);
-                  return;
-                }
-                if (value === 'large') {
-                  if (flags.catalogState === 'empty') setDemoCatalogState('learning');
-                  trySample('large', 'knowledge');
-                  return;
-                }
-                setDemoCatalogState(value);
-              }}
+              onChange={applyProto11Audience}
               aria-label="Demo state"
               data-test-subj="contextEngineDemoState"
             />
@@ -3933,24 +4178,6 @@ function ContextEngineApp({
             confirmButtonText="Remove"
             buttonColor="danger"
           />
-        ) : null}
-        {pendingReset ? (
-          <EuiConfirmModal
-            aria-labelledby="contextEngineResetDemoDataTitle"
-            titleProps={{ id: 'contextEngineResetDemoDataTitle' }}
-            title="Reset demo data?"
-            onCancel={() => setPendingReset(false)}
-            onConfirm={confirmResetDemoData}
-            cancelButtonText="Cancel"
-            confirmButtonText="Reset"
-            buttonColor="danger"
-            data-test-subj="contextEngineResetDemoDataConfirm"
-          >
-            <p>
-              This removes every AI index created in this browser and restores the curated set:
-              the managed elastic index, two sample AI indices and four example indices.
-            </p>
-          </EuiConfirmModal>
         ) : null}
         {pendingDeleteIndex ? (
           <EuiConfirmModal
