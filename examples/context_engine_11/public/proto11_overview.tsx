@@ -49,7 +49,7 @@ import {
 } from './proto11_data';
 import type { Proto11Meta } from './proto11_types';
 
-const FirstPassDotGrid = ({ meta }: { meta: Proto11Meta }) => {
+export const FirstPassDotGrid = ({ meta }: { meta: Proto11Meta }) => {
   const { euiTheme } = useEuiTheme();
   const { dots, written, rejected } = firstPassDots(meta);
   return (

@@ -103,6 +103,7 @@ import {
   rerunAutomation,
   sampleNameFor,
   sampleScenarioOf,
+  outstandingRejected,
   rejectionMetaForAutomation,
   sendFixMessage,
   sourceHasOutstandingRejections,
@@ -132,7 +133,7 @@ import {
   Proto11RunCallout,
   Proto11SampleCallout,
 } from './proto11_overview';
-import { Proto11SetupCard } from './proto11_setup_card';
+import { Proto11OnboardingRail } from './proto11_setup_card';
 import { proto11RequiredSetupDone } from './proto11_setup';
 import { Proto11TestQuestion } from './proto11_test_question';
 import { Proto11MemoriesTab, type IndexMemory } from './proto11_memories_tab';
@@ -727,6 +728,7 @@ function ContextEngineApp({
   const [createEmpty, setCreateEmpty] = useState(false);
   const [createProposalOpen, setCreateProposalOpen] = useState(false);
   const [sampleDemoOpen, setSampleDemoOpen] = useState(false);
+  const [railOwnsFill, setRailOwnsFill] = useState(false);
   const [sampleBandPresent, setSampleBandPresent] = useState(false);
   const skipRouteSync = useRef(false);
   const [flags, setFlags] = useState(demoFlags$.value);
@@ -1228,6 +1230,91 @@ function ContextEngineApp({
     openDetail(created);
   };
 
+  const blankProto11 = (): Proto11Meta => ({
+    goal: 'docs',
+    sourceIds: [],
+    runTemplates: [],
+    phase: 'sampleReady',
+    tick: 0,
+    written: { sample: 0, full: 0, fixed: 0 },
+    fix: 'none',
+    fixTick: 0,
+    lookedAt: [],
+    checkHidden: true,
+  });
+
+  const createCodingAgentIndex = () => {
+    const existing = namespaces.find((item) => item.name === 'my-agent-context');
+    if (existing) {
+      openDetail(existing);
+      return;
+    }
+    const name = 'my-agent-context';
+    const created: Namespace = {
+      name,
+      displayName: name,
+      intent: 'Context for my coding agent.',
+      memoryEnabled: true,
+      owner: 'you',
+      updated: relativeNow(),
+      indexName: backingIndexName(name),
+      storageType: 'index',
+      userCreated: true,
+      sources: [],
+      traces: [],
+      automations: [],
+      indicators: [],
+      knowledge: statsFromIndicators([]),
+      tryQuestions: [],
+      proto11: { ...blankProto11(), onboardingView: 'agent' },
+    };
+    setNamespaces((current) => [created, ...current]);
+    openDetail(created);
+  };
+
+  const applySimulateBeat = (
+    namespaceName: string,
+    beat: 'agent' | 'traces' | 'retrieval' | 'memory',
+    tool: string,
+    memoryLine: string
+  ) => {
+    updateProto11Namespace(namespaceName, (item) => {
+      const meta = item.proto11 ?? blankProto11();
+      if (beat === 'agent') {
+        const agentName = `${tool} (external)`;
+        const agents = meta.connectedAgents ?? [];
+        const nextAgents = agents.some((agent) => agent.name === agentName)
+          ? agents
+          : [...agents, { name: agentName, connectedNote: 'Connected · just now' }];
+        return {
+          ...item,
+          proto11: { ...meta, connectedAgents: nextAgents, connectGuide: undefined },
+        };
+      }
+      if (beat === 'traces') {
+        const traces = item.traces ?? [];
+        return {
+          ...item,
+          traces: traces.length > 0 ? traces : [{ value: tool, type: 'elastic_agent' }],
+          proto11: { ...meta, tracesViaPrompt: true },
+        };
+      }
+      if (beat === 'retrieval') {
+        return {
+          ...item,
+          proto11: {
+            ...meta,
+            firstRetrievalTitle: item.indicators[0]?.title ?? 'How this index answers questions',
+          },
+        };
+      }
+      return {
+        ...item,
+        proto11: { ...meta, firstMemoryReceived: true, firstMemoryLine: memoryLine },
+      };
+    });
+  };
+
   const suggestDisabledReason = () => {
     if (flags.skillUnavailable) {
       return 'Automation generation is unavailable in this environment.';
@@ -1611,7 +1698,7 @@ function ContextEngineApp({
     primaryActionItem: {
       id: 'create-ai-index',
       label: 'Create AI index',
-      iconType: 'plusInCircle',
+      iconType: 'plusCircle',
       run: proto11On ? openComposerPage : openNameForm,
       testId: 'contextEngineCreateAiIndex',
     },
@@ -2036,6 +2123,7 @@ function ContextEngineApp({
                 onAddToIndex={addProposalToIndex}
                 onRerun={rerunProposal}
                 onCreateEmpty={openNameForm}
+                onConnectCodingAgent={createCodingAgentIndex}
                 onExploreSample={trySample}
                 onAskAgent={openProposalAgent}
                 discoverHref={coreStart.http.basePath.prepend('/app/discover')}
@@ -2198,7 +2286,7 @@ function ContextEngineApp({
                       wrap
                     >
                       <EuiFlexItem grow={false}>
-                        <EuiButton fill iconType="plusInCircle" onClick={openNameForm}>
+                        <EuiButton fill iconType="plusCircle" onClick={openNameForm}>
                           Create AI index
                         </EuiButton>
                       </EuiFlexItem>
@@ -2394,8 +2482,13 @@ function ContextEngineApp({
   const renderDetail = (namespace: Namespace) => {
     const state = indexState(namespace);
     const meta = namespace.proto11;
-    const stateBadge: AppHeaderBadge =
-      state === 'ready'
+    const setupTracked =
+      proto11On && Boolean(namespace.userCreated) && !namespace.managed && !meta?.sample;
+    const stateBadge: AppHeaderBadge = setupTracked
+      ? proto11RequiredSetupDone(namespace)
+        ? { label: 'Ready', color: 'success' }
+        : { label: 'Needs setup', color: 'warning' }
+      : state === 'ready'
         ? {
             label: 'Ready',
             color: 'success',
@@ -2409,7 +2502,7 @@ function ContextEngineApp({
           };
     const badges: AppHeaderBadge[] = [
       ...(meta?.sample ? [{ label: 'Sample', color: 'hollow' } satisfies AppHeaderBadge] : []),
-      ...(meta && state !== 'ready' ? [] : [stateBadge]),
+      ...(setupTracked || !(meta && state !== 'ready') ? [stateBadge] : []),
     ];
     if (namespace.managed) {
       badges.push({ label: 'Managed', color: 'hollow' });
@@ -2496,6 +2589,14 @@ function ContextEngineApp({
       ? 'agents'
       : null;
     const anyEditing = activeEditPanel !== null;
+    const setupRailOpen =
+      proto11On &&
+      Boolean(namespace.userCreated) &&
+      !namespace.managed &&
+      !meta?.sample &&
+      !meta?.setupDismissed &&
+      !proto11RequiredSetupDone(namespace);
+    const demotePanelFill = railOwnsFill || setupRailOpen;
     const sourcesListDirty =
       sourcesSignature(allDraftSources(sourcesDraft)) !== sourcesSignature(namespace.sources);
     const sourcesEsqlDirty = (() => {
@@ -2873,53 +2974,39 @@ function ContextEngineApp({
           ) : null}
           {effectiveTab === 'overview' ? (
             <div className="contextEnginePrototype__panels">
-              {proto11Overview && meta && !meta.sample ? (
-                <Proto11SetupCard
+              {proto11On && namespace.userCreated && !namespace.managed && !meta?.sample ? (
+                <Proto11OnboardingRail
+                  key={namespace.name}
                   namespace={namespace}
                   fillAction={!anyEditing}
                   apiKeysHref={coreStart.http.basePath.prepend(
                     '/app/management/security/api_keys'
                   )}
-                  onAddSources={goToSources}
+                  onSaveDescription={(intent) => replaceNamespace({ ...namespace, intent })}
+                  onSaveSources={(sources) => replaceNamespace({ ...namespace, sources })}
+                  onSaveTraces={(traces) => replaceNamespace({ ...namespace, traces })}
                   onRunAll={() => updateProto11Namespace(namespace.name, startFullRun)}
                   onViewKnowledge={() => setDetailTab('knowledge')}
                   onAddElasticAgent={() => setAddAgent({})}
-                  onAddTraces={() => requestEdit('traces')}
-                  onConnectExternal={() => {
-                    updateProto11Namespace(namespace.name, (item) => {
-                      const itemMeta = item.proto11;
-                      if (!itemMeta) return item;
-                      const agents = itemMeta.connectedAgents ?? [];
-                      const nextAgents = agents.some(
-                        (agent) => agent.name === 'Claude Code (external)'
-                      )
-                        ? agents
-                        : [
-                            ...agents,
-                            {
-                              name: 'Claude Code (external)',
-                              connectedNote: 'Connected · just now',
-                            },
-                          ];
-                      const traces = item.traces ?? [];
-                      return {
-                        ...item,
-                        traces:
-                          traces.length > 0
-                            ? traces
-                            : [{ value: 'Claude Code', type: 'elastic_agent' }],
-                        proto11: {
-                          ...itemMeta,
-                          connectedAgents: nextAgents,
-                          connectGuide: undefined,
-                        },
-                      };
+                  onFixRejections={() => {
+                    const target = namespace.automations.find((automation) => {
+                      const scoped = rejectionMetaForAutomation(namespace, automation);
+                      return Boolean(scoped && outstandingRejected(scoped) > 0);
                     });
+                    if (target) setFixFlyoutFor(target.id);
                   }}
-                  onMemoryReceived={() =>
-                    updateProto11Meta(namespace.name, { firstMemoryReceived: true })
+                  onSimulateBeat={(beat, tool, memoryLine) =>
+                    applySimulateBeat(namespace.name, beat, tool, memoryLine)
                   }
-                  onDismiss={() => updateProto11Meta(namespace.name, { setupDismissed: true })}
+                  onHide={() =>
+                    updateProto11Namespace(namespace.name, (item) => ({
+                      ...item,
+                      proto11: item.proto11
+                        ? { ...item.proto11, setupDismissed: true }
+                        : item.proto11,
+                    }))
+                  }
+                  onExpandedChange={setRailOwnsFill}
                 />
               ) : null}
               {proto11Overview ? (
@@ -2989,7 +3076,17 @@ function ContextEngineApp({
                   onRemove={() => removeSample(namespace.name)}
                 />
               ) : null}
-              {meta ? <Proto11RunCallout namespace={namespace} meta={meta} /> : null}
+              {meta &&
+              !(
+                proto11On &&
+                namespace.userCreated &&
+                !namespace.managed &&
+                !meta.sample &&
+                !meta.setupDismissed &&
+                meta.phase === 'firstPass'
+              ) ? (
+                <Proto11RunCallout namespace={namespace} meta={meta} />
+              ) : null}
               {namespace.sources.length === 0 && !readyCalloutDismissed[namespace.name] ? (
                 <ReadyCallout
                   onDismiss={() =>
@@ -3261,7 +3358,7 @@ function ContextEngineApp({
                         ? headerEditButtons(sourcesListDirty, saveSourcesEditor)
                         : hasSources
                           ? panelEditLink(() => requestEdit('sources'))
-                          : anyEditing
+                          : anyEditing || demotePanelFill
                             ? panelAddEmpty('+ Add sources', () => requestEdit('sources'))
                             : panelAddFilled('+ Add sources', () => requestEdit('sources'))}
                     </div>
@@ -3372,7 +3469,7 @@ function ContextEngineApp({
                       <div className="contextEnginePrototype__panelActions">
                         {suggestReason ? <DisabledReason>{suggestReason}</DisabledReason> : null}
                         {addAutomationButton(
-                          automationProposalOpen || anyEditing
+                          automationProposalOpen || anyEditing || demotePanelFill
                             ? 'empty'
                             : hasAutomations
                             ? 'button'

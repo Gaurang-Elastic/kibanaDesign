@@ -9,7 +9,13 @@
 
 import type { Namespace } from './namespace_data';
 
-export type Proto11SetupStepId = 'source' | 'indicators' | 'agent' | 'traces' | 'memory';
+export type Proto11SetupStepId =
+  | 'describe'
+  | 'source'
+  | 'indicators'
+  | 'agent'
+  | 'traces'
+  | 'memory';
 
 export interface Proto11SetupStep {
   id: Proto11SetupStepId;
@@ -27,6 +33,12 @@ export const proto11SetupSteps = (namespace: Namespace): Proto11SetupStep[] => {
   const indicatorsDone = meta?.phase === 'fullRun' || meta?.phase === 'complete';
   const steps: Proto11SetupStep[] = [
     {
+      id: 'describe',
+      label: 'Describe it',
+      optional: false,
+      done: namespace.intent.trim().length > 0,
+    },
+    {
       id: 'source',
       label: 'Connect a source',
       optional: false,
@@ -34,7 +46,7 @@ export const proto11SetupSteps = (namespace: Namespace): Proto11SetupStep[] => {
     },
     {
       id: 'indicators',
-      label: 'Check the first Knowledge Indicators',
+      label: 'First Knowledge Indicators',
       optional: false,
       done: indicatorsDone,
     },
@@ -54,7 +66,7 @@ export const proto11SetupSteps = (namespace: Namespace): Proto11SetupStep[] => {
   if (proto11MemoryOn(namespace)) {
     steps.push({
       id: 'memory',
-      label: 'Send your first memory',
+      label: 'First memory',
       optional: true,
       done: Boolean(meta?.firstMemoryReceived),
     });
@@ -62,9 +74,10 @@ export const proto11SetupSteps = (namespace: Namespace): Proto11SetupStep[] => {
   return steps;
 };
 
-/** Steps 1 to 3. Samples are treated as already set up so the catalog badge stays off them. */
+/** Steps 1 to 4. Samples and the managed index are already set up. */
 export const proto11RequiredSetupDone = (namespace: Namespace): boolean => {
-  if (!namespace.proto11 || namespace.proto11.sample) return true;
+  if (namespace.managed || namespace.proto11?.sample) return true;
+  if (!namespace.userCreated && !namespace.proto11) return true;
   return proto11SetupSteps(namespace)
     .filter((step) => !step.optional)
     .every((step) => step.done);

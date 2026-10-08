@@ -19,6 +19,7 @@ import {
   EuiIcon,
   EuiSpacer,
   EuiText,
+  transparentize,
   useEuiTheme,
 } from '@elastic/eui';
 
@@ -45,6 +46,9 @@ export const GRAPH_KI_LIMIT = 200;
 
 const SOURCE_X = 118;
 const SOURCE_R = 18;
+const SOURCE_CARD_W = 168;
+const SOURCE_CARD_H = 32;
+const DIAGRAM_PAD = 24;
 const KI_LEFT = 250;
 const KI_GAP = 26;
 const BASE_R = 8;
@@ -376,16 +380,6 @@ export const Proto11KiMap = ({
   );
 
   useEffect(() => {
-    const element = wrapRef.current;
-    if (!element) return;
-    const update = () => setWidth(Math.max(640, Math.floor(element.clientWidth)));
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
     setDrill(null);
     setModeChoice(modeByIndex.get(namespace.name) ?? 'coverage');
     setPan({ x: 0, y: 0 });
@@ -444,6 +438,26 @@ export const Proto11KiMap = ({
     (modeChoice === 'graph' && graphDisabled) || (modeChoice === 'flow' && flowDisabled)
       ? 'coverage'
       : modeChoice;
+  const diagramCanvas = mode === 'graph' || mode === 'flow';
+  const cardRadius = Number.parseFloat(String(euiTheme.border.radius.small)) || 4;
+  const dotInk =
+    colorMode === 'DARK'
+      ? transparentize(euiTheme.colors.textGhost, 0.1)
+      : transparentize(euiTheme.colors.textInk, 0.12);
+
+  useEffect(() => {
+    const element = wrapRef.current;
+    if (!element) return;
+    const update = () => {
+      const styles = getComputedStyle(element);
+      const pad = Number.parseFloat(styles.paddingLeft) + Number.parseFloat(styles.paddingRight);
+      setWidth(Math.max(640, Math.floor(element.clientWidth - (Number.isFinite(pad) ? pad : 0))));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [diagramCanvas]);
 
   useLayoutEffect(() => {
     onModeGroup?.(
@@ -634,9 +648,20 @@ export const Proto11KiMap = ({
           margin-top: 12px;
           max-height: 640px;
           overflow: auto;
-          border: 1px solid ${euiTheme.colors.borderBaseSubdued};
-          border-radius: 6px;
-          background: ${euiTheme.colors.emptyShade};
+          border: ${diagramCanvas
+            ? euiTheme.border.thin
+            : `1px solid ${euiTheme.colors.borderBaseSubdued}`};
+          border-radius: ${diagramCanvas ? euiTheme.border.radius.panel : '6px'};
+          background: ${mode === 'coverage'
+            ? euiTheme.colors.emptyShade
+            : euiTheme.colors.backgroundBaseSubdued};
+          ${diagramCanvas
+            ? `
+            padding: ${DIAGRAM_PAD}px;
+            background-image: radial-gradient(circle, ${dotInk} 1px, transparent 1px);
+            background-size: 16px 16px;
+          `
+            : ''}
         `}
       >
         {mode === 'flow' && flowTooSmall ? (
@@ -645,9 +670,13 @@ export const Proto11KiMap = ({
           </EuiText>
         ) : mode === 'coverage' || mode === 'flow' ? (
           <div
-            css={css`
-              padding: 16px;
-            `}
+            css={
+              mode === 'coverage'
+                ? css`
+                    padding: 16px;
+                  `
+                : undefined
+            }
           >
             {mode === 'coverage' ? (
               <Proto11Coverage
@@ -768,25 +797,31 @@ export const Proto11KiMap = ({
                             setTip(null);
                           }}
                         >
-                          <circle
-                            cx={node.x}
-                            cy={node.y}
-                            r={node.r}
-                            fill={node.gap ? 'transparent' : euiTheme.colors.lightestShade}
-                            stroke={
-                              node.gap ? euiTheme.colors.warning : euiTheme.colors.borderBaseSubdued
-                            }
-                            strokeWidth={node.gap ? 1.5 : 1}
-                            strokeDasharray={node.gap ? '4 3' : undefined}
+                          <rect
+                            x={node.x - SOURCE_CARD_W / 2}
+                            y={node.y - SOURCE_CARD_H / 2}
+                            width={SOURCE_CARD_W}
+                            height={SOURCE_CARD_H}
+                            rx={cardRadius}
+                            fill={euiTheme.colors.emptyShade}
+                            stroke={euiTheme.border.color}
+                            strokeWidth={1}
                           />
-                          <foreignObject x={node.x - 8} y={node.y - 8} width={16} height={16}>
+                          <foreignObject
+                            x={node.x - SOURCE_CARD_W / 2}
+                            y={node.y - SOURCE_CARD_H / 2}
+                            width={SOURCE_CARD_W}
+                            height={SOURCE_CARD_H}
+                          >
                             <div
                               style={{
-                                width: 16,
-                                height: 16,
+                                height: '100%',
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'center',
+                                gap: 6,
+                                padding: '0 8px',
+                                color: euiTheme.colors.text,
+                                fontSize: 11,
                               }}
                             >
                               <EuiIcon
@@ -795,21 +830,13 @@ export const Proto11KiMap = ({
                                 color="text"
                                 aria-hidden={true}
                               />
+                              <span>{truncate(node.sourceName, 22)}</span>
                             </div>
                           </foreignObject>
-                          <text
-                            x={node.x}
-                            y={node.y + node.r + 14}
-                            textAnchor="middle"
-                            fontSize={11}
-                            fill={euiTheme.colors.text}
-                          >
-                            {truncate(node.sourceName, 28)}
-                          </text>
                           {node.gap ? (
                             <text
                               x={node.x}
-                              y={node.y + node.r + 28}
+                              y={node.y + SOURCE_CARD_H / 2 + 14}
                               textAnchor="middle"
                               fontSize={11}
                               fill={euiTheme.colors.subduedText}
@@ -881,7 +908,7 @@ export const Proto11KiMap = ({
                 drill={drill}
                 colorMode={colorMode}
                 fillFor={fillFor}
-                border={euiTheme.colors.emptyShade}
+                border={euiTheme.colors.backgroundBaseSubdued}
                 text={euiTheme.colors.text}
                 subdued={euiTheme.colors.subduedText}
                 gapStroke={euiTheme.colors.warning}

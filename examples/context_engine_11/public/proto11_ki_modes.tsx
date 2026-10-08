@@ -14,7 +14,6 @@ import { EuiIcon, EuiText, transparentize, useEuiTheme } from '@elastic/eui';
 import type { KnowledgeType } from './knowledge_indicators';
 import {
   AGENT_TEAL,
-  AGENT_TEAL_INK,
   KI_VIZ_TYPES,
   KNOWLEDGE_BLUE,
   kiTypeShort,
@@ -205,6 +204,7 @@ export const Proto11Flow = ({
   onType: (type: KiVizType) => void;
 }) => {
   const { euiTheme } = useEuiTheme();
+  const cardRadius = Number.parseFloat(String(euiTheme.border.radius.small)) || 4;
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   const columns = [...KI_VIZ_TYPES];
   const typeCount = (type: KiVizType) =>
@@ -398,12 +398,10 @@ export const Proto11Flow = ({
               y={node.y}
               width={sourceW}
               height={node.h}
-              rx={4}
-              fill={euiTheme.colors.lightestShade}
-              stroke={
-                node.gap ? euiTheme.colors.borderBaseWarning : euiTheme.colors.borderBaseSubdued
-              }
-              strokeDasharray={node.gap ? '4 3' : undefined}
+              rx={cardRadius}
+              fill={euiTheme.colors.emptyShade}
+              stroke={euiTheme.border.color}
+              strokeWidth={1}
             />
             <foreignObject x={xSource + 6} y={node.y} width={sourceW - 12} height={node.h}>
               <div
@@ -459,9 +457,9 @@ export const Proto11Flow = ({
               y={node.y}
               width={agentW}
               height={node.h}
-              rx={4}
-              fill={AGENT_TEAL}
-              stroke={AGENT_TEAL_INK}
+              rx={cardRadius}
+              fill={euiTheme.colors.emptyShade}
+              stroke={euiTheme.border.color}
               strokeWidth={1}
             />
             <foreignObject x={xAgent + 6} y={node.y} width={agentW - 12} height={node.h}>
@@ -471,7 +469,7 @@ export const Proto11Flow = ({
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
-                  color: AGENT_TEAL_INK,
+                  color: euiTheme.colors.text,
                   fontSize: 11,
                 }}
               >

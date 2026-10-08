@@ -93,7 +93,15 @@ export interface Proto11Meta {
   connectGuide?: Proto11ConnectGuide;
   /** The coding agent, or a later run, saved the first memory. */
   firstMemoryReceived?: boolean;
-  /** The collapsed setup card was dismissed. */
+  /** First words shown for the memory step once one is saved. */
+  firstMemoryLine?: string;
+  /** The coding-agent prompt turned traces on. */
+  tracesViaPrompt?: boolean;
+  /** Title of the first Knowledge Indicator an agent retrieved. */
+  firstRetrievalTitle?: string;
+  /** Step the rail opens on for a shortcut, such as the coding-agent index. */
+  onboardingView?: 'describe' | 'source' | 'indicators' | 'agent' | 'traces' | 'memory';
+  /** The collapsed setup rail was hidden. */
   setupDismissed?: boolean;
 }
 

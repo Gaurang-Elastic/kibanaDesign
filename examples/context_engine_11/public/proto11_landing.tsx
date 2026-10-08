@@ -73,6 +73,7 @@ import { TraceRow } from './traces_panel';
 import { TABLE_SPARKLES_TYPE } from './register_table_sparkles';
 import heroArtLight from './assets/context-ai-index-light-animated.svg';
 import heroArtDark from './assets/context-ai-index-dark-animated.svg';
+import heroTexture from './assets/context_hero_texture.svg';
 
 type TraceSelector = 'elastic_agents' | 'genai_libraries';
 type DataTab = 'elasticsearch' | 'connectors';
@@ -1227,6 +1228,38 @@ export const Proto11IndexProposal = ({
   );
 };
 
+/** Faint dot texture behind the hero illustration, faded out towards the hero copy. */
+const HeroTexture = () => {
+  const { euiTheme, colorMode } = useEuiTheme();
+  return (
+    <div
+      aria-hidden="true"
+      data-test-subj="proto11HeroTexture"
+      css={css`
+        position: absolute;
+        /* Reaches past the hero's xl padding to its top, right and bottom edges. */
+        inset: -${euiTheme.size.xl} -${euiTheme.size.xl} -${euiTheme.size.xl} 0;
+        overflow: hidden;
+        pointer-events: none;
+        z-index: 0;
+        opacity: ${colorMode === 'DARK' ? 0.08 : 0.12};
+        mask-image: linear-gradient(to right, transparent 0%, black 35%);
+      `}
+    >
+      <div
+        css={css`
+          position: absolute;
+          top: 0;
+          right: -10%;
+          width: 140%;
+          aspect-ratio: 1270 / 1219;
+          background: url(${heroTexture}) no-repeat center / 100% auto;
+        `}
+      />
+    </div>
+  );
+};
+
 /** Animated hero illustration. Plays its entrance once per mount, unless reduced motion is on. */
 export const Proto11HeroArt = () => {
   const { colorMode } = useEuiTheme();
@@ -1251,6 +1284,7 @@ export const Proto11Landing = ({
   onAddToIndex,
   onRerun,
   onCreateEmpty,
+  onConnectCodingAgent,
   onExploreSample,
   onAskAgent,
   discoverHref,
@@ -1267,6 +1301,7 @@ export const Proto11Landing = ({
   onAddToIndex: (targetName: string, proposal: Proto11Proposal) => void;
   onRerun: (targetName: string, proposal: Proto11Proposal) => void;
   onCreateEmpty: () => void;
+  onConnectCodingAgent: () => void;
   onExploreSample: ExploreSample;
   onAskAgent: AskAgentAboutProposal;
   discoverHref: string;
@@ -1274,6 +1309,7 @@ export const Proto11Landing = ({
   sampleDemoOpen: boolean;
   onSampleDemoOpenChange: (next: boolean) => void;
 }) => {
+  const { euiTheme } = useEuiTheme();
   const [proposalShowing, setProposalShowing] = useState(false);
   if (variant === 'compact') {
     return (
@@ -1303,7 +1339,19 @@ export const Proto11Landing = ({
         `}
         data-test-subj="proto11Hero"
       >
-        <EuiPanel color="transparent" paddingSize="xl" hasShadow={false} borderRadius="none">
+        <EuiPanel
+          paddingSize="xl"
+          hasShadow={false}
+          borderRadius="none"
+          hasBorder={false}
+          css={css`
+            background: linear-gradient(
+              165deg,
+              ${euiTheme.colors.emptyShade} 0%,
+              ${euiTheme.colors.backgroundBaseSubdued} 100%
+            );
+          `}
+        >
           <div className="contextEnginePrototype__proto11Hero">
             <div className="contextEnginePrototype__proto11HeroContent">
               <EuiTitle size="l">
@@ -1330,19 +1378,38 @@ export const Proto11Landing = ({
               {proposalShowing ? null : (
                 <>
                   <EuiSpacer size="m" />
-                  <EuiText size="s" data-test-subj="proto11HeroActions">
+                  <EuiText size="s" color="subdued" data-test-subj="proto11HeroActions">
+                    <EuiLink
+                      color="subdued"
+                      onClick={onConnectCodingAgent}
+                      data-test-subj="proto11ConnectCodingInstead"
+                    >
+                      Connect a coding agent instead
+                    </EuiLink>
+                    {' · '}
                     <EuiLink
                       color="subdued"
                       onClick={onCreateEmpty}
                       data-test-subj="proto11CreateEmpty"
                     >
-                      Create an empty AI index instead
+                      Create an empty AI index
+                    </EuiLink>
+                    {' · '}
+                    <EuiLink
+                      color="subdued"
+                      onClick={() => onSampleDemoOpenChange(true)}
+                      data-test-subj="proto11TrySample"
+                    >
+                      Try it on sample data
                     </EuiLink>
                   </EuiText>
                 </>
               )}
             </div>
-            <div className="contextEnginePrototype__proto11HeroArt">{heroArt}</div>
+            <div className="contextEnginePrototype__proto11HeroArt">
+              <HeroTexture />
+              {heroArt}
+            </div>
           </div>
         </EuiPanel>
         <Proto11SampleStrip
