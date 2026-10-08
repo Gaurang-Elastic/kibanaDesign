@@ -13,6 +13,7 @@ import {
   EuiAvatar,
   EuiBadge,
   EuiButton,
+  EuiButtonEmpty,
   EuiButtonGroup,
   EuiButtonIcon,
   EuiCheckbox,
@@ -1137,11 +1138,14 @@ export const Proto11IndexProposal = ({
   onCreateAndRun,
   onRerun,
   onCancel,
+  actions = 'fill',
 }: {
   namespace: Namespace;
   onCreateAndRun: (proposal: Proto11Proposal) => void;
   onRerun: (proposal: Proto11Proposal) => void;
   onCancel: () => void;
+  /** `none` hides the buttons for a read-only rail. */
+  actions?: 'fill' | 'empty' | 'none';
 }) => {
   const proposal = proposeFromIndex(namespace);
   const templateId = goalById(proposal.goal).template;
@@ -1207,23 +1211,41 @@ export const Proto11IndexProposal = ({
           </EuiText>
         </>
       ) : null}
-      <EuiSpacer size="l" />
-      <EuiFlexGroup justifyContent="flexEnd" alignItems="center" gutterSize="m" responsive={false}>
-        <EuiFlexItem grow={false}>
-          <EuiLink onClick={onCancel} data-test-subj="proto11IndexProposalCancel">
-            Cancel
-          </EuiLink>
-        </EuiFlexItem>
-        <EuiFlexItem grow={false}>
-          <EuiButton
-            fill
-            onClick={() => (alreadyThere ? onRerun(proposal) : onCreateAndRun(proposal))}
-            data-test-subj="proto11IndexProposalRun"
+      {actions === 'none' ? null : (
+        <>
+          <EuiSpacer size="l" />
+          <EuiFlexGroup
+            justifyContent="flexEnd"
+            alignItems="center"
+            gutterSize="m"
+            responsive={false}
           >
-            {alreadyThere ? 'Run it again' : 'Add and run'}
-          </EuiButton>
-        </EuiFlexItem>
-      </EuiFlexGroup>
+            <EuiFlexItem grow={false}>
+              <EuiLink onClick={onCancel} data-test-subj="proto11IndexProposalCancel">
+                Cancel
+              </EuiLink>
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              {actions === 'fill' ? (
+                <EuiButton
+                  fill
+                  onClick={() => (alreadyThere ? onRerun(proposal) : onCreateAndRun(proposal))}
+                  data-test-subj="proto11IndexProposalRun"
+                >
+                  {alreadyThere ? 'Run it again' : 'Add and run'}
+                </EuiButton>
+              ) : (
+                <EuiButtonEmpty
+                  onClick={() => (alreadyThere ? onRerun(proposal) : onCreateAndRun(proposal))}
+                  data-test-subj="proto11IndexProposalRun"
+                >
+                  {alreadyThere ? 'Run it again' : 'Add and run'}
+                </EuiButtonEmpty>
+              )}
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        </>
+      )}
     </div>
   );
 };

@@ -27,10 +27,22 @@ export interface Proto11SetupStep {
 /** Memory stays on unless the index turns it off. */
 export const proto11MemoryOn = (namespace: Namespace): boolean => namespace.memoryEnabled !== false;
 
+const runInProgress = (status: string | undefined): boolean =>
+  status === 'firstPass' || status === 'running';
+
+/**
+ * The first run has finished. A run that is still going does not count,
+ * and a later run does not undo one that already finished.
+ */
+const indicatorsRunFinished = (namespace: Namespace): boolean =>
+  namespace.automations.some(
+    (automation) => automation.hasRun && !runInProgress(automation.runStatus)
+  ) && !namespace.automations.some((automation) => runInProgress(automation.runStatus));
+
 /** Steps in order. Memory is omitted when the index has Memory off. */
 export const proto11SetupSteps = (namespace: Namespace): Proto11SetupStep[] => {
   const meta = namespace.proto11;
-  const indicatorsDone = meta?.phase === 'fullRun' || meta?.phase === 'complete';
+  const indicatorsDone = indicatorsRunFinished(namespace);
   const steps: Proto11SetupStep[] = [
     {
       id: 'describe',
@@ -72,6 +84,25 @@ export const proto11SetupSteps = (namespace: Namespace): Proto11SetupStep[] => {
     });
   }
   return steps;
+};
+
+/**
+ * The step that owns the ring. The coding-agent index opens on Connect your agent
+ * while sources and the first run are still pending.
+ */
+export const proto11CurrentStepId = (namespace: Namespace): Proto11SetupStepId | undefined => {
+  const steps = proto11SetupSteps(namespace);
+  const open = (id: Proto11SetupStepId) => steps.some((step) => step.id === id && !step.done);
+  if (
+    namespace.proto11?.onboardingView === 'agent' &&
+    !open('describe') &&
+    open('source') &&
+    open('indicators') &&
+    open('agent')
+  ) {
+    return 'agent';
+  }
+  return steps.find((step) => !step.done)?.id;
 };
 
 /** Steps 1 to 4. Samples and the managed index are already set up. */

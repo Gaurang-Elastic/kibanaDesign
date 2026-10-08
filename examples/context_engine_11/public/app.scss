@@ -1239,6 +1239,40 @@ html {
   gap: 32px;
 }
 
+.contextEnginePrototype__proto11Figure {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.contextEnginePrototype__modeFade {
+  animation: contextEngineModeIn 250ms ease-out;
+}
+
+.contextEnginePrototype__automationCard--highlight {
+  background: var(--euiColorBackgroundLightPrimary, #e8f1fc);
+}
+
+@keyframes contextEngineModeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contextEnginePrototype__modeFade {
+    animation: none;
+  }
+}
+
 .contextEnginePrototype__kiValueList {
   margin: 0;
   padding-inline-start: 1.25rem;

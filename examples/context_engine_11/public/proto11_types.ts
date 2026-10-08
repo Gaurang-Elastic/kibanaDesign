@@ -103,6 +103,8 @@ export interface Proto11Meta {
   onboardingView?: 'describe' | 'source' | 'indicators' | 'agent' | 'traces' | 'memory';
   /** The collapsed setup rail was hidden. */
   setupDismissed?: boolean;
+  /** Set once steps 1 to 4 are done, so later runs stay on the Ready page. */
+  setupFinished?: boolean;
 }
 
 /** Sample pass for an automation added to an existing AI index. */

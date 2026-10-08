@@ -108,14 +108,12 @@ import {
   sendFixMessage,
   sourceHasOutstandingRejections,
   sourceKiCount,
-  startFullRun,
   startRerun,
   type CreateFromGoalOptions,
   type Proto11Proposal,
 } from './proto11_data';
 import { Proto11AddAgentFlyout, Proto11UsedByPanel } from './proto11_agents_panel';
 import {
-  Proto11Composer,
   Proto11HeroArt,
   Proto11IndexProposal,
   Proto11Landing,
@@ -587,7 +585,13 @@ const DisabledReason = ({ children }: { children: React.ReactNode }) => (
   </EuiText>
 );
 
-const Proto11Figures = ({ namespace }: { namespace: Namespace }) => {
+const Proto11Figures = ({
+  namespace,
+  onSelect,
+}: {
+  namespace: Namespace;
+  onSelect?: (which: 'knowledge' | 'sources' | 'automations' | 'lastRun') => void;
+}) => {
   const lastRun =
     namespace.lastSuccessfulRun?.when ??
     [...namespace.automations].reverse().find((item) => item.lastRunAt)?.lastRunAt ??
@@ -596,32 +600,61 @@ const Proto11Figures = ({ namespace }: { namespace: Namespace }) => {
       : namespace.automations.some((item) => item.hasRun)
       ? 'just now'
       : 'Not yet');
-  const figures = [
+  const figures: Array<{
+    id: 'knowledge' | 'sources' | 'automations' | 'lastRun';
+    label: string;
+    value: string;
+    test: string;
+  }> = [
     {
+      id: 'knowledge',
       label: 'Knowledge Indicators',
       value: String(namespace.indicators.length),
       test: 'proto11FigureKi',
     },
-    { label: 'Sources', value: String(namespace.sources.length), test: 'proto11FigureSources' },
     {
+      id: 'sources',
+      label: 'Sources',
+      value: String(namespace.sources.length),
+      test: 'proto11FigureSources',
+    },
+    {
+      id: 'automations',
       label: 'Automations',
       value: String(namespace.automations.length),
       test: 'proto11FigureAutomations',
     },
-    { label: 'Last run', value: lastRun, test: 'proto11FigureLastRun' },
+    { id: 'lastRun', label: 'Last run', value: lastRun, test: 'proto11FigureLastRun' },
   ];
   return (
     <div className="contextEnginePrototype__proto11Figures" data-test-subj="proto11OverviewFigures">
-      {figures.map((figure) => (
-        <div key={figure.label} data-test-subj={figure.test}>
-          <EuiTitle size="s">
-            <p>{figure.value}</p>
-          </EuiTitle>
-          <EuiText size="s" color="subdued">
-            <p>{figure.label}</p>
-          </EuiText>
-        </div>
-      ))}
+      {figures.map((figure) => {
+        const body = (
+          <>
+            <EuiTitle size="s">
+              <p>{figure.value}</p>
+            </EuiTitle>
+            <EuiText size="s" color="subdued">
+              <p>{figure.label}</p>
+            </EuiText>
+          </>
+        );
+        return onSelect ? (
+          <button
+            key={figure.id}
+            type="button"
+            className="contextEnginePrototype__proto11Figure"
+            data-test-subj={figure.test}
+            onClick={() => onSelect(figure.id)}
+          >
+            {body}
+          </button>
+        ) : (
+          <div key={figure.id} data-test-subj={figure.test}>
+            {body}
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -725,10 +758,11 @@ function ContextEngineApp({
   const [ownerFilterOpen, setOwnerFilterOpen] = useState(false);
   const [indexPage, setIndexPage] = useState(0);
   const [indexPageSize, setIndexPageSize] = useState(10);
-  const [createEmpty, setCreateEmpty] = useState(false);
-  const [createProposalOpen, setCreateProposalOpen] = useState(false);
   const [sampleDemoOpen, setSampleDemoOpen] = useState(false);
   const [railOwnsFill, setRailOwnsFill] = useState(false);
+  const [railSimulating, setRailSimulating] = useState(false);
+  const [setupFlyout, setSetupFlyout] = useState(false);
+  const [highlightAutomationId, setHighlightAutomationId] = useState<string | null>(null);
   const [sampleBandPresent, setSampleBandPresent] = useState(false);
   const skipRouteSync = useRef(false);
   const [flags, setFlags] = useState(demoFlags$.value);
@@ -1012,6 +1046,7 @@ function ContextEngineApp({
   useEffect(() => {
     setNextStepDismissed(false);
     setAddAgent(null);
+    setSetupFlyout(false);
   }, [activeName, screen]);
 
   useEffect(() => {
@@ -1071,6 +1106,18 @@ function ContextEngineApp({
     );
   };
 
+  useEffect(() => {
+    if (railSimulating || !proto11On || !activeName) return;
+    const current = namespaces.find((item) => item.name === activeName);
+    if (!current?.proto11 || current.proto11.setupFinished) return;
+    if (!current.userCreated || current.managed || current.proto11.sample) return;
+    if (!proto11RequiredSetupDone(current)) return;
+    updateProto11Namespace(current.name, (item) => ({
+      ...item,
+      proto11: item.proto11 ? { ...item.proto11, setupFinished: true } : item.proto11,
+    }));
+  }, [namespaces, activeName, proto11On, railSimulating]);
+
   const createFromGoal = (options: Omit<CreateFromGoalOptions, 'takenNames'>) => {
     const created = createProto11Namespace({
       ...options,
@@ -1083,9 +1130,24 @@ function ContextEngineApp({
   const addProposalToIndex = (targetName: string, proposal: Proto11Proposal) => {
     const existing = namespaces.find((item) => item.name === targetName);
     if (!existing) return;
+    const wasReady =
+      proto11On &&
+      (Boolean(existing.proto11?.setupFinished) ||
+        existing.managed ||
+        Boolean(existing.proto11?.sample) ||
+        proto11RequiredSetupDone(existing));
     const updated = addProposalToNamespace(existing, proposal);
+    const added = updated.automations.find(
+      (automation) => !existing.automations.some((item) => item.id === automation.id)
+    );
     setNamespaces((current) => current.map((item) => (item.name === targetName ? updated : item)));
     openDetail(updated);
+    if (wasReady && added) {
+      setHighlightAutomationId(added.id);
+      window.setTimeout(() => {
+        setHighlightAutomationId((current) => (current === added.id ? null : current));
+      }, 2000);
+    }
   };
 
   const rerunProposal = (targetName: string, proposal: Proto11Proposal) => {
@@ -1136,21 +1198,12 @@ function ContextEngineApp({
     coreStart.notifications.toasts.addSuccess('Sample data removed');
   };
 
-  const openComposerPage = () => {
-    setCreateEmpty(false);
-    setScreen('create');
-    if (history.location.pathname !== '/create' || history.location.search) {
-      history.push('/create');
-    }
-  };
-
   const openNameForm = () => {
     setCreateName('');
     setCreateIntent('');
     setCreateMemoryEnabled(true);
     setSourcesDraft(emptySourcesDraft());
     setCreateTraces([]);
-    setCreateEmpty(true);
     setScreen('create');
     const next = proto11On ? '/create?empty=1' : '/create';
     if (`${history.location.pathname}${history.location.search}` !== next) {
@@ -1179,21 +1232,20 @@ function ContextEngineApp({
   };
 
   useEffect(() => {
-    const applyRoute = (pathname: string, search: string) => {
+    const applyRoute = (pathname: string) => {
       if (skipRouteSync.current) {
         skipRouteSync.current = false;
         return;
       }
       if (pathname === '/create') {
-        setCreateEmpty(!proto11On || new URLSearchParams(search).get('empty') === '1');
         setScreen('create');
         return;
       }
       setScreen((current) => (current === 'create' ? 'index' : current));
     };
-    applyRoute(history.location.pathname, history.location.search);
-    return history.listen((location) => applyRoute(location.pathname, location.search));
-  }, [history, proto11On]);
+    applyRoute(history.location.pathname);
+    return history.listen((location) => applyRoute(location.pathname));
+  }, [history]);
 
   useEffect(() => {
     setIndexPage(0);
@@ -1209,18 +1261,19 @@ function ContextEngineApp({
     if (createDisabledReason) return;
     const name = createName.trim();
     const indexName = backingIndexName(name);
+    const createdMemory = !proto11On && showMemory ? createMemoryEnabled : true;
     const created: Namespace = {
       name,
       displayName: name,
-      intent: createIntent.trim(),
-      memoryEnabled: showMemory ? createMemoryEnabled : true,
+      intent: proto11On ? '' : createIntent.trim(),
+      memoryEnabled: createdMemory,
       owner: 'you',
       updated: relativeNow(),
       indexName,
       storageType: 'index', // Search-team #16065: always index in the UI
       userCreated: true,
       sources: [],
-      traces: createTraces,
+      traces: proto11On ? [] : createTraces,
       automations: [],
       indicators: [],
       knowledge: statsFromIndicators([]),
@@ -1699,7 +1752,7 @@ function ContextEngineApp({
       id: 'create-ai-index',
       label: 'Create AI index',
       iconType: 'plusCircle',
-      run: proto11On ? openComposerPage : openNameForm,
+      run: openNameForm,
       testId: 'contextEngineCreateAiIndex',
     },
   };
@@ -2355,45 +2408,16 @@ function ContextEngineApp({
   };
 
   const renderCreate = () => {
-    const showComposer = proto11On && !createEmpty;
     return (
       <>
         <PageHeader
           title="Create AI index"
           back={headerBack(CONTEXT_APP_HREF, 'Context', goLanding)}
-          metadata={showComposer ? undefined : headerMeta(CREATE_DESCRIPTION)}
-          menu={proto11On ? proto11Menu(!createProposalOpen) : undefined}
+          metadata={headerMeta(CREATE_DESCRIPTION)}
+          menu={proto11On ? { items: [exploreSampleItem] } : undefined}
           badges={proto11HeaderBadges}
-          sectionClassName={
-            showComposer ? 'contextEnginePrototype__headerSection--quietCreate' : undefined
-          }
         />
         <PageBody>
-          {showComposer ? (
-            <div className="contextEnginePrototype__create" data-test-subj="proto11CreatePage">
-              <Proto11Composer
-                compact={false}
-                takenNames={namespaces.map((item) => item.name)}
-                namespaces={namespaces}
-                onCreateFromGoal={createFromGoal}
-                onAddToIndex={addProposalToIndex}
-                onRerun={rerunProposal}
-                onAskAgent={openProposalAgent}
-                onProposalChange={setCreateProposalOpen}
-              />
-              {createProposalOpen ? null : (
-                <EuiText size="s">
-                  <EuiLink
-                    color="subdued"
-                    onClick={openNameForm}
-                    data-test-subj="proto11CreateEmptyInstead"
-                  >
-                    Create an empty AI index instead
-                  </EuiLink>
-                </EuiText>
-              )}
-            </div>
-          ) : (
           <div className="contextEnginePrototype__create">
             <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__panel">
               <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
@@ -2415,6 +2439,8 @@ function ContextEngineApp({
                 <p>{NAME_HELPER}</p>
               </EuiText>
             </EuiPanel>
+            {proto11On ? null : (
+            <>
             <EuiPanel hasBorder paddingSize="l" className="contextEnginePrototype__panel">
               <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
                 <h2>Description</h2>
@@ -2450,6 +2476,8 @@ function ContextEngineApp({
               improvementsEnabled={FEEDBACK_LOOP_ENABLED && flags.feedbackLoopEnabled}
               accordionId="context-engine-11-create-traces-esql"
             />
+            </>
+            )}
             <EuiFlexGroup
               justifyContent="flexEnd"
               alignItems="center"
@@ -2473,7 +2501,6 @@ function ContextEngineApp({
               </EuiFlexItem>
             </EuiFlexGroup>
           </div>
-          )}
         </PageBody>
       </>
     );
@@ -2484,10 +2511,34 @@ function ContextEngineApp({
     const meta = namespace.proto11;
     const setupTracked =
       proto11On && Boolean(namespace.userCreated) && !namespace.managed && !meta?.sample;
+    const requiredSetupDone = proto11RequiredSetupDone(namespace);
+    const setupMode =
+      setupTracked &&
+      !meta?.setupFinished &&
+      (railSimulating || !requiredSetupDone);
+    const readyMode = proto11On && !setupMode;
     const stateBadge: AppHeaderBadge = setupTracked
-      ? proto11RequiredSetupDone(namespace)
-        ? { label: 'Ready', color: 'success' }
-        : { label: 'Needs setup', color: 'warning' }
+      ? setupMode
+        ? { label: 'Needs setup', color: 'warning' }
+        : {
+            label: 'Ready',
+            renderCustomBadge: () => (
+              <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false}>
+                <EuiFlexItem grow={false}>
+                  <EuiBadge color="success">Ready</EuiBadge>
+                </EuiFlexItem>
+                <EuiFlexItem grow={false}>
+                  <EuiLink
+                    color="subdued"
+                    onClick={() => setSetupFlyout(true)}
+                    data-test-subj="proto11SetupLink"
+                  >
+                    Setup
+                  </EuiLink>
+                </EuiFlexItem>
+              </EuiFlexGroup>
+            ),
+          }
       : state === 'ready'
         ? {
             label: 'Ready',
@@ -2513,7 +2564,8 @@ function ContextEngineApp({
     if (showMemoriesTab) {
       badges.unshift({ label: 'Exploration', color: 'hollow' });
     }
-    const hideKnowledgeTab = Boolean(meta) && namespace.indicators.length === 0;
+    const hideKnowledgeTab =
+      Boolean(meta) && namespace.indicators.length === 0 && !setupMode;
     const showUsageTab =
       USAGE_ENABLED &&
       flags.proto11Usage &&
@@ -2952,6 +3004,267 @@ function ContextEngineApp({
         </EuiPanel>
       ) : null;
 
+    const automationCard = (automation: Automation) => (
+      <div
+        key={automation.id}
+        className={`contextEnginePrototype__automationCard${
+          highlightAutomationId === automation.id
+            ? ' contextEnginePrototype__automationCard--highlight'
+            : ''
+        }`}
+        data-test-subj={
+          highlightAutomationId === automation.id ? 'proto11AutomationHighlight' : undefined
+        }
+      >
+        <div className="contextEnginePrototype__automationCardTop">
+          <EuiTitle size="xs" className="contextEnginePrototype__automationCardTitle">
+            <h3>
+              {meta && automation.templateId ? (
+                <EuiIcon
+                  type="bolt"
+                  size="m"
+                  aria-hidden={true}
+                  className="contextEnginePrototype__automationTitleIcon"
+                />
+              ) : null}
+              {automation.title}
+            </h3>
+          </EuiTitle>
+          <div className="contextEnginePrototype__automationCardMeta">
+            {meta && automation.templateId ? (
+              <EuiBadge color={proto11StatusPill(automation, namespace).color}>
+                {proto11StatusPill(automation, namespace).label}
+              </EuiBadge>
+            ) : (
+              <EuiBadge color={automation.enabled ? 'success' : 'hollow'}>
+                {automation.enabled ? 'Enabled' : 'Disabled'}
+              </EuiBadge>
+            )}
+            <EuiPopover
+              button={
+                <EuiButtonEmpty
+                  size="s"
+                  iconType="pencil"
+                  onClick={() => {
+                    setAutomationsAddOpen(false);
+                    setAutomationsMenuOpen((current) =>
+                      current === automation.id ? null : automation.id
+                    );
+                  }}
+                >
+                  Edit automation
+                </EuiButtonEmpty>
+              }
+              isOpen={automationsMenuOpen === automation.id}
+              closePopover={() => setAutomationsMenuOpen(null)}
+              panelPaddingSize="none"
+              anchorPosition="downRight"
+            >
+              <EuiContextMenuPanel
+                size="s"
+                items={[
+                  <EuiContextMenuItem
+                    key="refine"
+                    icon="productAgent"
+                    onClick={() => {
+                      setAutomationsMenuOpen(null);
+                      openRefineAutomation(namespace, automation);
+                    }}
+                  >
+                    Refine with agent
+                  </EuiContextMenuItem>,
+                  <EuiContextMenuItem
+                    key="edit-workflow"
+                    icon="popout"
+                    href={workflowsHref}
+                    target="_blank"
+                    onClick={() => setAutomationsMenuOpen(null)}
+                  >
+                    Edit workflow
+                  </EuiContextMenuItem>,
+                  <EuiContextMenuItem
+                    key="run-now"
+                    icon="play"
+                    onClick={() => {
+                      setAutomationsMenuOpen(null);
+                      replaceNamespace({
+                        ...namespace,
+                        automations: namespace.automations.map((item) =>
+                          item.id === automation.id
+                            ? { ...item, hasRun: true, lastRunAt: relativeNow() }
+                            : item
+                        ),
+                        lastSuccessfulRun: {
+                          name: automation.title,
+                          when: relativeNow(),
+                        },
+                        updated: relativeNow(),
+                      });
+                      coreStart.notifications.toasts.addSuccess(`Started ${automation.title}`);
+                    }}
+                  >
+                    Run now
+                  </EuiContextMenuItem>,
+                  <div key="divider" role="separator" className="contextEnginePrototype__menuDivider" />,
+                  <EuiContextMenuItem
+                    key="toggle"
+                    icon={automation.enabled ? 'pause' : 'playFilled'}
+                    color={automation.enabled ? 'danger' : undefined}
+                    onClick={() => {
+                      setAutomationsMenuOpen(null);
+                      replaceNamespace({
+                        ...namespace,
+                        automations: namespace.automations.map((item) =>
+                          item.id === automation.id ? { ...item, enabled: !item.enabled } : item
+                        ),
+                      });
+                    }}
+                  >
+                    {automation.enabled ? 'Disable' : 'Enable'}
+                  </EuiContextMenuItem>,
+                  <EuiContextMenuItem
+                    key="delete"
+                    icon="trash"
+                    color="danger"
+                    onClick={() => {
+                      setAutomationsMenuOpen(null);
+                      setPendingDelete({
+                        namespaceName: namespace.name,
+                        automation,
+                      });
+                    }}
+                  >
+                    Delete
+                  </EuiContextMenuItem>,
+                ]}
+              />
+            </EuiPopover>
+          </div>
+        </div>
+        {meta && automation.templateId ? (
+          <Proto11AutomationFacts
+            automation={automation}
+            namespace={namespace}
+            onFix={() => setFixFlyoutFor(automation.id)}
+          />
+        ) : (
+          <>
+            <EuiText size="xs" color="subdued">
+              <p>{automationAddedLine(automation)}</p>
+            </EuiText>
+            {meta ? (
+              <Proto11AutomationRejection
+                namespace={namespace}
+                automation={automation}
+                onFix={() => setFixFlyoutFor(automation.id)}
+              />
+            ) : null}
+            <EuiText size="s">
+              <p>{automation.description}</p>
+            </EuiText>
+            <div className="contextEnginePrototype__automationIo">
+              <span className="contextEnginePrototype__automationIoLabel">Reads</span>
+              {displayedReads(namespace, automation).length > 0 ? (
+                displayedReads(namespace, automation).map((source) => (
+                  <EuiBadge key={source} color="hollow">
+                    {source}
+                  </EuiBadge>
+                ))
+              ) : (
+                <EuiBadge color="hollow">No sources</EuiBadge>
+              )}
+              <EuiIcon type="arrowRight" size="s" color="subdued" />
+              <span className="contextEnginePrototype__automationIoLabel">Produces</span>
+              {meta && displayedProduces(namespace, automation) === 0 && !automation.hasRun ? (
+                <EuiBadge color="hollow">No Knowledge Indicators yet</EuiBadge>
+              ) : (
+                <EuiBadge color="hollow">
+                  {displayedProduces(namespace, automation)}{' '}
+                  {displayedProduces(namespace, automation) === 1
+                    ? 'Knowledge Indicator'
+                    : 'Knowledge Indicators'}
+                </EuiBadge>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    );
+
+    const renderRail = (readOnly: boolean) => (
+      <Proto11OnboardingRail
+        key={readOnly ? `${namespace.name}-setup` : namespace.name}
+        namespace={namespace}
+        fillAction={!anyEditing}
+        readOnly={readOnly}
+        apiKeysHref={coreStart.http.basePath.prepend('/app/management/security/api_keys')}
+        onSaveDescription={(intent, memoryEnabled) =>
+          replaceNamespace({ ...namespace, intent, memoryEnabled })
+        }
+        onSaveSources={(sources) => replaceNamespace({ ...namespace, sources })}
+        onSaveTraces={(traces) => replaceNamespace({ ...namespace, traces })}
+        onViewKnowledge={() => setDetailTab('knowledge')}
+        onAddElasticAgent={() => setAddAgent({})}
+        onAddProposal={(proposal) => addProposalToIndex(namespace.name, proposal)}
+        onRerunProposal={(proposal) => rerunProposal(namespace.name, proposal)}
+        indicatorsCards={namespace.automations.map(automationCard)}
+        onSimulateBeat={(beat, tool, memoryLine) =>
+          applySimulateBeat(namespace.name, beat, tool, memoryLine)
+        }
+        onSimulatingChange={readOnly ? undefined : setRailSimulating}
+        onExpandedChange={readOnly ? () => undefined : setRailOwnsFill}
+      />
+    );
+
+    const attentionItems: Array<{
+      id: string;
+      text: string;
+      action: string;
+      onClick: () => void;
+    }> = [];
+    if (readyMode && meta) {
+      let rejectedCount = 0;
+      let fixId: string | undefined;
+      namespace.automations.forEach((automation) => {
+        const scoped = rejectionMetaForAutomation(namespace, automation);
+        const outstanding = scoped ? outstandingRejected(scoped) : 0;
+        if (outstanding > 0) {
+          rejectedCount += outstanding;
+          fixId = fixId ?? automation.id;
+        }
+      });
+      if (rejectedCount > 0 && fixId) {
+        const targetId = fixId;
+        attentionItems.push({
+          id: 'rejected',
+          text: `${rejectedCount} Knowledge Indicators rejected`,
+          action: 'Fix with Elastic AI Agent',
+          onClick: () => setFixFlyoutFor(targetId),
+        });
+      }
+      namespace.sources.forEach((source) => {
+        if (sourceKiCount(namespace, source) === 0) {
+          attentionItems.push({
+            id: `quiet-${source.id}`,
+            text: `${source.name} has no Knowledge Indicators yet`,
+            action: 'Propose automation',
+            onClick: () => {
+              setAutomationProposalOpen(true);
+              setPendingAutomationsScroll(true);
+            },
+          });
+        }
+      });
+    }
+    if (readyMode && canEditPanels && connectedAgents.length === 0) {
+      attentionItems.push({
+        id: 'connect',
+        text: 'No agent uses this index',
+        action: 'Connect',
+        onClick: () => setAddAgent({}),
+      });
+    }
+
     return (
       <>
         <PageHeader
@@ -2973,42 +3286,221 @@ function ContextEngineApp({
             </div>
           ) : null}
           {effectiveTab === 'overview' ? (
-            <div className="contextEnginePrototype__panels">
-              {proto11On && namespace.userCreated && !namespace.managed && !meta?.sample ? (
-                <Proto11OnboardingRail
-                  key={namespace.name}
+            setupMode ? (
+              <div className="contextEnginePrototype__modeFade" data-test-subj="proto11SetupMode">
+                {renderRail(false)}
+              </div>
+            ) : readyMode ? (
+              <div
+                className="contextEnginePrototype__modeFade contextEnginePrototype__panels"
+                data-test-subj="proto11ReadyMode"
+              >
+                <EuiText size="s" data-test-subj="proto11OverviewMeta">
+                  <p>
+                    {overviewPurpose(namespace)}
+                    {showMemory
+                      ? ` · ${namespace.memoryEnabled === false ? 'Memory off' : 'Memory on'}`
+                      : ''}
+                    {(namespace.traces?.length ?? 0) > 0
+                      ? ` · Learns from ${learnsFromName || 'an agent'}`
+                      : ''}
+                    {canEditPanels && !meta?.sample ? (
+                      <>
+                        {' · '}
+                        <EuiLink onClick={openDetails} data-test-subj="proto11EditDetails">
+                          Edit details
+                        </EuiLink>
+                      </>
+                    ) : null}
+                  </p>
+                </EuiText>
+                {editIntentOpen ? (
+                  <EuiPanel
+                    hasBorder
+                    paddingSize="l"
+                    className="contextEnginePrototype__panel"
+                    data-test-subj="proto11DetailsEditor"
+                  >
+                    <EuiFormRow label="Description" fullWidth>
+                      <EuiTextArea
+                        fullWidth
+                        rows={4}
+                        placeholder={DESCRIPTION_PLACEHOLDER}
+                        value={intentDraft}
+                        onChange={(event) => setIntentDraft(event.target.value)}
+                        aria-label="Description"
+                      />
+                    </EuiFormRow>
+                    {showMemory ? (
+                      <>
+                        <EuiSpacer size="m" />
+                        <MemorySwitch checked={memoryDraft} onChange={setMemoryDraft} />
+                      </>
+                    ) : null}
+                    <EuiSpacer size="l" />
+                    <AgentTracesPanel
+                      bare
+                      traces={tracesDraft}
+                      onChange={setTracesDraft}
+                      accordionId="context-engine-11-ready-traces-esql"
+                      variant="editor"
+                      description={null}
+                    />
+                    <EuiSpacer size="m" />
+                    <EuiFlexGroup gutterSize="s" justifyContent="flexEnd" responsive={false}>
+                      {headerEditButtons(descriptionDirty || tracesDirty, saveDetails)}
+                    </EuiFlexGroup>
+                  </EuiPanel>
+                ) : null}
+                <Proto11Figures
                   namespace={namespace}
-                  fillAction={!anyEditing}
-                  apiKeysHref={coreStart.http.basePath.prepend(
-                    '/app/management/security/api_keys'
-                  )}
-                  onSaveDescription={(intent) => replaceNamespace({ ...namespace, intent })}
-                  onSaveSources={(sources) => replaceNamespace({ ...namespace, sources })}
-                  onSaveTraces={(traces) => replaceNamespace({ ...namespace, traces })}
-                  onRunAll={() => updateProto11Namespace(namespace.name, startFullRun)}
-                  onViewKnowledge={() => setDetailTab('knowledge')}
-                  onAddElasticAgent={() => setAddAgent({})}
-                  onFixRejections={() => {
-                    const target = namespace.automations.find((automation) => {
-                      const scoped = rejectionMetaForAutomation(namespace, automation);
-                      return Boolean(scoped && outstandingRejected(scoped) > 0);
+                  onSelect={(which) => {
+                    if (which === 'knowledge') {
+                      setDetailTab('knowledge');
+                      return;
+                    }
+                    if (which === 'sources') {
+                      sourcesPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      return;
+                    }
+                    automationsPanelRef.current?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start',
                     });
-                    if (target) setFixFlyoutFor(target.id);
                   }}
-                  onSimulateBeat={(beat, tool, memoryLine) =>
-                    applySimulateBeat(namespace.name, beat, tool, memoryLine)
-                  }
-                  onHide={() =>
-                    updateProto11Namespace(namespace.name, (item) => ({
-                      ...item,
-                      proto11: item.proto11
-                        ? { ...item.proto11, setupDismissed: true }
-                        : item.proto11,
-                    }))
-                  }
-                  onExpandedChange={setRailOwnsFill}
                 />
-              ) : null}
+                {attentionItems.length > 0 ? (
+                  <EuiPanel
+                    hasBorder
+                    paddingSize="m"
+                    color="warning"
+                    data-test-subj="proto11NeedsAttention"
+                  >
+                    {attentionItems.map((item, index) => (
+                      <EuiFlexGroup
+                        key={item.id}
+                        alignItems="center"
+                        gutterSize="m"
+                        responsive={false}
+                      >
+                        <EuiFlexItem>
+                          <EuiText size="s">
+                            <p>{item.text}</p>
+                          </EuiText>
+                        </EuiFlexItem>
+                        <EuiFlexItem grow={false}>
+                          {index === 0 && !automationProposalOpen ? (
+                            <EuiButton size="s" fill onClick={item.onClick}>
+                              {item.action}
+                            </EuiButton>
+                          ) : (
+                            <EuiLink onClick={item.onClick}>{item.action}</EuiLink>
+                          )}
+                        </EuiFlexItem>
+                      </EuiFlexGroup>
+                    ))}
+                  </EuiPanel>
+                ) : null}
+                <EuiPanel
+                  hasBorder
+                  paddingSize="l"
+                  className="contextEnginePrototype__panel"
+                  panelRef={automationsPanelRef}
+                >
+                  <div className="contextEnginePrototype__panelHeader">
+                    <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
+                      <h2>Automations</h2>
+                    </EuiTitle>
+                    {canEditPanels ? (
+                      <div className="contextEnginePrototype__panelActions">
+                        {addAutomationButton('empty')}
+                      </div>
+                    ) : null}
+                  </div>
+                  {automationProposalOpen ? (
+                    <>
+                      <EuiSpacer size="l" />
+                      <div ref={proposalComposerRef} data-test-subj="proto11AutomationComposer">
+                        <Proto11IndexProposal
+                          namespace={namespace}
+                          onCreateAndRun={(proposal) => {
+                            addProposalToIndex(namespace.name, proposal);
+                            setAutomationProposalOpen(false);
+                          }}
+                          onRerun={(proposal) => {
+                            rerunProposal(namespace.name, proposal);
+                            setAutomationProposalOpen(false);
+                          }}
+                          onCancel={() => setAutomationProposalOpen(false)}
+                        />
+                      </div>
+                    </>
+                  ) : null}
+                  {hasAutomations ? <EuiSpacer size="m" /> : null}
+                  {namespace.automations.map(automationCard)}
+                </EuiPanel>
+                <EuiPanel
+                  hasBorder
+                  paddingSize="l"
+                  className="contextEnginePrototype__panel"
+                  panelRef={sourcesPanelRef}
+                >
+                  <div className="contextEnginePrototype__panelHeader">
+                    <EuiTitle size="xs" className="contextEnginePrototype__panelTitle">
+                      <h2>Sources</h2>
+                    </EuiTitle>
+                    {canEditPanels ? (
+                      <div className="contextEnginePrototype__panelActions">
+                        {sourcesEditing
+                          ? headerEditButtons(sourcesListDirty, saveSourcesEditor)
+                          : hasSources
+                            ? panelEditLink(() => requestEdit('sources'))
+                            : panelAddEmpty('+ Add sources', () => requestEdit('sources'))}
+                      </div>
+                    ) : null}
+                  </div>
+                  {sourcesEditing ? (
+                    <>
+                      <EuiSpacer size="m" />
+                      <SourcesPicker
+                        draft={sourcesDraft}
+                        onChange={setSourcesDraft}
+                        accordionId="context-engine-11-ready-sources"
+                      />
+                    </>
+                  ) : hasSources ? (
+                    <>
+                      <EuiSpacer size="m" />
+                      {namespace.sources.map((source) => (
+                        <div key={source.id} className="contextEnginePrototype__row">
+                          <div className="contextEnginePrototype__rowMain">
+                            <EuiText size="s">
+                              <strong>
+                                {source.typeLabel === 'ES|QL' && source.subtitle
+                                  ? source.subtitle
+                                  : source.name}
+                              </strong>
+                            </EuiText>
+                          </div>
+                          <EuiBadge color="hollow">{sourceTypeLabel(source)}</EuiBadge>
+                          <EuiText size="s" color="subdued" data-test-subj="proto11SourceKiCount">
+                            <p>{meta ? sourceKiCount(namespace, source) : 0}</p>
+                          </EuiText>
+                        </div>
+                      ))}
+                    </>
+                  ) : null}
+                </EuiPanel>
+                <Proto11UsedByPanel
+                  namespaceName={namespace.name}
+                  agents={connectedAgents}
+                  canAdd={canEditPanels}
+                  onAdd={() => setAddAgent({})}
+                  onOpenSettings={(name) => setAddAgent({ name })}
+                />
+              </div>
+            ) : (
+            <div className="contextEnginePrototype__panels">
               {proto11Overview ? (
                 <>
                   <EuiText size="s" data-test-subj="proto11OverviewMeta">
@@ -3499,190 +3991,7 @@ function ContextEngineApp({
                   ) : null}
                   {hasAutomations ? <EuiSpacer size="m" /> : null}
                   {hasAutomations ? (
-                    namespace.automations.map((automation) => (
-                      <div key={automation.id} className="contextEnginePrototype__automationCard">
-                        <div className="contextEnginePrototype__automationCardTop">
-                          <EuiTitle size="xs" className="contextEnginePrototype__automationCardTitle">
-                            <h3>
-                              {meta && automation.templateId ? (
-                                <EuiIcon
-                                  type="bolt"
-                                  size="m"
-                                  aria-hidden={true}
-                                  className="contextEnginePrototype__automationTitleIcon"
-                                />
-                              ) : null}
-                              {automation.title}
-                            </h3>
-                          </EuiTitle>
-                          <div className="contextEnginePrototype__automationCardMeta">
-                            {meta && automation.templateId ? (
-                              <EuiBadge color={proto11StatusPill(automation, namespace).color}>
-                                {proto11StatusPill(automation, namespace).label}
-                              </EuiBadge>
-                            ) : (
-                              <EuiBadge color={automation.enabled ? 'success' : 'hollow'}>
-                                {automation.enabled ? 'Enabled' : 'Disabled'}
-                              </EuiBadge>
-                            )}
-                            <EuiPopover
-                              button={
-                                <EuiButtonEmpty
-                                  size="s"
-                                  iconType="pencil"
-                                  onClick={() => {
-                                    setAutomationsAddOpen(false);
-                                    setAutomationsMenuOpen((current) =>
-                                      current === automation.id ? null : automation.id
-                                    );
-                                  }}
-                                >
-                                  Edit automation
-                                </EuiButtonEmpty>
-                              }
-                              isOpen={automationsMenuOpen === automation.id}
-                              closePopover={() => setAutomationsMenuOpen(null)}
-                              panelPaddingSize="none"
-                              anchorPosition="downRight"
-                            >
-                              <EuiContextMenuPanel
-                                size="s"
-                                items={[
-                                  <EuiContextMenuItem
-                                    key="refine"
-                                    icon="productAgent"
-                                    onClick={() => {
-                                      setAutomationsMenuOpen(null);
-                                      openRefineAutomation(namespace, automation);
-                                    }}
-                                  >
-                                    Refine with agent
-                                  </EuiContextMenuItem>,
-                                  <EuiContextMenuItem
-                                    key="edit-workflow"
-                                    icon="popout"
-                                    href={workflowsHref}
-                                    target="_blank"
-                                    onClick={() => setAutomationsMenuOpen(null)}
-                                  >
-                                    Edit workflow
-                                  </EuiContextMenuItem>,
-                                  <EuiContextMenuItem
-                                    key="run-now"
-                                    icon="play"
-                                    onClick={() => {
-                                      setAutomationsMenuOpen(null);
-                                      replaceNamespace({
-                                        ...namespace,
-                                        automations: namespace.automations.map((item) =>
-                                          item.id === automation.id
-                                            ? { ...item, hasRun: true, lastRunAt: relativeNow() }
-                                            : item
-                                        ),
-                                        lastSuccessfulRun: {
-                                          name: automation.title,
-                                          when: relativeNow(),
-                                        },
-                                        updated: relativeNow(),
-                                      });
-                                      coreStart.notifications.toasts.addSuccess(
-                                        `Started ${automation.title}`
-                                      );
-                                    }}
-                                  >
-                                    Run now
-                                  </EuiContextMenuItem>,
-                                  <div
-                                    key="divider"
-                                    role="separator"
-                                    className="contextEnginePrototype__menuDivider"
-                                  />,
-                                  <EuiContextMenuItem
-                                    key="toggle"
-                                    icon={automation.enabled ? 'pause' : 'playFilled'}
-                                    color={automation.enabled ? 'danger' : undefined}
-                                    onClick={() => {
-                                      setAutomationsMenuOpen(null);
-                                      replaceNamespace({
-                                        ...namespace,
-                                        automations: namespace.automations.map((item) =>
-                                          item.id === automation.id
-                                            ? { ...item, enabled: !item.enabled }
-                                            : item
-                                        ),
-                                      });
-                                    }}
-                                  >
-                                    {automation.enabled ? 'Disable' : 'Enable'}
-                                  </EuiContextMenuItem>,
-                                  <EuiContextMenuItem
-                                    key="delete"
-                                    icon="trash"
-                                    color="danger"
-                                    onClick={() => {
-                                      setAutomationsMenuOpen(null);
-                                      setPendingDelete({
-                                        namespaceName: namespace.name,
-                                        automation,
-                                      });
-                                    }}
-                                  >
-                                    Delete
-                                  </EuiContextMenuItem>,
-                                ]}
-                              />
-                            </EuiPopover>
-                          </div>
-                        </div>
-                        {meta && automation.templateId ? (
-                          <Proto11AutomationFacts
-                            automation={automation}
-                            namespace={namespace}
-                            onFix={() => setFixFlyoutFor(automation.id)}
-                          />
-                        ) : (
-                          <>
-                        <EuiText size="xs" color="subdued">
-                          <p>{automationAddedLine(automation)}</p>
-                        </EuiText>
-                        {meta ? (
-                          <Proto11AutomationRejection
-                            namespace={namespace}
-                            automation={automation}
-                            onFix={() => setFixFlyoutFor(automation.id)}
-                          />
-                        ) : null}
-                        <EuiText size="s">
-                          <p>{automation.description}</p>
-                        </EuiText>
-                        <div className="contextEnginePrototype__automationIo">
-                          <span className="contextEnginePrototype__automationIoLabel">Reads</span>
-                          {displayedReads(namespace, automation).length > 0 ? (
-                            displayedReads(namespace, automation).map((source) => (
-                              <EuiBadge key={source} color="hollow">
-                                {source}
-                              </EuiBadge>
-                            ))
-                          ) : (
-                            <EuiBadge color="hollow">No sources</EuiBadge>
-                          )}
-                          <EuiIcon type="arrowRight" size="s" color="subdued" />
-                          <span className="contextEnginePrototype__automationIoLabel">Produces</span>
-                          {meta && displayedProduces(namespace, automation) === 0 && !automation.hasRun ? (
-                            <EuiBadge color="hollow">No Knowledge Indicators yet</EuiBadge>
-                          ) : (
-                            <EuiBadge color="hollow">
-                              {displayedProduces(namespace, automation)}{' '}
-                              {displayedProduces(namespace, automation) === 1
-                                ? 'Knowledge Indicator'
-                                : 'Knowledge Indicators'}
-                            </EuiBadge>
-                          )}
-                        </div>
-                          </>
-                        )}
-                      </div>
-                    ))
+                    namespace.automations.map(automationCard)
                   ) : null}
                 </EuiPanel>
               )}
@@ -3721,6 +4030,7 @@ function ContextEngineApp({
                 />
               ) : null}
             </div>
+            )
           ) : effectiveTab === 'knowledge' ? (
             <KnowledgeTab
               namespace={namespace}
@@ -3792,6 +4102,21 @@ function ContextEngineApp({
             />
           ) : null}
         </PageBody>
+        {setupFlyout ? (
+          <EuiFlyout
+            ownFocus
+            size="l"
+            onClose={() => setSetupFlyout(false)}
+            aria-label="Setup"
+          >
+            <EuiFlyoutHeader hasBorder>
+              <EuiTitle size="m">
+                <h2>Setup</h2>
+              </EuiTitle>
+            </EuiFlyoutHeader>
+            <EuiFlyoutBody>{renderRail(true)}</EuiFlyoutBody>
+          </EuiFlyout>
+        ) : null}
         {addAgent && meta ? (
           <Proto11AddAgentFlyout
             indexLabel={namespace.displayName}

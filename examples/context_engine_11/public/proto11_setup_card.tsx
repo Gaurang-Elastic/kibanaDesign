@@ -24,6 +24,7 @@ import {
   EuiPanel,
   EuiPopover,
   EuiSpacer,
+  EuiSwitch,
   EuiText,
   EuiTextArea,
   useEuiTheme,
@@ -31,18 +32,16 @@ import {
 
 import type { IndexTrace, Namespace, NamespaceSource } from './namespace_data';
 import { FirstPassDotGrid } from './proto11_overview';
+import { overviewPurpose, type Proto11Proposal } from './proto11_data';
+import { Proto11IndexProposal } from './proto11_landing';
 import {
-  outstandingRejected,
-  overviewPurpose,
-  rejectedTotal,
-  rejectionMetaForAutomation,
-} from './proto11_data';
-import {
+  proto11CurrentStepId,
   proto11RequiredSetupDone,
   proto11SetupSteps,
   type Proto11SetupStep,
   type Proto11SetupStepId,
 } from './proto11_setup';
+import type { Proto11Meta } from './proto11_types';
 import { AgentTracesPanel } from './traces_panel';
 import {
   allDraftSources,
@@ -56,6 +55,9 @@ type MemoryScope = 'team' | 'me';
 type MemoryType = 'Episodic' | 'Semantic' | 'Procedural';
 type SimulateBeat = 'agent' | 'traces' | 'retrieval' | 'memory';
 
+const DESCRIPTION_HELPER =
+  'Important: This description shapes generated automation workflows and helps agents decide when the index is relevant.';
+const MEMORY_TIP = 'Agents can save and recall task memory.';
 const TRACES_ENDPOINT = 'https://{your-kibana}/api/agent_builder/traces';
 const SAMPLE_MEMORY = 'Noted a fact from the last task.';
 const MEMORY_TYPES: MemoryType[] = ['Episodic', 'Semantic', 'Procedural'];
@@ -84,6 +86,22 @@ const firstWords = (text: string, count = 6): string => {
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (words.length <= count) return words.join(' ');
   return `${words.slice(0, count).join(' ')}…`;
+};
+
+const dotGridMeta = (meta: Proto11Meta | undefined): Proto11Meta | undefined => {
+  if (!meta) return undefined;
+  if (meta.addon?.phase === 'firstPass') {
+    return {
+      ...meta,
+      phase: 'firstPass',
+      tick: meta.addon.tick,
+      sourceIds: meta.addon.sourceIds,
+      runTemplates: [meta.addon.template],
+      written: { ...meta.written, sample: meta.addon.written },
+      sample: false,
+    };
+  }
+  return meta.phase === 'firstPass' ? meta : undefined;
 };
 
 const scopeLabel = (scope: MemoryScope): string => (scope === 'team' ? 'Team' : 'Just me');
@@ -289,7 +307,7 @@ const activityItems = (
   return items.reverse();
 };
 
-/** Ordered setup rail with the current step and a live activity feed. */
+/** Ordered setup rail. In Setup mode this panel is the whole Overview tab. */
 export const Proto11OnboardingRail = ({
   namespace,
   fillAction,
@@ -297,31 +315,35 @@ export const Proto11OnboardingRail = ({
   onSaveDescription,
   onSaveSources,
   onSaveTraces,
-  onRunAll,
   onViewKnowledge,
   onAddElasticAgent,
-  onFixRejections,
   onSimulateBeat,
-  onHide,
   onExpandedChange,
+  onSimulatingChange,
+  onAddProposal,
+  onRerunProposal,
+  indicatorsCards,
+  readOnly = false,
 }: {
   namespace: Namespace;
   fillAction: boolean;
   apiKeysHref: string;
-  onSaveDescription: (intent: string) => void;
+  onSaveDescription: (intent: string, memoryEnabled: boolean) => void;
   onSaveSources: (sources: NamespaceSource[]) => void;
   onSaveTraces: (traces: IndexTrace[]) => void;
-  onRunAll: () => void;
   onViewKnowledge: () => void;
   onAddElasticAgent: () => void;
-  onFixRejections: () => void;
   onSimulateBeat: (beat: SimulateBeat, tool: string, memoryLine: string) => void;
-  onHide: () => void;
   onExpandedChange: (expanded: boolean) => void;
+  onSimulatingChange?: (active: boolean) => void;
+  onAddProposal: (proposal: Proto11Proposal) => void;
+  onRerunProposal: (proposal: Proto11Proposal) => void;
+  indicatorsCards?: React.ReactNode;
+  readOnly?: boolean;
 }) => {
   const { euiTheme } = useEuiTheme();
   const steps = proto11SetupSteps(namespace);
-  const currentId = steps.find((step) => !step.done)?.id;
+  const currentId = proto11CurrentStepId(namespace);
   const requiredDone = proto11RequiredSetupDone(namespace);
   const preferred = namespace.proto11?.onboardingView;
   const [viewed, setViewed] = useState<Proto11SetupStepId>(() => {
@@ -329,6 +351,7 @@ export const Proto11OnboardingRail = ({
     return currentId ?? steps[steps.length - 1].id;
   });
   const [intent, setIntent] = useState(namespace.intent);
+  const [memoryOn, setMemoryOn] = useState(namespace.memoryEnabled !== false);
   const [sourcesDraft, setSourcesDraft] = useState<SourcesDraft>(() =>
     draftFromSources(namespace.sources)
   );
@@ -341,15 +364,23 @@ export const Proto11OnboardingRail = ({
   const [waitingTool, setWaitingTool] = useState<string | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [showEarlier, setShowEarlier] = useState(false);
+  const [proposalVisible, setProposalVisible] = useState(true);
   const prevCurrent = useRef(currentId);
   const timers = useRef<number[]>([]);
 
   const dismissed = Boolean(namespace.proto11?.setupDismissed);
-  const expanded = !dismissed && !(requiredDone && !simulating);
+  const expanded = readOnly || (!dismissed && !(requiredDone && !simulating));
 
   useEffect(() => {
+    if (readOnly) return;
     onExpandedChange(expanded);
-  }, [expanded, onExpandedChange]);
+  }, [expanded, onExpandedChange, readOnly]);
+
+  useEffect(() => {
+    onSimulatingChange?.(simulating);
+  }, [simulating, onSimulatingChange]);
+
+  useEffect(() => () => onSimulatingChange?.(false), [onSimulatingChange]);
 
   useEffect(() => () => onExpandedChange(false), [onExpandedChange]);
 
@@ -370,6 +401,10 @@ export const Proto11OnboardingRail = ({
   }, [namespace.name, namespace.intent]);
 
   useEffect(() => {
+    setMemoryOn(namespace.memoryEnabled !== false);
+  }, [namespace.memoryEnabled]);
+
+  useEffect(() => {
     if ((namespace.proto11?.connectedAgents?.length ?? 0) > 0) setWaitingTool(null);
   }, [namespace.proto11?.connectedAgents?.length]);
 
@@ -386,10 +421,6 @@ export const Proto11OnboardingRail = ({
   const purpose = overviewPurpose(namespace);
   const prompt = codingPrompt(tool, namespace.name, purpose, scope, types);
   const highlightTokens = [namespace.name, shortPurpose(purpose), scopeLabel(scope), ...types];
-  const rejection = namespace.automations
-    .map((automation) => rejectionMetaForAutomation(namespace, automation))
-    .find((meta) => meta && outstandingRejected(meta) > 0);
-  const rejected = rejection ? rejectedTotal(rejection) : 0;
   const items = activityItems(namespace, copied, waitingTool);
   const visibleItems = showEarlier ? items : items.slice(0, 6);
   const hiddenCount = items.length - visibleItems.length;
@@ -428,32 +459,7 @@ export const Proto11OnboardingRail = ({
     setWaitingTool(toolLabel(tool));
   };
 
-  if (!expanded) {
-    if (dismissed || !requiredDone) return null;
-    const indicators = namespace.indicators.length;
-    const agents = namespace.proto11?.connectedAgents?.length ?? 0;
-    const indicatorLabel =
-      indicators === 1 ? '1 Knowledge Indicator' : `${indicators} Knowledge Indicators`;
-    const agentLabel = agents === 1 ? '1 agent connected' : `${agents} agents connected`;
-    return (
-      <EuiPanel hasBorder paddingSize="m" data-test-subj="proto11SetupCollapsed">
-        <EuiFlexGroup alignItems="center" gutterSize="m" responsive={false}>
-          <EuiFlexItem>
-            <EuiText size="s">
-              <p>
-                Setup complete. {indicatorLabel}, {agentLabel}.
-              </p>
-            </EuiText>
-          </EuiFlexItem>
-          <EuiFlexItem grow={false}>
-            <EuiLink onClick={onHide} data-test-subj="proto11SetupHide">
-              Hide setup
-            </EuiLink>
-          </EuiFlexItem>
-        </EuiFlexGroup>
-      </EuiPanel>
-    );
-  }
+  if (!expanded) return null;
 
   const renderContent = () => {
     if (viewedStep.id === 'describe') {
@@ -468,16 +474,42 @@ export const Proto11OnboardingRail = ({
             fullWidth
             rows={3}
             value={intent}
+            readOnly={readOnly}
             onChange={(event) => setIntent(event.target.value)}
             aria-label="Description"
             data-test-subj="proto11SetupDescription"
           />
+          <EuiText size="xs" color="subdued">
+            <p>{DESCRIPTION_HELPER}</p>
+          </EuiText>
+          <EuiSpacer size="m" />
+          <EuiFlexGroup gutterSize="xs" alignItems="center" responsive={false}>
+            <EuiFlexItem grow={false}>
+              <EuiSwitch
+                label={memoryOn ? 'Memory: on' : 'Memory: off'}
+                checked={memoryOn}
+                compressed
+                disabled={readOnly}
+                onChange={(event) => {
+                  const next = event.target.checked;
+                  setMemoryOn(next);
+                  onSaveDescription(namespace.intent, next);
+                }}
+                data-test-subj="proto11SetupMemory"
+              />
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <EuiIconTip content={MEMORY_TIP} aria-label={MEMORY_TIP} position="top" />
+            </EuiFlexItem>
+          </EuiFlexGroup>
+          {readOnly ? null : (
+            <>
           <EuiSpacer size="s" />
           {actionFill ? (
             <EuiButton
               size="s"
               fill
-              onClick={() => onSaveDescription(intent.trim())}
+              onClick={() => onSaveDescription(intent.trim(), memoryOn)}
               isDisabled={!dirty || intent.trim().length === 0}
               data-test-subj="proto11SetupSaveDescription"
             >
@@ -486,17 +518,32 @@ export const Proto11OnboardingRail = ({
           ) : (
             <EuiButtonEmpty
               size="s"
-              onClick={() => onSaveDescription(intent.trim())}
+              onClick={() => onSaveDescription(intent.trim(), memoryOn)}
               isDisabled={!dirty || intent.trim().length === 0}
               data-test-subj="proto11SetupSaveDescription"
             >
               Save
             </EuiButtonEmpty>
           )}
+            </>
+          )}
         </>
       );
     }
     if (viewedStep.id === 'source') {
+      if (readOnly) {
+        return namespace.sources.length === 0 ? (
+          <EuiText size="s" color="subdued">
+            <p>No sources yet.</p>
+          </EuiText>
+        ) : (
+          <EuiText size="s">
+            {namespace.sources.map((source) => (
+              <p key={source.id}>{source.name}</p>
+            ))}
+          </EuiText>
+        );
+      }
       const next = allDraftSources(sourcesDraft);
       const dirty =
         next.map((source) => source.id).join('|') !==
@@ -508,6 +555,8 @@ export const Proto11OnboardingRail = ({
             onChange={setSourcesDraft}
             accordionId="proto11-setup-sources"
           />
+          {readOnly ? null : (
+            <>
           <EuiSpacer size="s" />
           {actionFill ? (
             <EuiButton
@@ -528,63 +577,52 @@ export const Proto11OnboardingRail = ({
               Save
             </EuiButtonEmpty>
           )}
+            </>
+          )}
         </>
       );
     }
     if (viewedStep.id === 'indicators') {
       const meta = namespace.proto11;
-      const ready = namespace.indicators.length;
+      const running = namespace.automations.some(
+        (automation) => automation.runStatus === 'firstPass' || automation.runStatus === 'running'
+      );
+      const dotMeta = dotGridMeta(meta);
+      if (namespace.automations.length === 0) {
+        if (!proposalVisible) {
+          return (
+            <EuiLink onClick={() => setProposalVisible(true)} data-test-subj="proto11ProposeAgain">
+              Propose automation
+            </EuiLink>
+          );
+        }
+        return (
+          <Proto11IndexProposal
+            namespace={namespace}
+            actions={readOnly ? 'none' : actionFill ? 'fill' : 'empty'}
+            onCreateAndRun={(proposal) => onAddProposal(proposal)}
+            onRerun={(proposal) => onRerunProposal(proposal)}
+            onCancel={() => setProposalVisible(false)}
+          />
+        );
+      }
       return (
         <>
-          {meta?.phase === 'firstPass' ? (
+          {running && dotMeta ? (
             <>
-              <FirstPassDotGrid meta={meta} />
+              <FirstPassDotGrid meta={dotMeta} />
               <EuiSpacer size="m" />
             </>
           ) : null}
-          {meta && meta.phase !== 'firstPass' ? (
-            <EuiText size="s">
-              <p>
-                {ready} ready from a sample
-                {rejected > 0 ? `, ${rejected} rejected` : ''}.
-              </p>
-            </EuiText>
-          ) : null}
-          {!meta ? (
-            <EuiText size="s" color="subdued">
-              <p>
-                Connect a source, then run an automation to produce the first Knowledge Indicators.
-              </p>
-            </EuiText>
-          ) : null}
-          <EuiSpacer size="s" />
-          <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
-            {meta?.phase === 'sampleReady' ? (
-              <EuiFlexItem grow={false}>
-                {actionFill ? (
-                  <EuiButton size="s" fill onClick={onRunAll} data-test-subj="proto11RunAll">
-                    Run on all data
-                  </EuiButton>
-                ) : (
-                  <EuiButtonEmpty size="s" onClick={onRunAll} data-test-subj="proto11RunAll">
-                    Run on all data
-                  </EuiButtonEmpty>
-                )}
-              </EuiFlexItem>
-            ) : null}
-            <EuiFlexItem grow={false}>
+          {indicatorsCards}
+          {running ? null : (
+            <>
+              <EuiSpacer size="s" />
               <EuiLink onClick={onViewKnowledge} data-test-subj="proto11ViewKnowledge">
                 View Knowledge Indicators
               </EuiLink>
-            </EuiFlexItem>
-            {rejected > 0 ? (
-              <EuiFlexItem grow={false}>
-                <EuiLink color="subdued" onClick={onFixRejections} data-test-subj="proto11SetupFix">
-                  Fix with Elastic AI Agent
-                </EuiLink>
-              </EuiFlexItem>
-            ) : null}
-          </EuiFlexGroup>
+            </>
+          )}
         </>
       );
     }
@@ -633,6 +671,8 @@ export const Proto11OnboardingRail = ({
                   Add this index to an Elastic agent so it can retrieve these Knowledge Indicators.
                 </p>
               </EuiText>
+              {readOnly ? null : (
+                <>
               <EuiSpacer size="s" />
               {actionFill ? (
                 <EuiButton
@@ -653,6 +693,8 @@ export const Proto11OnboardingRail = ({
                 >
                   Add to an Elastic agent
                 </EuiButtonEmpty>
+              )}
+                </>
               )}
             </>
           ) : (
@@ -745,6 +787,8 @@ export const Proto11OnboardingRail = ({
               >
                 <Highlighted text={prompt} tokens={highlightTokens} />
               </div>
+              {readOnly ? null : (
+                <>
               <EuiSpacer size="s" />
               <EuiFlexGroup gutterSize="s" alignItems="center" responsive={false} wrap>
                 <EuiFlexItem grow={false}>
@@ -813,12 +857,28 @@ export const Proto11OnboardingRail = ({
               >
                 Simulate connection (demo)
               </EuiLink>
+                </>
+              )}
             </>
           )}
         </>
       );
     }
     if (viewedStep.id === 'traces') {
+      if (readOnly) {
+        const traces = namespace.traces ?? [];
+        return traces.length === 0 ? (
+          <EuiText size="s" color="subdued">
+            <p>No traces yet.</p>
+          </EuiText>
+        ) : (
+          <EuiText size="s">
+            {traces.map((trace) => (
+              <p key={`${trace.type}-${trace.value}`}>{trace.value}</p>
+            ))}
+          </EuiText>
+        );
+      }
       const dirty = JSON.stringify(tracesDraft) !== JSON.stringify(namespace.traces ?? []);
       return (
         <>
